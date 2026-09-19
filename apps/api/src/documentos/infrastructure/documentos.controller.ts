@@ -1,13 +1,10 @@
 import { BadRequestException, Body, Controller, Param, Post } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { EstadoDocumentoSchema, TipoDocumentoSchema } from '@gafer/contracts';
 import { CrearDocumentoUseCase } from '../application/crear-documento.usecase';
 import { TransicionarDocumentoUseCase } from '../application/transicionar-documento.usecase';
 
-/**
- * Los esquemas de @gafer/contracts se usan acá para validar en el borde
- * de la API (el mismo tipo que consume apps/web), en vez de reimplementar
- * la lista de estados/tipos válidos en el backend.
- */
+@ApiTags('Fase 2 - Documentos')
 @Controller('documentos')
 export class DocumentosController {
   constructor(
@@ -16,6 +13,10 @@ export class DocumentosController {
   ) {}
 
   @Post()
+  @ApiOperation({
+    summary: 'Crear documento digital (Scaffold Fase 2)',
+    description: 'Endpoint preliminar para creación y numeración de certificados de saneamiento.',
+  })
   async crear(@Body('clienteId') clienteId: string, @Body('tipo') tipo: string) {
     const tipoValidado = TipoDocumentoSchema.parse(tipo);
     const documento = await this.crearDocumento.ejecutar(clienteId, tipoValidado);
@@ -27,6 +28,10 @@ export class DocumentosController {
   }
 
   @Post(':id/transicion')
+  @ApiOperation({
+    summary: 'Transicionar estado de documento (Scaffold Fase 2)',
+    description: 'Avanza el documento en su máquina de estados (BORRADOR -> EMITIDO -> ANULADO).',
+  })
   async transicionar(@Param('id') id: string, @Body('nuevoEstado') nuevoEstado: string) {
     const parseo = EstadoDocumentoSchema.safeParse(nuevoEstado);
     if (!parseo.success) {

@@ -9,7 +9,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 // Use Cases - Creación
 import { RegistrarClienteUseCase } from '../application/registrar-cliente.usecase';
@@ -56,7 +56,7 @@ import {
 // S3 Storage
 import { S3StorageService } from '../../shared/infrastructure/storage/s3-storage.service';
 
-// DTOs
+// DTOs Request
 import {
   CrearClienteDto,
   ActualizarClienteDto,
@@ -70,6 +70,25 @@ import {
   GenerarDownloadUrlDto,
 } from './dto/mantenimiento.dto';
 import { PaginacionQueryDto } from '../../shared/infrastructure/dto/paginacion.dto';
+
+// DTOs Response (OpenAPI / Scalar)
+import {
+  ClienteResponseDto,
+  ClienteDetalleResponseDto,
+  ClientePaginadoResponseDto,
+  ProyectoResponseDto,
+  ServicioContratadoResponseDto,
+  InsumoResponseDto,
+  InsumoPaginadoResponseDto,
+  EquipoResponseDto,
+  EquipoPaginadoResponseDto,
+  PersonalResponseDto,
+  PersonalPaginadoResponseDto,
+  UploadUrlResponseDto,
+  DownloadUrlResponseDto,
+  EstadoSimpleResponseDto,
+  ErrorResponseDto,
+} from './dto/mantenimiento-response.dto';
 
 @ApiTags('Mantenimiento')
 @Controller('mantenimiento')
@@ -109,9 +128,16 @@ export class MantenimientoController {
   @Post('clientes')
   @ApiOperation({
     summary: 'Registrar nuevo cliente corporativo con RUC y código corto',
+    description: 'Valida RUC de 11 dígitos, unicidad de código corto alfanumérico y formato de correo.',
   })
-  @ApiResponse({ status: 201, description: 'Cliente registrado exitosamente' })
-  async crearCliente(@Body() dto: CrearClienteDto) {
+  @ApiResponse({
+    status: 201,
+    description: 'Cliente registrado exitosamente',
+    type: ClienteResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Datos inválidos', type: ErrorResponseDto })
+  @ApiResponse({ status: 409, description: 'RUC o código corto duplicado', type: ErrorResponseDto })
+  async crearCliente(@Body() dto: CrearClienteDto): Promise<ClienteResponseDto> {
     const cliente = await this.registrarClienteUseCase.execute(dto);
     return {
       id: cliente.id,
@@ -119,12 +145,26 @@ export class MantenimientoController {
       ruc: cliente.ruc,
       codigoCorto: cliente.codigoCorto,
       estado: cliente.getEstado(),
+      giroNegocio: cliente.giroNegocio,
+      contactoNombre: cliente.contactoNombre,
+      contactoTelefono: cliente.contactoTelefono,
+      contactoCorreo: cliente.contactoCorreo,
     };
   }
 
   @Get('clientes')
-  @ApiOperation({ summary: 'Listar clientes registrados con paginación' })
-  async listarClientes(@Query() query?: PaginacionQueryDto) {
+  @ApiOperation({
+    summary: 'Listar clientes registrados con paginación y búsqueda',
+    description: 'Permite filtrar por razón social, RUC o código corto con paginación (limit/offset).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Listado paginado de clientes',
+    type: ClientePaginadoResponseDto,
+  })
+  async listarClientes(
+    @Query() query?: PaginacionQueryDto,
+  ): Promise<ClientePaginadoResponseDto> {
     const { limit = 20, offset = 0, busqueda } = query ?? {};
     let clientes = await this.clienteRepo.listarTodos();
 
@@ -160,8 +200,14 @@ export class MantenimientoController {
   }
 
   @Get('clientes/:id')
-  @ApiOperation({ summary: 'Obtener detalle de un cliente por ID' })
-  async obtenerCliente(@Param('id') id: string) {
+  @ApiOperation({
+    summary: 'Obtener detalle completo de un cliente por ID',
+    description: 'Devuelve datos fiscales, de contacto y campos personalizados.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID del cliente', example: 'c1111111-1111-1111-1111-111111111111' })
+  @ApiResponse({ status: 200, description: 'Detalle del cliente', type: ClienteDetalleResponseDto })
+  @ApiResponse({ status: 404, description: 'Cliente no encontrado', type: ErrorResponseDto })
+  async obtenerCliente(@Param('id') id: string): Promise<ClienteDetalleResponseDto> {
     const cliente = await this.clienteRepo.buscarPorId(id);
     if (!cliente) {
       throw new NotFoundException(`Cliente ${id} no encontrado`);
@@ -183,12 +229,18 @@ export class MantenimientoController {
   }
 
   @Patch('clientes/:id')
-  @ApiOperation({ summary: 'Actualizar datos de un cliente existente' })
-  @ApiResponse({ status: 200, description: 'Cliente actualizado exitosamente' })
+  @ApiOperation({
+    summary: 'Actualizar datos de un cliente existente',
+    description: 'Modifica razón social, dirección fiscal, teléfono, cargo o correo de contacto.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID del cliente', example: 'c1111111-1111-1111-1111-111111111111' })
+  @ApiResponse({ status: 200, description: 'Cliente actualizado', type: ClienteDetalleResponseDto })
+  @ApiResponse({ status: 400, description: 'Datos inválidos', type: ErrorResponseDto })
+  @ApiResponse({ status: 404, description: 'Cliente no encontrado', type: ErrorResponseDto })
   async actualizarCliente(
     @Param('id') id: string,
     @Body() dto: ActualizarClienteDto,
-  ) {
+  ): Promise<ClienteDetalleResponseDto> {
     const cliente = await this.actualizarClienteUseCase.execute({
       id,
       ...dto,
@@ -196,6 +248,8 @@ export class MantenimientoController {
     return {
       id: cliente.id,
       razonSocial: cliente.razonSocial,
+      ruc: cliente.ruc,
+      codigoCorto: cliente.codigoCorto,
       direccionFiscal: cliente.direccionFiscal,
       giroNegocio: cliente.giroNegocio,
       contactoNombre: cliente.contactoNombre,
@@ -203,21 +257,26 @@ export class MantenimientoController {
       contactoTelefono: cliente.contactoTelefono,
       contactoCorreo: cliente.contactoCorreo,
       estado: cliente.getEstado(),
+      camposExtra: cliente.camposExtra,
     };
   }
 
   @Patch('clientes/:id/desactivar')
   @ApiOperation({ summary: 'Desactivar un cliente (baja lógica)' })
-  @ApiResponse({ status: 200, description: 'Cliente desactivado' })
-  async desactivarCliente(@Param('id') id: string) {
+  @ApiParam({ name: 'id', description: 'UUID del cliente' })
+  @ApiResponse({ status: 200, description: 'Cliente desactivado', type: EstadoSimpleResponseDto })
+  @ApiResponse({ status: 404, description: 'Cliente no encontrado', type: ErrorResponseDto })
+  async desactivarCliente(@Param('id') id: string): Promise<EstadoSimpleResponseDto> {
     const cliente = await this.desactivarClienteUseCase.execute(id);
     return { id: cliente.id, estado: cliente.getEstado() };
   }
 
   @Patch('clientes/:id/activar')
   @ApiOperation({ summary: 'Reactivar un cliente previamente desactivado' })
-  @ApiResponse({ status: 200, description: 'Cliente reactivado' })
-  async activarCliente(@Param('id') id: string) {
+  @ApiParam({ name: 'id', description: 'UUID del cliente' })
+  @ApiResponse({ status: 200, description: 'Cliente reactivado', type: EstadoSimpleResponseDto })
+  @ApiResponse({ status: 404, description: 'Cliente no encontrado', type: ErrorResponseDto })
+  async activarCliente(@Param('id') id: string): Promise<EstadoSimpleResponseDto> {
     const cliente = await this.activarClienteUseCase.execute(id);
     return { id: cliente.id, estado: cliente.getEstado() };
   }
@@ -229,9 +288,12 @@ export class MantenimientoController {
   @Post('proyectos')
   @ApiOperation({
     summary: 'Registrar una sede o proyecto vinculado a un cliente',
+    description: 'Valida nombre único por cliente en mayúsculas sin espacios (ej. PLANTA_SUR).',
   })
-  @ApiResponse({ status: 201, description: 'Sede/proyecto registrado exitosamente' })
-  async crearProyecto(@Body() dto: CrearProyectoDto) {
+  @ApiResponse({ status: 201, description: 'Sede/proyecto registrado exitosamente', type: ProyectoResponseDto })
+  @ApiResponse({ status: 400, description: 'Cliente inactivo o datos inválidos', type: ErrorResponseDto })
+  @ApiResponse({ status: 409, description: 'Nombre de sede duplicado para este cliente', type: ErrorResponseDto })
+  async crearProyecto(@Body() dto: CrearProyectoDto): Promise<ProyectoResponseDto> {
     const proyecto = await this.registrarProyectoUseCase.execute(dto);
     return {
       id: proyecto.id,
@@ -239,13 +301,21 @@ export class MantenimientoController {
       nombre: proyecto.nombre,
       direccionSede: proyecto.direccionSede,
       distrito: proyecto.distrito,
+      provincia: proyecto.provincia,
+      departamento: proyecto.departamento,
+      contactoNombre: proyecto.contactoNombre,
+      contactoTelefono: proyecto.contactoTelefono,
       estado: proyecto.getEstado(),
     };
   }
 
   @Get('proyectos/cliente/:clienteId')
   @ApiOperation({ summary: 'Listar todas las sedes de un cliente' })
-  async listarProyectosPorCliente(@Param('clienteId') clienteId: string) {
+  @ApiParam({ name: 'clienteId', description: 'UUID del cliente' })
+  @ApiResponse({ status: 200, description: 'Listado de sedes', type: [ProyectoResponseDto] })
+  async listarProyectosPorCliente(
+    @Param('clienteId') clienteId: string,
+  ): Promise<ProyectoResponseDto[]> {
     const proyectos = await this.proyectoRepo.buscarPorClienteId(clienteId);
     return proyectos.map((p) => ({
       id: p.id,
@@ -268,12 +338,17 @@ export class MantenimientoController {
   @Post('servicios-contratados')
   @ApiOperation({
     summary: 'Registrar un servicio ambiental contratado para una sede',
+    description: 'Valida uno de los 7 tipos oficiales (DSF, DSS, DRT, etc.) y áreas coherentes.',
   })
   @ApiResponse({
     status: 201,
     description: 'Servicio contratado registrado exitosamente',
+    type: ServicioContratadoResponseDto,
   })
-  async crearServicioContratado(@Body() dto: CrearServicioContratadoDto) {
+  @ApiResponse({ status: 400, description: 'Áreas o tipos no válidos', type: ErrorResponseDto })
+  async crearServicioContratado(
+    @Body() dto: CrearServicioContratadoDto,
+  ): Promise<ServicioContratadoResponseDto> {
     const servicio = await this.registrarServicioContratadoUseCase.execute(dto);
     return {
       id: servicio.id,
@@ -290,7 +365,11 @@ export class MantenimientoController {
 
   @Get('servicios-contratados/proyecto/:proyectoId')
   @ApiOperation({ summary: 'Listar servicios contratados de una sede' })
-  async listarServiciosPorProyecto(@Param('proyectoId') proyectoId: string) {
+  @ApiParam({ name: 'proyectoId', description: 'UUID de la sede' })
+  @ApiResponse({ status: 200, description: 'Servicios de la sede', type: [ServicioContratadoResponseDto] })
+  async listarServiciosPorProyecto(
+    @Param('proyectoId') proyectoId: string,
+  ): Promise<ServicioContratadoResponseDto[]> {
     const servicios = await this.servicioRepo.buscarPorProyectoId(proyectoId);
     return servicios.map((s) => ({
       id: s.id,
@@ -313,8 +392,10 @@ export class MantenimientoController {
   @ApiOperation({
     summary: 'Registrar insumo químico con registro DIGESA y referencias MinIO S3',
   })
-  @ApiResponse({ status: 201, description: 'Insumo registrado exitosamente' })
-  async crearInsumo(@Body() dto: CrearInsumoDto) {
+  @ApiResponse({ status: 201, description: 'Insumo registrado exitosamente', type: InsumoResponseDto })
+  @ApiResponse({ status: 400, description: 'Datos incompletos', type: ErrorResponseDto })
+  @ApiResponse({ status: 409, description: 'Registro DIGESA ya existente', type: ErrorResponseDto })
+  async crearInsumo(@Body() dto: CrearInsumoDto): Promise<InsumoResponseDto> {
     const insumo = await this.registrarInsumoUseCase.execute(dto);
     return {
       id: insumo.id,
@@ -327,13 +408,17 @@ export class MantenimientoController {
       dosisEstandar: insumo.dosisEstandar,
       fichaTecnicaKey: insumo.fichaTecnicaKey,
       hojaMsdsKey: insumo.hojaMsdsKey,
+      proveedor: insumo.proveedor,
       estado: insumo.getEstado(),
     };
   }
 
   @Get('insumos')
-  @ApiOperation({ summary: 'Listar catálogo de insumos químicos activos' })
-  async listarInsumos(@Query() query?: PaginacionQueryDto) {
+  @ApiOperation({ summary: 'Listar catálogo de insumos químicos activos con paginación' })
+  @ApiResponse({ status: 200, description: 'Catálogo paginado de insumos', type: InsumoPaginadoResponseDto })
+  async listarInsumos(
+    @Query() query?: PaginacionQueryDto,
+  ): Promise<InsumoPaginadoResponseDto> {
     const { limit = 20, offset = 0, busqueda } = query ?? {};
     let insumos = await this.insumoRepo.listarActivos();
 
@@ -373,8 +458,10 @@ export class MantenimientoController {
 
   @Patch('insumos/:id/desactivar')
   @ApiOperation({ summary: 'Desactivar un insumo del catálogo' })
-  @ApiResponse({ status: 200, description: 'Insumo desactivado' })
-  async desactivarInsumo(@Param('id') id: string) {
+  @ApiParam({ name: 'id', description: 'UUID del insumo' })
+  @ApiResponse({ status: 200, description: 'Insumo desactivado', type: EstadoSimpleResponseDto })
+  @ApiResponse({ status: 404, description: 'Insumo no encontrado', type: ErrorResponseDto })
+  async desactivarInsumo(@Param('id') id: string): Promise<EstadoSimpleResponseDto> {
     const insumo = await this.desactivarInsumoUseCase.execute(id);
     return { id: insumo.id, estado: insumo.getEstado() };
   }
@@ -387,8 +474,10 @@ export class MantenimientoController {
   @ApiOperation({
     summary: 'Registrar equipo operativo con código interno GAFER',
   })
-  @ApiResponse({ status: 201, description: 'Equipo registrado exitosamente' })
-  async crearEquipo(@Body() dto: CrearEquipoDto) {
+  @ApiResponse({ status: 201, description: 'Equipo registrado exitosamente', type: EquipoResponseDto })
+  @ApiResponse({ status: 400, description: 'Datos inválidos', type: ErrorResponseDto })
+  @ApiResponse({ status: 409, description: 'Código interno de equipo duplicado', type: ErrorResponseDto })
+  async crearEquipo(@Body() dto: CrearEquipoDto): Promise<EquipoResponseDto> {
     const equipo = await this.registrarEquipoUseCase.execute(dto);
     return {
       id: equipo.id,
@@ -401,8 +490,11 @@ export class MantenimientoController {
   }
 
   @Get('equipos')
-  @ApiOperation({ summary: 'Listar catálogo de equipos operativos' })
-  async listarEquipos(@Query() query?: PaginacionQueryDto) {
+  @ApiOperation({ summary: 'Listar catálogo de equipos operativos con paginación' })
+  @ApiResponse({ status: 200, description: 'Catálogo de equipos', type: EquipoPaginadoResponseDto })
+  async listarEquipos(
+    @Query() query?: PaginacionQueryDto,
+  ): Promise<EquipoPaginadoResponseDto> {
     const { limit = 20, offset = 0, busqueda } = query ?? {};
     let equipos = await this.equipoRepo.listarOperativos();
 
@@ -436,11 +528,13 @@ export class MantenimientoController {
 
   @Patch('equipos/:id/estado')
   @ApiOperation({ summary: 'Actualizar estado operativo del equipo (OPERATIVO, MANTENIMIENTO, FUERA_SERVICIO)' })
-  @ApiResponse({ status: 200, description: 'Estado de equipo actualizado' })
+  @ApiParam({ name: 'id', description: 'UUID del equipo' })
+  @ApiResponse({ status: 200, description: 'Estado actualizado', type: EquipoResponseDto })
+  @ApiResponse({ status: 404, description: 'Equipo no encontrado', type: ErrorResponseDto })
   async cambiarEstadoEquipo(
     @Param('id') id: string,
     @Body() dto: CambiarEstadoEquipoDto,
-  ) {
+  ): Promise<EquipoResponseDto> {
     const equipo = await this.actualizarEstadoEquipoUseCase.execute(
       id,
       dto.estadoOperativo,
@@ -448,6 +542,9 @@ export class MantenimientoController {
     return {
       id: equipo.id,
       codigoInterno: equipo.codigoInterno,
+      nombre: equipo.nombre,
+      tipo: equipo.tipo,
+      marcaModelo: equipo.marcaModelo,
       estadoOperativo: equipo.getEstadoOperativo(),
     };
   }
@@ -458,10 +555,12 @@ export class MantenimientoController {
 
   @Post('personal')
   @ApiOperation({
-    summary: 'Registrar personal técnico o supervisor con DNI',
+    summary: 'Registrar personal técnico o supervisor con DNI de 8 dígitos',
   })
-  @ApiResponse({ status: 201, description: 'Personal registrado exitosamente' })
-  async crearPersonal(@Body() dto: CrearPersonalDto) {
+  @ApiResponse({ status: 201, description: 'Personal registrado exitosamente', type: PersonalResponseDto })
+  @ApiResponse({ status: 400, description: 'DNI inválido', type: ErrorResponseDto })
+  @ApiResponse({ status: 409, description: 'DNI o usuario duplicado', type: ErrorResponseDto })
+  async crearPersonal(@Body() dto: CrearPersonalDto): Promise<PersonalResponseDto> {
     const personal = await this.registrarPersonalUseCase.execute(dto);
     return {
       id: personal.id,
@@ -476,8 +575,11 @@ export class MantenimientoController {
   }
 
   @Get('personal')
-  @ApiOperation({ summary: 'Listar personal técnico y supervisores activos' })
-  async listarPersonal(@Query() query?: PaginacionQueryDto) {
+  @ApiOperation({ summary: 'Listar personal técnico y supervisores activos con paginación' })
+  @ApiResponse({ status: 200, description: 'Listado de personal', type: PersonalPaginadoResponseDto })
+  async listarPersonal(
+    @Query() query?: PaginacionQueryDto,
+  ): Promise<PersonalPaginadoResponseDto> {
     const { limit = 20, offset = 0, busqueda } = query ?? {};
     let lista = await this.personalRepo.listarActivos();
 
@@ -513,8 +615,10 @@ export class MantenimientoController {
 
   @Patch('personal/:id/desactivar')
   @ApiOperation({ summary: 'Desactivar personal o colaborador (baja lógica)' })
-  @ApiResponse({ status: 200, description: 'Personal desactivado' })
-  async desactivarPersonal(@Param('id') id: string) {
+  @ApiParam({ name: 'id', description: 'UUID del personal' })
+  @ApiResponse({ status: 200, description: 'Personal desactivado', type: EstadoSimpleResponseDto })
+  @ApiResponse({ status: 404, description: 'Personal no encontrado', type: ErrorResponseDto })
+  async desactivarPersonal(@Param('id') id: string): Promise<EstadoSimpleResponseDto> {
     const personal = await this.desactivarPersonalUseCase.execute(id);
     return { id: personal.id, estado: personal.getEstado() };
   }
@@ -527,9 +631,10 @@ export class MantenimientoController {
   @ApiOperation({
     summary:
       'Generar URL prefirmada para subida directa de fichas técnicas o MSDS a MinIO S3',
+    description: 'Devuelve una URL prefirmada con PUT para subir archivos PDF directamente desde el cliente.',
   })
-  @ApiResponse({ status: 200, description: 'URL prefirmada generada con éxito' })
-  async generarUploadUrl(@Body() dto: GenerarUploadUrlDto) {
+  @ApiResponse({ status: 200, description: 'URL prefirmada generada', type: UploadUrlResponseDto })
+  async generarUploadUrl(@Body() dto: GenerarUploadUrlDto): Promise<UploadUrlResponseDto> {
     const uploadUrl = await this.storageService.generarPresignedUploadUrl(
       dto.key,
       dto.contentType,
@@ -546,9 +651,10 @@ export class MantenimientoController {
   @ApiOperation({
     summary:
       'Generar URL prefirmada para visualización o descarga segura desde MinIO S3',
+    description: 'Devuelve una URL temporal segura (1 hora) con GET para consultar el archivo.',
   })
-  @ApiResponse({ status: 200, description: 'URL prefirmada de descarga generada' })
-  async generarDownloadUrl(@Body() dto: GenerarDownloadUrlDto) {
+  @ApiResponse({ status: 200, description: 'URL prefirmada de descarga generada', type: DownloadUrlResponseDto })
+  async generarDownloadUrl(@Body() dto: GenerarDownloadUrlDto): Promise<DownloadUrlResponseDto> {
     const downloadUrl = await this.storageService.generarPresignedDownloadUrl(
       dto.key,
     );
