@@ -1,7 +1,9 @@
+import { randomUUID } from 'crypto';
+
 export type EstadoGeneral = 'ACTIVO' | 'INACTIVO';
 
 export interface ClienteProps {
-  id: string;
+  id?: string;
   razonSocial: string;
   ruc: string;
   codigoCorto: string;
@@ -46,7 +48,7 @@ export class Cliente {
       throw new Error('El correo de contacto debe ser válido');
     }
 
-    this.id = props.id;
+    this.id = props.id ?? randomUUID();
     this.razonSocial = props.razonSocial.trim();
     this.ruc = props.ruc;
     this.codigoCorto = props.codigoCorto;

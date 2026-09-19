@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { StorageModule } from '../shared/infrastructure/storage/storage.module';
 import { MantenimientoController } from './infrastructure/mantenimiento.controller';
 
 // Use Cases
@@ -26,6 +27,7 @@ import { KyselyEquipoRepository } from './infrastructure/adapters/kysely-equipo.
 import { KyselyPersonalRepository } from './infrastructure/adapters/kysely-personal.repository';
 
 @Module({
+  imports: [StorageModule],
   controllers: [MantenimientoController],
   providers: [
     // Casos de Uso

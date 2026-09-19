@@ -1,9 +1,11 @@
+import { randomUUID } from 'crypto';
+
 export type EstadoGeneral = 'ACTIVO' | 'INACTIVO';
 export type PresentacionInsumo = 'LIQUIDO' | 'POLVO' | 'BLOQUE' | 'SOBRE' | 'GEL' | 'OTRO';
 export type UnidadMedidaInsumo = 'ML' | 'L' | 'G' | 'KG' | 'SOBRE' | 'BLOQUE' | 'UNIDAD';
 
 export interface InsumoProps {
-  id: string;
+  id?: string;
   nombreComercial: string;
   principioActivo: string;
   presentacion: PresentacionInsumo;
@@ -42,7 +44,7 @@ export class Insumo {
       throw new Error('El número de registro DIGESA es obligatorio para saneamiento ambiental');
     }
 
-    this.id = props.id;
+    this.id = props.id ?? randomUUID();
     this.nombreComercial = props.nombreComercial.trim();
     this.principioActivo = props.principioActivo.trim();
     this.presentacion = props.presentacion;

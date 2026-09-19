@@ -1,9 +1,10 @@
+import { randomUUID } from 'crypto';
 import { EstadoGeneral } from './cliente';
 
 export type CargoPersonal = 'SUPERVISOR' | 'TECNICO_OPERADOR';
 
 export interface PersonalProps {
-  id: string;
+  id?: string;
   dni: string;
   nombres: string;
   apellidos: string;
@@ -41,7 +42,7 @@ export class Personal {
       throw new Error(`Cargo no válido: ${props.cargo}. Debe ser SUPERVISOR o TECNICO_OPERADOR`);
     }
 
-    this.id = props.id;
+    this.id = props.id ?? randomUUID();
     this.dni = props.dni;
     this.nombres = props.nombres.trim();
     this.apellidos = props.apellidos.trim();

@@ -1,3 +1,5 @@
+import { randomUUID } from 'crypto';
+
 export type TipoEquipo =
   | 'FUMIGACION'
   | 'NEBULIZACION'
@@ -10,7 +12,7 @@ export type TipoEquipo =
 export type EstadoOperativoEquipo = 'OPERATIVO' | 'MANTENIMIENTO' | 'FUERA_SERVICIO';
 
 export interface EquipoProps {
-  id: string;
+  id?: string;
   codigoInterno: string;
   nombre: string;
   tipo: TipoEquipo;
@@ -41,7 +43,7 @@ export class Equipo {
       throw new Error('El nombre del equipo es obligatorio');
     }
 
-    this.id = props.id;
+    this.id = props.id ?? randomUUID();
     this.codigoInterno = props.codigoInterno.trim().toUpperCase();
     this.nombre = props.nombre.trim();
     this.tipo = props.tipo;

@@ -3,15 +3,17 @@ import { OperacionesController } from './infrastructure/operaciones.controller';
 import { RegistrarInspeccionUseCase } from './application/registrar-inspeccion.usecase';
 import { CerrarInspeccionUseCase } from './application/cerrar-inspeccion.usecase';
 import { INSPECCION_REPOSITORY } from './domain/ports/inspeccion.repository';
-import { InspeccionRepositoryMemory } from './infrastructure/inspeccion.repository.memory';
+import { KyselyInspeccionRepository } from './infrastructure/adapters/kysely-inspeccion.repository';
+import { MantenimientoModule } from '../mantenimiento/mantenimiento.module';
 
 @Module({
+  imports: [MantenimientoModule],
   controllers: [OperacionesController],
   providers: [
     RegistrarInspeccionUseCase,
     CerrarInspeccionUseCase,
-    { provide: INSPECCION_REPOSITORY, useClass: InspeccionRepositoryMemory },
+    { provide: INSPECCION_REPOSITORY, useClass: KyselyInspeccionRepository },
   ],
-  exports: [RegistrarInspeccionUseCase, CerrarInspeccionUseCase],
+  exports: [RegistrarInspeccionUseCase, CerrarInspeccionUseCase, INSPECCION_REPOSITORY],
 })
 export class OperacionesModule {}
