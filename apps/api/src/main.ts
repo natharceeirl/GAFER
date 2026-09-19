@@ -16,6 +16,11 @@ async function bootstrap() {
   // Habilitar CORS para integración con apps/web y apps/mobile
   app.enableCors();
 
+  // Prefijo global de la API REST (/api), preservando /docs y /docs-json en la raíz
+  app.setGlobalPrefix('api', {
+    exclude: ['docs', 'docs-json'],
+  });
+
   // Filtro Global de Excepciones de Dominio (mapea invariantes de negocio a HTTP 400/404/409)
   app.useGlobalFilters(new DomainExceptionFilter());
 

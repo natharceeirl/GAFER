@@ -1,19 +1,24 @@
-import { Body, Controller, Param, Post } from '@nestjs/common';
 import {
-  ApiOperation,
-  ApiParam,
-  ApiProperty,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+} from '@nestjs/common';
+import { ApiProperty, ApiTags } from '@nestjs/swagger';
 import { RegistrarInspeccionUseCase } from '../application/registrar-inspeccion.usecase';
 import {
   CerrarInspeccionUseCase,
   ConsumoInsumoCommand,
 } from '../application/cerrar-inspeccion.usecase';
+import { ObtenerInspeccionUseCase } from '../application/obtener-inspeccion.usecase';
 import {
   ApiCrearInspeccionDoc,
   ApiCerrarInspeccionDoc,
+  ApiObtenerInspeccionPorIdDoc,
+  ApiConsultarInspeccionDoc,
 } from './operaciones.controller.doc';
 import { IsArray, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -70,6 +75,7 @@ export class OperacionesController {
   constructor(
     private readonly registrarInspeccion: RegistrarInspeccionUseCase,
     private readonly cerrarInspeccion: CerrarInspeccionUseCase,
+    private readonly obtenerInspeccion: ObtenerInspeccionUseCase,
   ) {}
 
   @Post()
@@ -85,10 +91,54 @@ export class OperacionesController {
     };
   }
 
+  @Get()
+  @ApiConsultarInspeccionDoc()
+  async consultar(@Query('servicioId') servicioId?: string) {
+    if (!servicioId) {
+      return null;
+    }
+    const inspeccion = await this.obtenerInspeccion.ejecutarPorServicioId(servicioId);
+    if (!inspeccion) {
+      return null;
+    }
+    return {
+      id: inspeccion.id,
+      servicioId: inspeccion.servicioId,
+      codigoInspeccion: inspeccion.codigoInspeccion,
+      estado: inspeccion.getEstado(),
+      versionSync: inspeccion.getVersionSync(),
+      fechaEjecucion: inspeccion.fechaEjecucion,
+      horaInicio: inspeccion.horaInicio,
+      horaFin: inspeccion.horaFin,
+      tecnicosParticipantes: inspeccion.tecnicosParticipantes,
+      snapshotCatalogos: inspeccion.getSnapshot(),
+    };
+  }
+
+  @Get(':id')
+  @ApiObtenerInspeccionPorIdDoc()
+  async obtenerPorId(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    const inspeccion = await this.obtenerInspeccion.ejecutarPorId(id);
+    return {
+      id: inspeccion.id,
+      servicioId: inspeccion.servicioId,
+      codigoInspeccion: inspeccion.codigoInspeccion,
+      estado: inspeccion.getEstado(),
+      versionSync: inspeccion.getVersionSync(),
+      fechaEjecucion: inspeccion.fechaEjecucion,
+      horaInicio: inspeccion.horaInicio,
+      horaFin: inspeccion.horaFin,
+      tecnicosParticipantes: inspeccion.tecnicosParticipantes,
+      snapshotCatalogos: inspeccion.getSnapshot(),
+    };
+  }
+
   @Post(':id/cerrar')
   @ApiCerrarInspeccionDoc()
   async cerrar(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() dto?: CerrarInspeccionDto,
   ) {
     const inspeccion = await this.cerrarInspeccion.execute({

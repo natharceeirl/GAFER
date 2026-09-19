@@ -109,6 +109,17 @@ export class DomainExceptionFilter implements ExceptionFilter {
           path: request.url,
         });
       }
+      if (pgCode === '22P02') {
+        // invalid_text_representation (ej. sintaxis UUID no válida)
+        return response.status(HttpStatus.BAD_REQUEST).json({
+          statusCode: HttpStatus.BAD_REQUEST,
+          error: 'Bad Request',
+          message: 'Formato de identificador UUID no válido',
+          detail: (exception as any).detail,
+          timestamp: new Date().toISOString(),
+          path: request.url,
+        });
+      }
 
       this.logger.error(`Unhandled Exception: ${message}`, exception.stack);
       return response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({

@@ -73,3 +73,20 @@ export class InspeccionCerradaResponseDto {
   @ApiProperty({ type: SnapshotCatalogosDto, description: 'Copia inmutable de los catálogos al momento del cierre (Sección 13)' })
   snapshotCatalogos!: SnapshotCatalogosDto;
 }
+
+export class InspeccionDetalleResponseDto extends InspeccionResponseDto {
+  @ApiProperty({ example: '2026-09-19', description: 'Fecha de ejecución' })
+  fechaEjecucion!: string;
+
+  @ApiProperty({ example: '08:30', required: false, nullable: true })
+  horaInicio!: string | null;
+
+  @ApiProperty({ example: '11:45', required: false, nullable: true })
+  horaFin!: string | null;
+
+  @ApiProperty({ example: ['DNI-44556677'], type: [String] })
+  tecnicosParticipantes!: string[];
+
+  @ApiProperty({ type: SnapshotCatalogosDto, description: 'Copia inmutable de los catálogos al momento del cierre (Sección 13)' })
+  snapshotCatalogos!: SnapshotCatalogosDto;
+}

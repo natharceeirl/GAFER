@@ -68,3 +68,51 @@ export function ApiCerrarInspeccionDoc() {
     }),
   );
 }
+
+export function ApiObtenerInspeccionPorIdDoc() {
+  return applyDecorators(
+    ApiOperation({
+      summary: 'Obtener detalle completo de una inspección por ID',
+      description: 'Retorna estado, participantes y el snapshot_catalogos congelado de la Sección 13.',
+    }),
+    ApiParam({
+      name: 'id',
+      description: 'UUID de la inspección',
+      example: 'insp-1111111-1111-1111-1111-111111111111',
+    }),
+    ApiResponse({
+      status: 200,
+      description: 'Inspección encontrada',
+      type: InspeccionResponseDto,
+    }),
+    ApiResponse({
+      status: 400,
+      description: 'UUID de inspección inválido',
+      type: BadRequestErrorDto,
+    }),
+    ApiResponse({
+      status: 404,
+      description: 'Inspección no encontrada',
+      type: NotFoundErrorDto,
+    }),
+  );
+}
+
+export function ApiConsultarInspeccionDoc() {
+  return applyDecorators(
+    ApiOperation({
+      summary: 'Consultar inspección activa por servicioId (usado por frontend web/móvil)',
+      description: 'Permite a apps/web consultar si existe una inspección en curso vinculada a un servicio contratado.',
+    }),
+    ApiResponse({
+      status: 200,
+      description: 'Inspección asociada al servicio (o null si no existe)',
+      type: InspeccionResponseDto,
+    }),
+    ApiResponse({
+      status: 400,
+      description: 'UUID de servicio contratado inválido',
+      type: BadRequestErrorDto,
+    }),
+  );
+}

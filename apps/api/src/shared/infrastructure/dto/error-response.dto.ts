@@ -19,7 +19,7 @@ export class BadRequestErrorDto {
   @ApiProperty({ example: '2026-09-19T19:00:00.000Z', description: 'Marca de tiempo ISO del error' })
   timestamp!: string;
 
-  @ApiProperty({ example: '/mantenimiento/clientes', description: 'Ruta del endpoint solicitado' })
+  @ApiProperty({ example: '/api/mantenimiento/clientes', description: 'Ruta del endpoint solicitado' })
   path!: string;
 }
 
@@ -40,7 +40,7 @@ export class NotFoundErrorDto {
   timestamp!: string;
 
   @ApiProperty({
-    example: '/mantenimiento/clientes/c1111111-1111-1111-1111-111111111111',
+    example: '/api/mantenimiento/clientes/c1111111-1111-1111-1111-111111111111',
     description: 'Ruta del endpoint solicitado',
   })
   path!: string;
@@ -62,7 +62,7 @@ export class ConflictErrorDto {
   @ApiProperty({ example: '2026-09-19T19:00:00.000Z', description: 'Marca de tiempo ISO del error' })
   timestamp!: string;
 
-  @ApiProperty({ example: '/mantenimiento/clientes', description: 'Ruta del endpoint solicitado' })
+  @ApiProperty({ example: '/api/mantenimiento/clientes', description: 'Ruta del endpoint solicitado' })
   path!: string;
 }
 
@@ -82,6 +82,6 @@ export class InternalServerErrorDto {
   @ApiProperty({ example: '2026-09-19T19:00:00.000Z', description: 'Marca de tiempo ISO del error' })
   timestamp!: string;
 
-  @ApiProperty({ example: '/mantenimiento/clientes', description: 'Ruta del endpoint solicitado' })
+  @ApiProperty({ example: '/api/mantenimiento/clientes', description: 'Ruta del endpoint solicitado' })
   path!: string;
 }

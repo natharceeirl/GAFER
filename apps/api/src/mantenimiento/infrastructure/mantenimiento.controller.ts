@@ -5,6 +5,7 @@ import {
   Inject,
   NotFoundException,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -207,7 +208,9 @@ export class MantenimientoController {
 
   @Get('clientes/:id')
   @ApiObtenerClienteDoc()
-  async obtenerCliente(@Param('id') id: string): Promise<ClienteDetalleResponseDto> {
+  async obtenerCliente(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<ClienteDetalleResponseDto> {
     const cliente = await this.clienteRepo.buscarPorId(id);
     if (!cliente) {
       throw new NotFoundException(`Cliente ${id} no encontrado`);
@@ -231,7 +234,7 @@ export class MantenimientoController {
   @Patch('clientes/:id')
   @ApiActualizarClienteDoc()
   async actualizarCliente(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() dto: ActualizarClienteDto,
   ): Promise<ClienteDetalleResponseDto> {
     const cliente = await this.actualizarClienteUseCase.execute({
@@ -256,14 +259,18 @@ export class MantenimientoController {
 
   @Patch('clientes/:id/desactivar')
   @ApiDesactivarClienteDoc()
-  async desactivarCliente(@Param('id') id: string): Promise<EstadoSimpleResponseDto> {
+  async desactivarCliente(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<EstadoSimpleResponseDto> {
     const cliente = await this.desactivarClienteUseCase.execute(id);
     return { id: cliente.id, estado: cliente.getEstado() };
   }
 
   @Patch('clientes/:id/activar')
   @ApiActivarClienteDoc()
-  async activarCliente(@Param('id') id: string): Promise<EstadoSimpleResponseDto> {
+  async activarCliente(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<EstadoSimpleResponseDto> {
     const cliente = await this.activarClienteUseCase.execute(id);
     return { id: cliente.id, estado: cliente.getEstado() };
   }
@@ -293,7 +300,7 @@ export class MantenimientoController {
   @Get('proyectos/cliente/:clienteId')
   @ApiListarProyectosPorClienteDoc()
   async listarProyectosPorCliente(
-    @Param('clienteId') clienteId: string,
+    @Param('clienteId', new ParseUUIDPipe({ version: '4' })) clienteId: string,
   ): Promise<ProyectoResponseDto[]> {
     const proyectos = await this.proyectoRepo.buscarPorClienteId(clienteId);
     return proyectos.map((p) => ({
@@ -336,7 +343,7 @@ export class MantenimientoController {
   @Get('servicios-contratados/proyecto/:proyectoId')
   @ApiListarServiciosPorProyectoDoc()
   async listarServiciosPorProyecto(
-    @Param('proyectoId') proyectoId: string,
+    @Param('proyectoId', new ParseUUIDPipe({ version: '4' })) proyectoId: string,
   ): Promise<ServicioContratadoResponseDto[]> {
     const servicios = await this.servicioRepo.buscarPorProyectoId(proyectoId);
     return servicios.map((s) => ({
@@ -420,7 +427,9 @@ export class MantenimientoController {
 
   @Patch('insumos/:id/desactivar')
   @ApiDesactivarInsumoDoc()
-  async desactivarInsumo(@Param('id') id: string): Promise<EstadoSimpleResponseDto> {
+  async desactivarInsumo(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<EstadoSimpleResponseDto> {
     const insumo = await this.desactivarInsumoUseCase.execute(id);
     return { id: insumo.id, estado: insumo.getEstado() };
   }
@@ -482,7 +491,7 @@ export class MantenimientoController {
   @Patch('equipos/:id/estado')
   @ApiCambiarEstadoEquipoDoc()
   async cambiarEstadoEquipo(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() dto: CambiarEstadoEquipoDto,
   ): Promise<EquipoResponseDto> {
     const equipo = await this.actualizarEstadoEquipoUseCase.execute(
@@ -559,7 +568,9 @@ export class MantenimientoController {
 
   @Patch('personal/:id/desactivar')
   @ApiDesactivarPersonalDoc()
-  async desactivarPersonal(@Param('id') id: string): Promise<EstadoSimpleResponseDto> {
+  async desactivarPersonal(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<EstadoSimpleResponseDto> {
     const personal = await this.desactivarPersonalUseCase.execute(id);
     return { id: personal.id, estado: personal.getEstado() };
   }

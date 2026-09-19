@@ -46,6 +46,16 @@ export class KyselyInspeccionRepository implements InspeccionRepository {
     return row ? this.mapToDomain(row) : null;
   }
 
+  async buscarPorServicioId(servicioId: string): Promise<Inspeccion | null> {
+    const row = await this.db
+      .selectFrom('inspecciones')
+      .selectAll()
+      .where('servicio_id', '=', servicioId)
+      .executeTakeFirst();
+
+    return row ? this.mapToDomain(row) : null;
+  }
+
   private mapToDomain(row: any): Inspeccion {
     const snapshotCatalogos =
       typeof row.snapshot_catalogos === 'string'
