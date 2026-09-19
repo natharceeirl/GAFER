@@ -35,44 +35,53 @@ Cada uno con tres capas internas: `domain/` (sin framework), `application/` (cas
 
 ## Cómo correr el proyecto
 
-### 1. Variables de entorno e Infraestructura local
-```bash
-# Copiar plantilla de variables de entorno
-cp .env.example .env
+### 1. Instalación y Variables de Entorno
 
-# Levantar infraestructura local (PostgreSQL 16, Redis 7, MinIO S3)
+```bash
+# 1. Instalar dependencias de todo el monorepo
+pnpm install
+
+# 2. Crear archivo de variables de entorno desde la plantilla
+cp .env.example .env
+```
+*(Tanto la Web como el Backend y el Worker leen este `.env` central automáticamente en desarrollo).*
+
+### 2. Levantar Infraestructura Local (Docker)
+
+```bash
+# Levantar PostgreSQL 16, Redis 7 y MinIO S3
 pnpm infra:up
 ```
 - **PostgreSQL:** `localhost:5432` (usuario: `gafer`, pass: `gafer`, db: `gafer`)
 - **Redis:** `localhost:6379`
 - **MinIO Console (S3):** `http://localhost:9001` (usuario: `gafer`, pass: `gafersecret`)
+- *(Para apagar los contenedores: `pnpm infra:down`)*
 
-### 2. Iniciar servicios en desarrollo
+### 3. Iniciar Servicios en Desarrollo
+
+Abre terminales separadas para los servicios que vayas a ejecutar:
 
 ```bash
-# Instalar dependencias
-pnpm install
+# Backend API (NestJS — corre en http://localhost:3000)
+pnpm dev:api
 
-# Backend API (NestJS)
-pnpm dev:api          # o: pnpm --filter @gafer/api start:dev
+# Worker asíncrono (NestJS + BullMQ — procesa jobs en segundo plano)
+pnpm dev:worker
 
-# Worker asíncrono (NestJS + BullMQ)
-pnpm dev:worker       # o: pnpm --filter @gafer/worker start:dev
+# Frontend Web (React + Vite Backoffice — abre en http://localhost:5173)
+pnpm dev:web
 
-# Frontend Web (React + Vite Backoffice)
-pnpm dev:web          # o: pnpm --filter @gafer/web dev
-
-# Mobile de campo (React Native + Expo SDK 57)
-pnpm dev:mobile       # o: pnpm --filter @gafer/mobile start
+# Mobile de campo (React Native + Expo SDK 57 — abre servidor Metro)
+pnpm dev:mobile
 ```
 
-### 3. Tests y Compilación
+### 4. Tests y Compilación
 
 ```bash
 # Compilar todo el monorepo respetando dependencias
 pnpm build
 
-# Ejecutar la suite completa de pruebas unitarias
+# Ejecutar la suite completa de 41 tests unitarios
 pnpm test
 ```
 
