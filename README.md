@@ -4,18 +4,19 @@ Sistema de automatización de informes y reportes para GAFER Saneamiento Ambient
 
 ## Estructura del proyecto
 
-Monorepo con pnpm workspaces. Backend en monolito modular (hexagonal + screaming architecture), frontend PWA (Feature-Sliced Design + Atomic Design + Container-Presentational).
+Monorepo con pnpm workspaces. Backend en monolito modular (hexagonal + screaming architecture), frontend web backoffice (React + Vite, FSD), app móvil de campo (React Native + Expo, FSD, offline-first).
 
 ```
 gafer/
 ├── apps/
-│   ├── api/          # NestJS — 7 módulos de dominio (ver debajo)
-│   ├── worker/        # NestJS — jobs asíncronos (PDF, fotos, alertas), reutiliza código de apps/api
-│   └── web/           # React + Vite — PWA instalable, FSD
+│   ├── api/          # NestJS — 7 módulos de dominio hexagonal
+│   ├── worker/       # NestJS + BullMQ — jobs asíncronos (PDF, fotos, alertas)
+│   ├── web/          # React + Vite — Backoffice administrativo en PC (FSD)
+│   └── mobile/       # React Native + Expo — App Android de campo offline-first (FSD)
 ├── packages/
-│   └── contracts/     # Tipos/esquemas Zod compartidos entre api y web
-├── infra/              # docker-compose (Postgres local), migraciones
-└── docs/               # Notas de arquitectura
+│   └── contracts/    # Tipos y esquemas Zod compartidos entre api, web y mobile
+├── infra/            # docker-compose (Postgres 16, Redis 7, MinIO S3)
+└── docs/             # Especificaciones y notas de arquitectura (ARQUITECTURA.md)
 ```
 
 ### Módulos de dominio (`apps/api/src`)
@@ -44,12 +45,15 @@ docker compose -f infra/docker-compose.yml up -d
 pnpm --filter @gafer/api start:dev
 pnpm --filter @gafer/worker start:dev
 
-# Frontend
+# Frontend Web
 pnpm --filter @gafer/web dev
 
+# Mobile (Android / Expo)
+pnpm --filter @gafer/mobile start
+
 # Tests / build de todo el monorepo (respeta el orden de dependencias)
-pnpm -r build
-pnpm -r test
+pnpm build
+pnpm test
 ```
 
 Los repositorios de `infrastructure/` en cada módulo son adapters en memoria (`*.repository.memory.ts`), marcados con `TODO` — se reemplazan por adapters Postgres antes de producción, sin tocar `domain/` ni `application/`.

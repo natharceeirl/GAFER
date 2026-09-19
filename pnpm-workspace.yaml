@@ -4,3 +4,8 @@ packages:
 allowBuilds:
   '@nestjs/core': true
   esbuild: true
+minimumReleaseAgeExclude:
+  - '@expo/cli@57.0.26'
+  - expo-asset@57.0.18
+  - expo-constants@57.0.19
+  - expo@57.0.24
