@@ -9,6 +9,8 @@
     "lint": "pnpm -r --if-present lint",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "db:migrate": "pnpm --filter @gafer/api db:migrate",
+    "db:rollback": "pnpm --filter @gafer/api db:rollback",
     "dev:api": "pnpm --filter @gafer/api start:dev",
     "dev:worker": "pnpm --filter @gafer/worker start:dev",
     "dev:web": "pnpm --filter @gafer/web dev",

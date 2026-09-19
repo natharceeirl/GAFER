@@ -71,12 +71,25 @@ pnpm infra:up
 - **MinIO Console (S3):** `http://localhost:9001` (usuario: `gafer`, pass: `gafersecret`)
 - *(Para apagar los contenedores: `pnpm infra:down`)*
 
-### 4. Iniciar Servicios en Desarrollo
+### 4. Migraciones de Base de Datos (PostgreSQL 16 + Kysely)
+
+Una vez levantada la infraestructura Docker, ejecuta las migraciones para crear las tablas maestras de la Fase 1:
+
+```bash
+# Ejecutar migraciones pendientes (UP)
+pnpm db:migrate
+
+# Revertir última migración en caso de necesidad (DOWN)
+pnpm db:rollback
+```
+*Las migraciones SQL residen en `infra/migrations/` y los tipos TypeScript para Kysely en `apps/api/src/database/types.ts`.*
+
+### 5. Iniciar Servicios en Desarrollo
 
 Abre terminales separadas para los servicios que vayas a ejecutar:
 
 ```bash
-# Backend API (NestJS — corre en http://localhost:3000)
+# Backend API (NestJS — corre en http://localhost:3000/api)
 pnpm dev:api
 
 # Worker asíncrono (NestJS + BullMQ — procesa jobs en segundo plano)
@@ -89,14 +102,17 @@ pnpm dev:web
 pnpm dev:mobile
 ```
 
-### 5. Tests y Compilación
+- **Documentación Interactiva (Scalar):** `http://localhost:3000/docs`
+- **Especificación OpenAPI (JSON):** `http://localhost:3000/docs-json`
+
+### 6. Tests y Compilación
 
 ```bash
 # Compilar todo el monorepo respetando dependencias
 pnpm build
 
-# Ejecutar la suite completa de 41 tests unitarios
+# Ejecutar la suite completa de 84 tests automatizados
 pnpm test
 ```
 
-Los repositorios de `infrastructure/` en cada módulo son adapters en memoria (`*.repository.memory.ts`), marcados con `TODO` — se reemplazan por adapters Postgres antes de producción, sin tocar `domain/` ni `application/`.
+La persistencia de la Fase 1 (Mantenimiento y Operaciones) utiliza adaptadores de PostgreSQL 16 con Kysely (`Kysely*Repository`), asegurando la regla de inmutabilidad contractual de la Sección 13 (`snapshot_catalogos`). Las fases subsiguientes cuentan con scaffolds desacoplados listos para su desarrollo en sus respectivos ciclos de SDD.
