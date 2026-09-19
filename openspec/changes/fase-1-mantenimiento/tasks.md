@@ -24,7 +24,7 @@
   - Screaming architecture: `src/modules/maintenance/` (domain, application, infrastructure).
   - Validaciones de negocio: unicidad de código corto, validación estricta de 11 dígitos para RUC.
   - DoD: Tests unitarios de servicios con mocks en Jest (`pnpm --filter @gafer/api test`).
-- [ ] **T2.3: Endpoints REST y Validación de Inmutabilidad Sección 13** <!-- id: 2.3 -->
+- [x] **T2.3: Endpoints REST y Validación de Inmutabilidad Sección 13** <!-- id: 2.3 -->
   - Implementar controladores REST para Clientes, Sedes, Servicios, Insumos, Equipos, Personal.
   - Implementar lógica de guardado de `snapshot_catalogos` en `inspecciones`.
   - Integración básica con MinIO para carga y firma de URLs de fichas técnicas y MSDS.

@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { EstadoGeneral } from './cliente';
 
 export type TipoServicio = 'DSF' | 'DSS' | 'DRT' | 'LRA' | 'LTG' | 'LTS' | 'LAM';
@@ -13,7 +14,7 @@ export type FrecuenciaServicio =
   | 'PUNTUAL';
 
 export interface ServicioContratadoProps {
-  id: string;
+  id?: string;
   proyectoId: string;
   tipoServicio: TipoServicio;
   frecuencia: FrecuenciaServicio;
@@ -63,7 +64,7 @@ export class ServicioContratado {
       throw new Error('Si el servicio requiere certificado ambiental, debe especificarse una vigencia en días mayor a 0');
     }
 
-    this.id = props.id;
+    this.id = props.id ?? randomUUID();
     this.proyectoId = props.proyectoId;
     this.tipoServicio = props.tipoServicio;
     this.frecuencia = props.frecuencia;

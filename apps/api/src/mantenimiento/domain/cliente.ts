@@ -1,7 +1,9 @@
+import { randomUUID } from 'crypto';
+
 export type EstadoGeneral = 'ACTIVO' | 'INACTIVO';
 
 export interface ClienteProps {
-  id: string;
+  id?: string;
   razonSocial: string;
   ruc: string;
   codigoCorto: string;
@@ -17,17 +19,17 @@ export interface ClienteProps {
 
 export class Cliente {
   public readonly id: string;
-  public readonly razonSocial: string;
+  public razonSocial: string;
   public readonly ruc: string;
   public readonly codigoCorto: string;
-  public readonly direccionFiscal: string;
-  public readonly giroNegocio: string;
-  public readonly contactoNombre: string;
-  public readonly contactoCargo: string;
-  public readonly contactoTelefono: string;
-  public readonly contactoCorreo: string;
+  public direccionFiscal: string;
+  public giroNegocio: string;
+  public contactoNombre: string;
+  public contactoCargo: string;
+  public contactoTelefono: string;
+  public contactoCorreo: string;
   private estado: EstadoGeneral;
-  public readonly camposExtra: Record<string, unknown>;
+  public camposExtra: Record<string, unknown>;
 
   constructor(props: ClienteProps) {
     if (!/^[0-9]{11}$/.test(props.ruc)) {
@@ -46,7 +48,7 @@ export class Cliente {
       throw new Error('El correo de contacto debe ser válido');
     }
 
-    this.id = props.id;
+    this.id = props.id ?? randomUUID();
     this.razonSocial = props.razonSocial.trim();
     this.ruc = props.ruc;
     this.codigoCorto = props.codigoCorto;
@@ -66,6 +68,51 @@ export class Cliente {
 
   activar(): void {
     this.estado = 'ACTIVO';
+  }
+
+  actualizarDatos(props: {
+    razonSocial?: string;
+    direccionFiscal?: string;
+    giroNegocio?: string;
+    contactoNombre?: string;
+    contactoCargo?: string;
+    contactoTelefono?: string;
+    contactoCorreo?: string;
+    camposExtra?: Record<string, unknown>;
+  }): void {
+    if (props.razonSocial !== undefined) {
+      if (!props.razonSocial.trim()) {
+        throw new Error('La razón social es obligatoria');
+      }
+      this.razonSocial = props.razonSocial.trim();
+    }
+    if (props.direccionFiscal !== undefined) {
+      if (!props.direccionFiscal.trim()) {
+        throw new Error('La dirección fiscal es obligatoria');
+      }
+      this.direccionFiscal = props.direccionFiscal.trim();
+    }
+    if (props.giroNegocio !== undefined) {
+      this.giroNegocio = props.giroNegocio.trim();
+    }
+    if (props.contactoNombre !== undefined) {
+      this.contactoNombre = props.contactoNombre.trim();
+    }
+    if (props.contactoCargo !== undefined) {
+      this.contactoCargo = props.contactoCargo.trim();
+    }
+    if (props.contactoTelefono !== undefined) {
+      this.contactoTelefono = props.contactoTelefono.trim();
+    }
+    if (props.contactoCorreo !== undefined) {
+      if (!props.contactoCorreo.includes('@')) {
+        throw new Error('El correo de contacto debe ser válido');
+      }
+      this.contactoCorreo = props.contactoCorreo.trim().toLowerCase();
+    }
+    if (props.camposExtra !== undefined) {
+      this.camposExtra = { ...this.camposExtra, ...props.camposExtra };
+    }
   }
 
   getEstado(): EstadoGeneral {

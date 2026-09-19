@@ -1,7 +1,8 @@
+import { randomUUID } from 'crypto';
 import { EstadoGeneral } from './cliente';
 
 export interface ProyectoProps {
-  id: string;
+  id?: string;
   clienteId: string;
   nombre: string;
   direccionSede: string;
@@ -42,7 +43,7 @@ export class Proyecto {
       throw new Error('La dirección física de la sede es obligatoria');
     }
 
-    this.id = props.id;
+    this.id = props.id ?? randomUUID();
     this.clienteId = props.clienteId;
     this.nombre = props.nombre;
     this.direccionSede = props.direccionSede.trim();
