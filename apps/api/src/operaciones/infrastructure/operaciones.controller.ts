@@ -15,7 +15,11 @@ import {
   InspeccionResponseDto,
   InspeccionCerradaResponseDto,
 } from './dto/operaciones-response.dto';
-import { ErrorResponseDto } from '../../mantenimiento/infrastructure/dto/mantenimiento-response.dto';
+import {
+  BadRequestErrorDto,
+  ConflictErrorDto,
+  NotFoundErrorDto,
+} from '../../shared/infrastructure/dto/error-response.dto';
 import { IsArray, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -86,7 +90,12 @@ export class OperacionesController {
   @ApiResponse({
     status: 400,
     description: 'Datos de inspección inválidos o faltantes',
-    type: ErrorResponseDto,
+    type: BadRequestErrorDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Servicio contratado asociado no encontrado',
+    type: NotFoundErrorDto,
   })
   async crear(@Body() dto: CrearInspeccionDto) {
     const inspeccion = await this.registrarInspeccion.ejecutar(dto.servicioId);
@@ -116,14 +125,19 @@ export class OperacionesController {
     type: InspeccionCerradaResponseDto,
   })
   @ApiResponse({
+    status: 400,
+    description: 'Parámetros de cierre o consumos de insumo inválidos',
+    type: BadRequestErrorDto,
+  })
+  @ApiResponse({
     status: 404,
     description: 'Inspección no encontrada',
-    type: ErrorResponseDto,
+    type: NotFoundErrorDto,
   })
   @ApiResponse({
     status: 409,
-    description: 'La inspección ya se encuentra cerrada y bloqueada',
-    type: ErrorResponseDto,
+    description: 'La inspección ya se encuentra cerrada y bloqueada permanentemente',
+    type: ConflictErrorDto,
   })
   async cerrar(
     @Param('id') id: string,

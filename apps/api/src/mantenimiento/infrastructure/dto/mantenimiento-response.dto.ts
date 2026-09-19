@@ -1,24 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
+export * from '../../../shared/infrastructure/dto/error-response.dto';
+import { BadRequestErrorDto } from '../../../shared/infrastructure/dto/error-response.dto';
 
-export class ErrorResponseDto {
-  @ApiProperty({ example: 400, description: 'Código de estado HTTP' })
-  statusCode!: number;
-
-  @ApiProperty({ example: 'Bad Request', description: 'Nombre del error HTTP' })
-  error!: string;
-
-  @ApiProperty({
-    example: 'El RUC debe tener exactamente 11 dígitos numéricos',
-    description: 'Descripción detallada del error de validación o regla de negocio',
-  })
-  message!: string | string[];
-
-  @ApiProperty({ example: '2026-09-19T19:00:00.000Z', description: 'Marca de tiempo ISO del error' })
-  timestamp!: string;
-
-  @ApiProperty({ example: '/mantenimiento/clientes', description: 'Ruta del endpoint solicitado' })
-  path!: string;
-}
+export class ErrorResponseDto extends BadRequestErrorDto {}
 
 export class ClienteResponseDto {
   @ApiProperty({ example: 'c1111111-1111-1111-1111-111111111111', description: 'Identificador único UUID' })
