@@ -35,24 +35,44 @@ Cada uno con tres capas internas: `domain/` (sin framework), `application/` (cas
 
 ## Cómo correr el proyecto
 
+### 1. Variables de entorno e Infraestructura local
 ```bash
+# Copiar plantilla de variables de entorno
+cp .env.example .env
+
+# Levantar infraestructura local (PostgreSQL 16, Redis 7, MinIO S3)
+pnpm infra:up
+```
+- **PostgreSQL:** `localhost:5432` (usuario: `gafer`, pass: `gafer`, db: `gafer`)
+- **Redis:** `localhost:6379`
+- **MinIO Console (S3):** `http://localhost:9001` (usuario: `gafer`, pass: `gafersecret`)
+
+### 2. Iniciar servicios en desarrollo
+
+```bash
+# Instalar dependencias
 pnpm install
 
-# Levantar Postgres local (opcional en esta etapa de scaffolding)
-docker compose -f infra/docker-compose.yml up -d
+# Backend API (NestJS)
+pnpm dev:api          # o: pnpm --filter @gafer/api start:dev
 
-# Backend
-pnpm --filter @gafer/api start:dev
-pnpm --filter @gafer/worker start:dev
+# Worker asíncrono (NestJS + BullMQ)
+pnpm dev:worker       # o: pnpm --filter @gafer/worker start:dev
 
-# Frontend Web
-pnpm --filter @gafer/web dev
+# Frontend Web (React + Vite Backoffice)
+pnpm dev:web          # o: pnpm --filter @gafer/web dev
 
-# Mobile (Android / Expo)
-pnpm --filter @gafer/mobile start
+# Mobile de campo (React Native + Expo SDK 57)
+pnpm dev:mobile       # o: pnpm --filter @gafer/mobile start
+```
 
-# Tests / build de todo el monorepo (respeta el orden de dependencias)
+### 3. Tests y Compilación
+
+```bash
+# Compilar todo el monorepo respetando dependencias
 pnpm build
+
+# Ejecutar la suite completa de pruebas unitarias
 pnpm test
 ```
 

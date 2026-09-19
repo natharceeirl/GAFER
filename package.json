@@ -6,7 +6,13 @@
     "pretest": "pnpm --filter @gafer/contracts build && pnpm --filter @gafer/api build",
     "build": "pnpm -r --if-present build",
     "test": "pnpm -r --if-present test",
-    "lint": "pnpm -r --if-present lint"
+    "lint": "pnpm -r --if-present lint",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "dev:api": "pnpm --filter @gafer/api start:dev",
+    "dev:worker": "pnpm --filter @gafer/worker start:dev",
+    "dev:web": "pnpm --filter @gafer/web dev",
+    "dev:mobile": "pnpm --filter @gafer/mobile start"
   },
   "devDependencies": {
     "typescript": "^5.5.4"
