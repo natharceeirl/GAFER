@@ -3,6 +3,7 @@ packages:
   - 'packages/*'
 allowBuilds:
   '@nestjs/core': true
+  '@scarf/scarf': false
   esbuild: true
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.26'
