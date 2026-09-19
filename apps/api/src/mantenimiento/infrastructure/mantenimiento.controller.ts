@@ -5,17 +5,27 @@ import {
   Inject,
   NotFoundException,
   Param,
+  Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
-// Use Cases
+// Use Cases - Creación
 import { RegistrarClienteUseCase } from '../application/registrar-cliente.usecase';
 import { RegistrarProyectoUseCase } from '../application/registrar-proyecto.usecase';
 import { RegistrarServicioContratadoUseCase } from '../application/registrar-servicio-contratado.usecase';
 import { RegistrarInsumoUseCase } from '../application/registrar-insumo.usecase';
 import { RegistrarEquipoUseCase } from '../application/registrar-equipo.usecase';
 import { RegistrarPersonalUseCase } from '../application/registrar-personal.usecase';
+
+// Use Cases - Ciclo de Vida y Actualización
+import { ActualizarClienteUseCase } from '../application/actualizar-cliente.usecase';
+import { DesactivarClienteUseCase } from '../application/desactivar-cliente.usecase';
+import { ActivarClienteUseCase } from '../application/activar-cliente.usecase';
+import { DesactivarInsumoUseCase } from '../application/desactivar-insumo.usecase';
+import { ActualizarEstadoEquipoUseCase } from '../application/actualizar-estado-equipo.usecase';
+import { DesactivarPersonalUseCase } from '../application/desactivar-personal.usecase';
 
 // Ports
 import {
@@ -49,25 +59,34 @@ import { S3StorageService } from '../../shared/infrastructure/storage/s3-storage
 // DTOs
 import {
   CrearClienteDto,
+  ActualizarClienteDto,
   CrearProyectoDto,
   CrearServicioContratadoDto,
   CrearInsumoDto,
   CrearEquipoDto,
+  CambiarEstadoEquipoDto,
   CrearPersonalDto,
   GenerarUploadUrlDto,
   GenerarDownloadUrlDto,
 } from './dto/mantenimiento.dto';
+import { PaginacionQueryDto } from '../../shared/infrastructure/dto/paginacion.dto';
 
 @ApiTags('Mantenimiento')
 @Controller('mantenimiento')
 export class MantenimientoController {
   constructor(
     private readonly registrarClienteUseCase: RegistrarClienteUseCase,
+    private readonly actualizarClienteUseCase: ActualizarClienteUseCase,
+    private readonly desactivarClienteUseCase: DesactivarClienteUseCase,
+    private readonly activarClienteUseCase: ActivarClienteUseCase,
     private readonly registrarProyectoUseCase: RegistrarProyectoUseCase,
     private readonly registrarServicioContratadoUseCase: RegistrarServicioContratadoUseCase,
     private readonly registrarInsumoUseCase: RegistrarInsumoUseCase,
+    private readonly desactivarInsumoUseCase: DesactivarInsumoUseCase,
     private readonly registrarEquipoUseCase: RegistrarEquipoUseCase,
+    private readonly actualizarEstadoEquipoUseCase: ActualizarEstadoEquipoUseCase,
     private readonly registrarPersonalUseCase: RegistrarPersonalUseCase,
+    private readonly desactivarPersonalUseCase: DesactivarPersonalUseCase,
     @Inject(CLIENTE_REPOSITORY)
     private readonly clienteRepo: ClienteRepository,
     @Inject(PROYECTO_REPOSITORY)
@@ -104,20 +123,40 @@ export class MantenimientoController {
   }
 
   @Get('clientes')
-  @ApiOperation({ summary: 'Listar todos los clientes registrados' })
-  async listarClientes() {
-    const clientes = await this.clienteRepo.listarTodos();
-    return clientes.map((c) => ({
-      id: c.id,
-      razonSocial: c.razonSocial,
-      ruc: c.ruc,
-      codigoCorto: c.codigoCorto,
-      estado: c.getEstado(),
-      giroNegocio: c.giroNegocio,
-      contactoNombre: c.contactoNombre,
-      contactoTelefono: c.contactoTelefono,
-      contactoCorreo: c.contactoCorreo,
-    }));
+  @ApiOperation({ summary: 'Listar clientes registrados con paginación' })
+  async listarClientes(@Query() query?: PaginacionQueryDto) {
+    const { limit = 20, offset = 0, busqueda } = query ?? {};
+    let clientes = await this.clienteRepo.listarTodos();
+
+    if (busqueda && busqueda.trim()) {
+      const q = busqueda.trim().toLowerCase();
+      clientes = clientes.filter(
+        (c) =>
+          c.razonSocial.toLowerCase().includes(q) ||
+          c.ruc.includes(q) ||
+          c.codigoCorto.toLowerCase().includes(q),
+      );
+    }
+
+    const total = clientes.length;
+    const paginados = clientes.slice(offset, offset + limit);
+
+    return {
+      total,
+      limit,
+      offset,
+      items: paginados.map((c) => ({
+        id: c.id,
+        razonSocial: c.razonSocial,
+        ruc: c.ruc,
+        codigoCorto: c.codigoCorto,
+        estado: c.getEstado(),
+        giroNegocio: c.giroNegocio,
+        contactoNombre: c.contactoNombre,
+        contactoTelefono: c.contactoTelefono,
+        contactoCorreo: c.contactoCorreo,
+      })),
+    };
   }
 
   @Get('clientes/:id')
@@ -141,6 +180,46 @@ export class MantenimientoController {
       estado: cliente.getEstado(),
       camposExtra: cliente.camposExtra,
     };
+  }
+
+  @Patch('clientes/:id')
+  @ApiOperation({ summary: 'Actualizar datos de un cliente existente' })
+  @ApiResponse({ status: 200, description: 'Cliente actualizado exitosamente' })
+  async actualizarCliente(
+    @Param('id') id: string,
+    @Body() dto: ActualizarClienteDto,
+  ) {
+    const cliente = await this.actualizarClienteUseCase.execute({
+      id,
+      ...dto,
+    });
+    return {
+      id: cliente.id,
+      razonSocial: cliente.razonSocial,
+      direccionFiscal: cliente.direccionFiscal,
+      giroNegocio: cliente.giroNegocio,
+      contactoNombre: cliente.contactoNombre,
+      contactoCargo: cliente.contactoCargo,
+      contactoTelefono: cliente.contactoTelefono,
+      contactoCorreo: cliente.contactoCorreo,
+      estado: cliente.getEstado(),
+    };
+  }
+
+  @Patch('clientes/:id/desactivar')
+  @ApiOperation({ summary: 'Desactivar un cliente (baja lógica)' })
+  @ApiResponse({ status: 200, description: 'Cliente desactivado' })
+  async desactivarCliente(@Param('id') id: string) {
+    const cliente = await this.desactivarClienteUseCase.execute(id);
+    return { id: cliente.id, estado: cliente.getEstado() };
+  }
+
+  @Patch('clientes/:id/activar')
+  @ApiOperation({ summary: 'Reactivar un cliente previamente desactivado' })
+  @ApiResponse({ status: 200, description: 'Cliente reactivado' })
+  async activarCliente(@Param('id') id: string) {
+    const cliente = await this.activarClienteUseCase.execute(id);
+    return { id: cliente.id, estado: cliente.getEstado() };
   }
 
   // ==========================================
@@ -254,22 +333,50 @@ export class MantenimientoController {
 
   @Get('insumos')
   @ApiOperation({ summary: 'Listar catálogo de insumos químicos activos' })
-  async listarInsumos() {
-    const insumos = await this.insumoRepo.listarActivos();
-    return insumos.map((i) => ({
-      id: i.id,
-      nombreComercial: i.nombreComercial,
-      principioActivo: i.principioActivo,
-      presentacion: i.presentacion,
-      unidadMedida: i.unidadMedida,
-      registroDigesa: i.registroDigesa,
-      concentracion: i.concentracion,
-      dosisEstandar: i.dosisEstandar,
-      fichaTecnicaKey: i.fichaTecnicaKey,
-      hojaMsdsKey: i.hojaMsdsKey,
-      proveedor: i.proveedor,
-      estado: i.getEstado(),
-    }));
+  async listarInsumos(@Query() query?: PaginacionQueryDto) {
+    const { limit = 20, offset = 0, busqueda } = query ?? {};
+    let insumos = await this.insumoRepo.listarActivos();
+
+    if (busqueda && busqueda.trim()) {
+      const q = busqueda.trim().toLowerCase();
+      insumos = insumos.filter(
+        (i) =>
+          i.nombreComercial.toLowerCase().includes(q) ||
+          i.principioActivo.toLowerCase().includes(q) ||
+          i.registroDigesa.toLowerCase().includes(q),
+      );
+    }
+
+    const total = insumos.length;
+    const paginados = insumos.slice(offset, offset + limit);
+
+    return {
+      total,
+      limit,
+      offset,
+      items: paginados.map((i) => ({
+        id: i.id,
+        nombreComercial: i.nombreComercial,
+        principioActivo: i.principioActivo,
+        presentacion: i.presentacion,
+        unidadMedida: i.unidadMedida,
+        registroDigesa: i.registroDigesa,
+        concentracion: i.concentracion,
+        dosisEstandar: i.dosisEstandar,
+        fichaTecnicaKey: i.fichaTecnicaKey,
+        hojaMsdsKey: i.hojaMsdsKey,
+        proveedor: i.proveedor,
+        estado: i.getEstado(),
+      })),
+    };
+  }
+
+  @Patch('insumos/:id/desactivar')
+  @ApiOperation({ summary: 'Desactivar un insumo del catálogo' })
+  @ApiResponse({ status: 200, description: 'Insumo desactivado' })
+  async desactivarInsumo(@Param('id') id: string) {
+    const insumo = await this.desactivarInsumoUseCase.execute(id);
+    return { id: insumo.id, estado: insumo.getEstado() };
   }
 
   // ==========================================
@@ -295,16 +402,54 @@ export class MantenimientoController {
 
   @Get('equipos')
   @ApiOperation({ summary: 'Listar catálogo de equipos operativos' })
-  async listarEquipos() {
-    const equipos = await this.equipoRepo.listarOperativos();
-    return equipos.map((e) => ({
-      id: e.id,
-      codigoInterno: e.codigoInterno,
-      nombre: e.nombre,
-      tipo: e.tipo,
-      marcaModelo: e.marcaModelo,
-      estadoOperativo: e.getEstadoOperativo(),
-    }));
+  async listarEquipos(@Query() query?: PaginacionQueryDto) {
+    const { limit = 20, offset = 0, busqueda } = query ?? {};
+    let equipos = await this.equipoRepo.listarOperativos();
+
+    if (busqueda && busqueda.trim()) {
+      const q = busqueda.trim().toLowerCase();
+      equipos = equipos.filter(
+        (e) =>
+          e.nombre.toLowerCase().includes(q) ||
+          e.codigoInterno.toLowerCase().includes(q) ||
+          e.tipo.toLowerCase().includes(q),
+      );
+    }
+
+    const total = equipos.length;
+    const paginados = equipos.slice(offset, offset + limit);
+
+    return {
+      total,
+      limit,
+      offset,
+      items: paginados.map((e) => ({
+        id: e.id,
+        codigoInterno: e.codigoInterno,
+        nombre: e.nombre,
+        tipo: e.tipo,
+        marcaModelo: e.marcaModelo,
+        estadoOperativo: e.getEstadoOperativo(),
+      })),
+    };
+  }
+
+  @Patch('equipos/:id/estado')
+  @ApiOperation({ summary: 'Actualizar estado operativo del equipo (OPERATIVO, MANTENIMIENTO, FUERA_SERVICIO)' })
+  @ApiResponse({ status: 200, description: 'Estado de equipo actualizado' })
+  async cambiarEstadoEquipo(
+    @Param('id') id: string,
+    @Body() dto: CambiarEstadoEquipoDto,
+  ) {
+    const equipo = await this.actualizarEstadoEquipoUseCase.execute(
+      id,
+      dto.estadoOperativo,
+    );
+    return {
+      id: equipo.id,
+      codigoInterno: equipo.codigoInterno,
+      estadoOperativo: equipo.getEstadoOperativo(),
+    };
   }
 
   // ==========================================
@@ -332,18 +477,46 @@ export class MantenimientoController {
 
   @Get('personal')
   @ApiOperation({ summary: 'Listar personal técnico y supervisores activos' })
-  async listarPersonal() {
-    const lista = await this.personalRepo.listarActivos();
-    return lista.map((p) => ({
-      id: p.id,
-      dni: p.dni,
-      nombres: p.nombres,
-      apellidos: p.apellidos,
-      cargo: p.cargo,
-      telefono: p.telefono,
-      usuario: p.usuario,
-      estado: p.getEstado(),
-    }));
+  async listarPersonal(@Query() query?: PaginacionQueryDto) {
+    const { limit = 20, offset = 0, busqueda } = query ?? {};
+    let lista = await this.personalRepo.listarActivos();
+
+    if (busqueda && busqueda.trim()) {
+      const q = busqueda.trim().toLowerCase();
+      lista = lista.filter(
+        (p) =>
+          p.nombres.toLowerCase().includes(q) ||
+          p.apellidos.toLowerCase().includes(q) ||
+          p.dni.includes(q),
+      );
+    }
+
+    const total = lista.length;
+    const paginados = lista.slice(offset, offset + limit);
+
+    return {
+      total,
+      limit,
+      offset,
+      items: paginados.map((p) => ({
+        id: p.id,
+        dni: p.dni,
+        nombres: p.nombres,
+        apellidos: p.apellidos,
+        cargo: p.cargo,
+        telefono: p.telefono,
+        usuario: p.usuario,
+        estado: p.getEstado(),
+      })),
+    };
+  }
+
+  @Patch('personal/:id/desactivar')
+  @ApiOperation({ summary: 'Desactivar personal o colaborador (baja lógica)' })
+  @ApiResponse({ status: 200, description: 'Personal desactivado' })
+  async desactivarPersonal(@Param('id') id: string) {
+    const personal = await this.desactivarPersonalUseCase.execute(id);
+    return { id: personal.id, estado: personal.getEstado() };
   }
 
   // ==========================================

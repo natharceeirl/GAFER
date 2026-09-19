@@ -2,13 +2,21 @@ import { Module } from '@nestjs/common';
 import { StorageModule } from '../shared/infrastructure/storage/storage.module';
 import { MantenimientoController } from './infrastructure/mantenimiento.controller';
 
-// Use Cases
+// Use Cases - Creación
 import { RegistrarClienteUseCase } from './application/registrar-cliente.usecase';
 import { RegistrarProyectoUseCase } from './application/registrar-proyecto.usecase';
 import { RegistrarServicioContratadoUseCase } from './application/registrar-servicio-contratado.usecase';
 import { RegistrarInsumoUseCase } from './application/registrar-insumo.usecase';
 import { RegistrarEquipoUseCase } from './application/registrar-equipo.usecase';
 import { RegistrarPersonalUseCase } from './application/registrar-personal.usecase';
+
+// Use Cases - Ciclo de Vida y Actualización
+import { ActualizarClienteUseCase } from './application/actualizar-cliente.usecase';
+import { DesactivarClienteUseCase } from './application/desactivar-cliente.usecase';
+import { ActivarClienteUseCase } from './application/activar-cliente.usecase';
+import { DesactivarInsumoUseCase } from './application/desactivar-insumo.usecase';
+import { ActualizarEstadoEquipoUseCase } from './application/actualizar-estado-equipo.usecase';
+import { DesactivarPersonalUseCase } from './application/desactivar-personal.usecase';
 
 // Ports
 import { CLIENTE_REPOSITORY } from './domain/ports/cliente.repository';
@@ -32,11 +40,17 @@ import { KyselyPersonalRepository } from './infrastructure/adapters/kysely-perso
   providers: [
     // Casos de Uso
     RegistrarClienteUseCase,
+    ActualizarClienteUseCase,
+    DesactivarClienteUseCase,
+    ActivarClienteUseCase,
     RegistrarProyectoUseCase,
     RegistrarServicioContratadoUseCase,
     RegistrarInsumoUseCase,
+    DesactivarInsumoUseCase,
     RegistrarEquipoUseCase,
+    ActualizarEstadoEquipoUseCase,
     RegistrarPersonalUseCase,
+    DesactivarPersonalUseCase,
 
     // Adaptadores Kysely enlazados a sus Puertos
     { provide: CLIENTE_REPOSITORY, useClass: KyselyClienteRepository },
@@ -51,11 +65,17 @@ import { KyselyPersonalRepository } from './infrastructure/adapters/kysely-perso
   ],
   exports: [
     RegistrarClienteUseCase,
+    ActualizarClienteUseCase,
+    DesactivarClienteUseCase,
+    ActivarClienteUseCase,
     RegistrarProyectoUseCase,
     RegistrarServicioContratadoUseCase,
     RegistrarInsumoUseCase,
+    DesactivarInsumoUseCase,
     RegistrarEquipoUseCase,
+    ActualizarEstadoEquipoUseCase,
     RegistrarPersonalUseCase,
+    DesactivarPersonalUseCase,
     CLIENTE_REPOSITORY,
     PROYECTO_REPOSITORY,
     SERVICIO_CONTRATADO_REPOSITORY,

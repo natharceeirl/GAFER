@@ -4,12 +4,29 @@ import { config } from 'dotenv';
 config();
 
 import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
 import { AppModule } from './app.module';
+import { DomainExceptionFilter } from './shared/infrastructure/filters/domain-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Habilitar CORS para integración con apps/web y apps/mobile
+  app.enableCors();
+
+  // Filtro Global de Excepciones de Dominio (mapea invariantes de negocio a HTTP 400/404/409)
+  app.useGlobalFilters(new DomainExceptionFilter());
+
+  // Validación estricta y transformación de payloads en la capa de transporte
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: false,
+    }),
+  );
 
   // Especificación OpenAPI con Swagger
   const swaggerConfig = new DocumentBuilder()
@@ -19,10 +36,10 @@ async function bootstrap() {
     )
     .setVersion('1.0')
     .addTag(
-      'mantenimiento',
-      'Gestión de clientes, sedes, servicios contratados e insumos',
+      'Mantenimiento',
+      'Gestión de clientes, sedes, servicios contratados, insumos y equipos',
     )
-    .addTag('operaciones', 'Inspecciones de campo y colaboración offline-first')
+    .addTag('Operaciones', 'Inspecciones de campo y snapshot inmutable Sección 13')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
