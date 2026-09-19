@@ -9,7 +9,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 
 // Use Cases - Creación
 import { RegistrarClienteUseCase } from '../application/registrar-cliente.usecase';
@@ -71,7 +71,7 @@ import {
 } from './dto/mantenimiento.dto';
 import { PaginacionQueryDto } from '../../shared/infrastructure/dto/paginacion.dto';
 
-// DTOs Response (OpenAPI / Scalar)
+// DTOs Response
 import {
   ClienteResponseDto,
   ClienteDetalleResponseDto,
@@ -87,10 +87,32 @@ import {
   UploadUrlResponseDto,
   DownloadUrlResponseDto,
   EstadoSimpleResponseDto,
-  BadRequestErrorDto,
-  NotFoundErrorDto,
-  ConflictErrorDto,
 } from './dto/mantenimiento-response.dto';
+
+// Documentation Decorators (applyDecorators)
+import {
+  ApiCrearClienteDoc,
+  ApiListarClientesDoc,
+  ApiObtenerClienteDoc,
+  ApiActualizarClienteDoc,
+  ApiDesactivarClienteDoc,
+  ApiActivarClienteDoc,
+  ApiCrearProyectoDoc,
+  ApiListarProyectosPorClienteDoc,
+  ApiCrearServicioContratadoDoc,
+  ApiListarServiciosPorProyectoDoc,
+  ApiCrearInsumoDoc,
+  ApiListarInsumosDoc,
+  ApiDesactivarInsumoDoc,
+  ApiCrearEquipoDoc,
+  ApiListarEquiposDoc,
+  ApiCambiarEstadoEquipoDoc,
+  ApiCrearPersonalDoc,
+  ApiListarPersonalDoc,
+  ApiDesactivarPersonalDoc,
+  ApiGenerarUploadUrlDoc,
+  ApiGenerarDownloadUrlDoc,
+} from './mantenimiento.controller.doc';
 
 @ApiTags('Mantenimiento')
 @Controller('mantenimiento')
@@ -128,17 +150,7 @@ export class MantenimientoController {
   // ==========================================
 
   @Post('clientes')
-  @ApiOperation({
-    summary: 'Registrar nuevo cliente corporativo con RUC y código corto',
-    description: 'Valida RUC exacto de 11 dígitos, unicidad de código corto alfanumérico y formato de correo.',
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'Cliente registrado exitosamente',
-    type: ClienteResponseDto,
-  })
-  @ApiResponse({ status: 400, description: 'Sintaxis o formato de datos inválido (RUC o correo)', type: BadRequestErrorDto })
-  @ApiResponse({ status: 409, description: 'RUC o código corto ya registrado en el sistema', type: ConflictErrorDto })
+  @ApiCrearClienteDoc()
   async crearCliente(@Body() dto: CrearClienteDto): Promise<ClienteResponseDto> {
     const cliente = await this.registrarClienteUseCase.execute(dto);
     return {
@@ -155,16 +167,7 @@ export class MantenimientoController {
   }
 
   @Get('clientes')
-  @ApiOperation({
-    summary: 'Listar clientes registrados con paginación y búsqueda',
-    description: 'Permite filtrar por razón social, RUC o código corto con paginación (limit/offset).',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Listado paginado de clientes',
-    type: ClientePaginadoResponseDto,
-  })
-  @ApiResponse({ status: 400, description: 'Parámetros de paginación o búsqueda inválidos', type: BadRequestErrorDto })
+  @ApiListarClientesDoc()
   async listarClientes(
     @Query() query?: PaginacionQueryDto,
   ): Promise<ClientePaginadoResponseDto> {
@@ -203,14 +206,7 @@ export class MantenimientoController {
   }
 
   @Get('clientes/:id')
-  @ApiOperation({
-    summary: 'Obtener detalle completo de un cliente por ID',
-    description: 'Devuelve datos fiscales, de contacto y campos personalizados.',
-  })
-  @ApiParam({ name: 'id', description: 'UUID del cliente', example: 'c1111111-1111-1111-1111-111111111111' })
-  @ApiResponse({ status: 200, description: 'Detalle del cliente encontrado', type: ClienteDetalleResponseDto })
-  @ApiResponse({ status: 400, description: 'ID de cliente con formato UUID inválido', type: BadRequestErrorDto })
-  @ApiResponse({ status: 404, description: 'Cliente no encontrado', type: NotFoundErrorDto })
+  @ApiObtenerClienteDoc()
   async obtenerCliente(@Param('id') id: string): Promise<ClienteDetalleResponseDto> {
     const cliente = await this.clienteRepo.buscarPorId(id);
     if (!cliente) {
@@ -233,14 +229,7 @@ export class MantenimientoController {
   }
 
   @Patch('clientes/:id')
-  @ApiOperation({
-    summary: 'Actualizar datos de un cliente existente',
-    description: 'Modifica razón social, dirección fiscal, teléfono, cargo o correo de contacto.',
-  })
-  @ApiParam({ name: 'id', description: 'UUID del cliente', example: 'c1111111-1111-1111-1111-111111111111' })
-  @ApiResponse({ status: 200, description: 'Cliente actualizado exitosamente', type: ClienteDetalleResponseDto })
-  @ApiResponse({ status: 400, description: 'Campos de actualización con formato inválido', type: BadRequestErrorDto })
-  @ApiResponse({ status: 404, description: 'Cliente no encontrado', type: NotFoundErrorDto })
+  @ApiActualizarClienteDoc()
   async actualizarCliente(
     @Param('id') id: string,
     @Body() dto: ActualizarClienteDto,
@@ -266,20 +255,14 @@ export class MantenimientoController {
   }
 
   @Patch('clientes/:id/desactivar')
-  @ApiOperation({ summary: 'Desactivar un cliente (baja lógica)' })
-  @ApiParam({ name: 'id', description: 'UUID del cliente' })
-  @ApiResponse({ status: 200, description: 'Cliente desactivado', type: EstadoSimpleResponseDto })
-  @ApiResponse({ status: 404, description: 'Cliente no encontrado', type: NotFoundErrorDto })
+  @ApiDesactivarClienteDoc()
   async desactivarCliente(@Param('id') id: string): Promise<EstadoSimpleResponseDto> {
     const cliente = await this.desactivarClienteUseCase.execute(id);
     return { id: cliente.id, estado: cliente.getEstado() };
   }
 
   @Patch('clientes/:id/activar')
-  @ApiOperation({ summary: 'Reactivar un cliente previamente desactivado' })
-  @ApiParam({ name: 'id', description: 'UUID del cliente' })
-  @ApiResponse({ status: 200, description: 'Cliente reactivado', type: EstadoSimpleResponseDto })
-  @ApiResponse({ status: 404, description: 'Cliente no encontrado', type: NotFoundErrorDto })
+  @ApiActivarClienteDoc()
   async activarCliente(@Param('id') id: string): Promise<EstadoSimpleResponseDto> {
     const cliente = await this.activarClienteUseCase.execute(id);
     return { id: cliente.id, estado: cliente.getEstado() };
@@ -290,14 +273,7 @@ export class MantenimientoController {
   // ==========================================
 
   @Post('proyectos')
-  @ApiOperation({
-    summary: 'Registrar una sede o proyecto vinculado a un cliente',
-    description: 'Valida nombre único por cliente en mayúsculas sin espacios (ej. PLANTA_SUR).',
-  })
-  @ApiResponse({ status: 201, description: 'Sede/proyecto registrado exitosamente', type: ProyectoResponseDto })
-  @ApiResponse({ status: 400, description: 'Cliente inactivo o datos inválidos', type: BadRequestErrorDto })
-  @ApiResponse({ status: 404, description: 'Cliente propietario no encontrado', type: NotFoundErrorDto })
-  @ApiResponse({ status: 409, description: 'Nombre de sede duplicado para este cliente', type: ConflictErrorDto })
+  @ApiCrearProyectoDoc()
   async crearProyecto(@Body() dto: CrearProyectoDto): Promise<ProyectoResponseDto> {
     const proyecto = await this.registrarProyectoUseCase.execute(dto);
     return {
@@ -315,10 +291,7 @@ export class MantenimientoController {
   }
 
   @Get('proyectos/cliente/:clienteId')
-  @ApiOperation({ summary: 'Listar todas las sedes de un cliente' })
-  @ApiParam({ name: 'clienteId', description: 'UUID del cliente' })
-  @ApiResponse({ status: 200, description: 'Listado de sedes del cliente', type: [ProyectoResponseDto] })
-  @ApiResponse({ status: 400, description: 'UUID de cliente inválido', type: BadRequestErrorDto })
+  @ApiListarProyectosPorClienteDoc()
   async listarProyectosPorCliente(
     @Param('clienteId') clienteId: string,
   ): Promise<ProyectoResponseDto[]> {
@@ -342,17 +315,7 @@ export class MantenimientoController {
   // ==========================================
 
   @Post('servicios-contratados')
-  @ApiOperation({
-    summary: 'Registrar un servicio ambiental contratado para una sede',
-    description: 'Valida uno de los 7 tipos oficiales (DSF, DSS, DRT, etc.) y áreas coherentes.',
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'Servicio contratado registrado exitosamente',
-    type: ServicioContratadoResponseDto,
-  })
-  @ApiResponse({ status: 400, description: 'Áreas inconsistentes (tratar > total) o tipo no válido', type: BadRequestErrorDto })
-  @ApiResponse({ status: 404, description: 'Sede/proyecto no encontrada', type: NotFoundErrorDto })
+  @ApiCrearServicioContratadoDoc()
   async crearServicioContratado(
     @Body() dto: CrearServicioContratadoDto,
   ): Promise<ServicioContratadoResponseDto> {
@@ -371,10 +334,7 @@ export class MantenimientoController {
   }
 
   @Get('servicios-contratados/proyecto/:proyectoId')
-  @ApiOperation({ summary: 'Listar servicios contratados de una sede' })
-  @ApiParam({ name: 'proyectoId', description: 'UUID de la sede' })
-  @ApiResponse({ status: 200, description: 'Servicios de la sede', type: [ServicioContratadoResponseDto] })
-  @ApiResponse({ status: 400, description: 'UUID de sede inválido', type: BadRequestErrorDto })
+  @ApiListarServiciosPorProyectoDoc()
   async listarServiciosPorProyecto(
     @Param('proyectoId') proyectoId: string,
   ): Promise<ServicioContratadoResponseDto[]> {
@@ -397,12 +357,7 @@ export class MantenimientoController {
   // ==========================================
 
   @Post('insumos')
-  @ApiOperation({
-    summary: 'Registrar insumo químico con registro DIGESA y referencias MinIO S3',
-  })
-  @ApiResponse({ status: 201, description: 'Insumo registrado exitosamente', type: InsumoResponseDto })
-  @ApiResponse({ status: 400, description: 'Campos requeridos faltantes o formato inválido', type: BadRequestErrorDto })
-  @ApiResponse({ status: 409, description: 'Registro DIGESA ya existente en el catálogo', type: ConflictErrorDto })
+  @ApiCrearInsumoDoc()
   async crearInsumo(@Body() dto: CrearInsumoDto): Promise<InsumoResponseDto> {
     const insumo = await this.registrarInsumoUseCase.execute(dto);
     return {
@@ -422,9 +377,7 @@ export class MantenimientoController {
   }
 
   @Get('insumos')
-  @ApiOperation({ summary: 'Listar catálogo de insumos químicos activos con paginación' })
-  @ApiResponse({ status: 200, description: 'Catálogo paginado de insumos', type: InsumoPaginadoResponseDto })
-  @ApiResponse({ status: 400, description: 'Parámetros de consulta inválidos', type: BadRequestErrorDto })
+  @ApiListarInsumosDoc()
   async listarInsumos(
     @Query() query?: PaginacionQueryDto,
   ): Promise<InsumoPaginadoResponseDto> {
@@ -466,10 +419,7 @@ export class MantenimientoController {
   }
 
   @Patch('insumos/:id/desactivar')
-  @ApiOperation({ summary: 'Desactivar un insumo del catálogo' })
-  @ApiParam({ name: 'id', description: 'UUID del insumo' })
-  @ApiResponse({ status: 200, description: 'Insumo desactivado', type: EstadoSimpleResponseDto })
-  @ApiResponse({ status: 404, description: 'Insumo no encontrado', type: NotFoundErrorDto })
+  @ApiDesactivarInsumoDoc()
   async desactivarInsumo(@Param('id') id: string): Promise<EstadoSimpleResponseDto> {
     const insumo = await this.desactivarInsumoUseCase.execute(id);
     return { id: insumo.id, estado: insumo.getEstado() };
@@ -480,12 +430,7 @@ export class MantenimientoController {
   // ==========================================
 
   @Post('equipos')
-  @ApiOperation({
-    summary: 'Registrar equipo operativo con código interno GAFER',
-  })
-  @ApiResponse({ status: 201, description: 'Equipo registrado exitosamente', type: EquipoResponseDto })
-  @ApiResponse({ status: 400, description: 'Datos del equipo inválidos', type: BadRequestErrorDto })
-  @ApiResponse({ status: 409, description: 'Código interno de equipo duplicado', type: ConflictErrorDto })
+  @ApiCrearEquipoDoc()
   async crearEquipo(@Body() dto: CrearEquipoDto): Promise<EquipoResponseDto> {
     const equipo = await this.registrarEquipoUseCase.execute(dto);
     return {
@@ -499,9 +444,7 @@ export class MantenimientoController {
   }
 
   @Get('equipos')
-  @ApiOperation({ summary: 'Listar catálogo de equipos operativos con paginación' })
-  @ApiResponse({ status: 200, description: 'Catálogo paginado de equipos', type: EquipoPaginadoResponseDto })
-  @ApiResponse({ status: 400, description: 'Parámetros inválidos', type: BadRequestErrorDto })
+  @ApiListarEquiposDoc()
   async listarEquipos(
     @Query() query?: PaginacionQueryDto,
   ): Promise<EquipoPaginadoResponseDto> {
@@ -537,11 +480,7 @@ export class MantenimientoController {
   }
 
   @Patch('equipos/:id/estado')
-  @ApiOperation({ summary: 'Actualizar estado operativo del equipo (OPERATIVO, MANTENIMIENTO, FUERA_SERVICIO)' })
-  @ApiParam({ name: 'id', description: 'UUID del equipo' })
-  @ApiResponse({ status: 200, description: 'Estado operativo actualizado', type: EquipoResponseDto })
-  @ApiResponse({ status: 400, description: 'Estado operativo no válido', type: BadRequestErrorDto })
-  @ApiResponse({ status: 404, description: 'Equipo no encontrado', type: NotFoundErrorDto })
+  @ApiCambiarEstadoEquipoDoc()
   async cambiarEstadoEquipo(
     @Param('id') id: string,
     @Body() dto: CambiarEstadoEquipoDto,
@@ -565,12 +504,7 @@ export class MantenimientoController {
   // ==========================================
 
   @Post('personal')
-  @ApiOperation({
-    summary: 'Registrar personal técnico o supervisor con DNI de 8 dígitos',
-  })
-  @ApiResponse({ status: 201, description: 'Personal registrado exitosamente', type: PersonalResponseDto })
-  @ApiResponse({ status: 400, description: 'DNI no contiene 8 dígitos numéricos o campos inválidos', type: BadRequestErrorDto })
-  @ApiResponse({ status: 409, description: 'DNI o nombre de usuario ya registrado', type: ConflictErrorDto })
+  @ApiCrearPersonalDoc()
   async crearPersonal(@Body() dto: CrearPersonalDto): Promise<PersonalResponseDto> {
     const personal = await this.registrarPersonalUseCase.execute(dto);
     return {
@@ -586,9 +520,7 @@ export class MantenimientoController {
   }
 
   @Get('personal')
-  @ApiOperation({ summary: 'Listar personal técnico y supervisores activos con paginación' })
-  @ApiResponse({ status: 200, description: 'Listado de personal activo', type: PersonalPaginadoResponseDto })
-  @ApiResponse({ status: 400, description: 'Parámetros inválidos', type: BadRequestErrorDto })
+  @ApiListarPersonalDoc()
   async listarPersonal(
     @Query() query?: PaginacionQueryDto,
   ): Promise<PersonalPaginadoResponseDto> {
@@ -626,10 +558,7 @@ export class MantenimientoController {
   }
 
   @Patch('personal/:id/desactivar')
-  @ApiOperation({ summary: 'Desactivar personal o colaborador (baja lógica)' })
-  @ApiParam({ name: 'id', description: 'UUID del colaborador' })
-  @ApiResponse({ status: 200, description: 'Personal desactivado', type: EstadoSimpleResponseDto })
-  @ApiResponse({ status: 404, description: 'Personal no encontrado', type: NotFoundErrorDto })
+  @ApiDesactivarPersonalDoc()
   async desactivarPersonal(@Param('id') id: string): Promise<EstadoSimpleResponseDto> {
     const personal = await this.desactivarPersonalUseCase.execute(id);
     return { id: personal.id, estado: personal.getEstado() };
@@ -640,13 +569,7 @@ export class MantenimientoController {
   // ==========================================
 
   @Post('storage/upload-url')
-  @ApiOperation({
-    summary:
-      'Generar URL prefirmada para subida directa de fichas técnicas o MSDS a MinIO S3',
-    description: 'Devuelve una URL prefirmada con PUT para subir archivos PDF directamente desde el cliente.',
-  })
-  @ApiResponse({ status: 200, description: 'URL prefirmada generada exitosamente (PUT)', type: UploadUrlResponseDto })
-  @ApiResponse({ status: 400, description: 'Clave de archivo o content-type inválido', type: BadRequestErrorDto })
+  @ApiGenerarUploadUrlDoc()
   async generarUploadUrl(@Body() dto: GenerarUploadUrlDto): Promise<UploadUrlResponseDto> {
     const uploadUrl = await this.storageService.generarPresignedUploadUrl(
       dto.key,
@@ -661,13 +584,7 @@ export class MantenimientoController {
   }
 
   @Post('storage/download-url')
-  @ApiOperation({
-    summary:
-      'Generar URL prefirmada para visualización o descarga segura desde MinIO S3',
-    description: 'Devuelve una URL temporal segura (1 hora) con GET para consultar el archivo.',
-  })
-  @ApiResponse({ status: 200, description: 'URL prefirmada de descarga generada (GET)', type: DownloadUrlResponseDto })
-  @ApiResponse({ status: 400, description: 'Clave de archivo requerida', type: BadRequestErrorDto })
+  @ApiGenerarDownloadUrlDoc()
   async generarDownloadUrl(@Body() dto: GenerarDownloadUrlDto): Promise<DownloadUrlResponseDto> {
     const downloadUrl = await this.storageService.generarPresignedDownloadUrl(
       dto.key,
