@@ -35,18 +35,32 @@ Cada uno con tres capas internas: `domain/` (sin framework), `application/` (cas
 
 ## Cómo correr el proyecto
 
-### 1. Instalación y Variables de Entorno
+### 1. Instalación de Dependencias
 
 ```bash
-# 1. Instalar dependencias de todo el monorepo
 pnpm install
-
-# 2. Crear archivo de variables de entorno desde la plantilla
-cp .env.example .env
 ```
-*(Tanto la Web como el Backend y el Worker leen este `.env` central automáticamente en desarrollo).*
 
-### 2. Levantar Infraestructura Local (Docker)
+### 2. Configuración de Entorno (12-Factor App)
+
+Cada aplicación es **autocontenida y desacoplada**. Para desarrollo local, copia el `.env.example` en el servicio que vayas a ejecutar:
+
+```bash
+# Backend API
+cp apps/api/.env.example apps/api/.env
+
+# Worker asíncrono
+cp apps/worker/.env.example apps/worker/.env
+
+# Frontend Web
+cp apps/web/.env.example apps/web/.env
+
+# Mobile de campo
+cp apps/mobile/.env.example apps/mobile/.env
+```
+*(En entornos de producción, contenedores Docker o CI/CD, las variables de entorno se inyectan directamente al proceso desde el sistema operativo o el orquestador, sin rutas relativas ni acoplamiento al sistema de archivos).*
+
+### 3. Levantar Infraestructura Local (Docker)
 
 ```bash
 # Levantar PostgreSQL 16, Redis 7 y MinIO S3
@@ -57,7 +71,7 @@ pnpm infra:up
 - **MinIO Console (S3):** `http://localhost:9001` (usuario: `gafer`, pass: `gafersecret`)
 - *(Para apagar los contenedores: `pnpm infra:down`)*
 
-### 3. Iniciar Servicios en Desarrollo
+### 4. Iniciar Servicios en Desarrollo
 
 Abre terminales separadas para los servicios que vayas a ejecutar:
 
@@ -75,7 +89,7 @@ pnpm dev:web
 pnpm dev:mobile
 ```
 
-### 4. Tests y Compilación
+### 5. Tests y Compilación
 
 ```bash
 # Compilar todo el monorepo respetando dependencias
