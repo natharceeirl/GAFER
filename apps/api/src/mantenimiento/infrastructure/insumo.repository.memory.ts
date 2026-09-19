@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { Insumo } from '../domain/insumo';
 import { InsumoRepository } from '../domain/ports/insumo.repository';
 
-// TODO: reemplazar por un adapter Postgres una vez definido el esquema de datos.
 @Injectable()
 export class InsumoRepositoryMemory implements InsumoRepository {
   private readonly store = new Map<string, Insumo>();
@@ -15,7 +14,17 @@ export class InsumoRepositoryMemory implements InsumoRepository {
     return this.store.get(id) ?? null;
   }
 
+  async buscarPorDigesa(registroDigesa: string): Promise<Insumo | null> {
+    return (
+      Array.from(this.store.values()).find(
+        (i) => i.registroDigesa === registroDigesa,
+      ) ?? null
+    );
+  }
+
   async listarActivos(): Promise<Insumo[]> {
-    return Array.from(this.store.values()).filter((i) => i.getEstado() === 'ACTIVO');
+    return Array.from(this.store.values()).filter(
+      (i) => i.getEstado() === 'ACTIVO',
+    );
   }
 }

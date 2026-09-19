@@ -19,7 +19,7 @@
   - Crear script SQL de migración inicial con tablas maestras: `clientes`, `proyectos`, `servicios_contratados`, `insumos`, `equipos`, `personal`, `inspecciones`, `inspecciones_auditoria`.
   - Crear índices en RUC, código corto, DNI y claves foráneas.
   - DoD: Migración se ejecuta limpiamente sobre PostgreSQL 16 local con script `up` y `down`.
-- [ ] **T2.2: Repositorios y Servicios Hexagonales en `apps/api`** <!-- id: 2.2 -->
+- [x] **T2.2: Repositorios y Servicios Hexagonales en `apps/api`** <!-- id: 2.2 -->
   - Implementar puertos y adaptadores para el módulo de Mantenimiento.
   - Screaming architecture: `src/modules/maintenance/` (domain, application, infrastructure).
   - Validaciones de negocio: unicidad de código corto, validación estricta de 11 dígitos para RUC.
