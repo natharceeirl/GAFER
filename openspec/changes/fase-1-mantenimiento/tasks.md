@@ -15,7 +15,7 @@
   - DoD: Simulación offline en Vitest verificando encolado y reintento.
 
 ## Role: Cristian (Backend & Database / Integraciones) — *ACTIVE DEVELOPER*
-- [ ] **T2.1: Migración PostgreSQL Inicial en `infra` / `apps/api`** <!-- id: 2.1 -->
+- [x] **T2.1: Migración PostgreSQL Inicial en `infra` / `apps/api`** <!-- id: 2.1 -->
   - Crear script SQL de migración inicial con tablas maestras: `clientes`, `proyectos`, `servicios_contratados`, `insumos`, `equipos`, `personal`, `inspecciones`, `inspecciones_auditoria`.
   - Crear índices en RUC, código corto, DNI y claves foráneas.
   - DoD: Migración se ejecuta limpiamente sobre PostgreSQL 16 local con script `up` y `down`.
