@@ -470,8 +470,83 @@ describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
     });
   });
 
-  // E. Pendientes
-  describe('E. Pendientes (falta una decisión del equipo o una función nueva)', () => {
-    it.todo('Guardar también equipos y personal en la copia de la inspección cerrada (hoy solo se guardan insumos)');
+  // E. Brechas resueltas (GAP-04)
+  describe('E. Brechas resueltas: Equipos y Personal en Snapshot (GAP-04)', () => {
+    it('guardar también equipos y personal en la copia de la inspección cerrada y proteger su inmutabilidad (GAP-04)', async () => {
+      const esc = await crearEscenario(http);
+      const id = await crearInspeccion(esc);
+
+      const cierre = await http.post(`/operaciones/inspecciones/${id}/cerrar`, {
+        consumos: [consumoDe(esc)],
+        equiposIds: [esc.equipoId],
+        personalIds: [esc.tecnicoId],
+      });
+
+      expect(cierre.status).toBe(201);
+      expect(cierre.body.estado).toBe('CERRADO');
+      expect(cierre.body.snapshotCatalogos.insumos).toHaveLength(1);
+      expect(cierre.body.snapshotCatalogos.equipos).toHaveLength(1);
+      expect(cierre.body.snapshotCatalogos.equipos[0]).toMatchObject({
+        equipoId: esc.equipoId,
+        nombre: 'Nebulizadora ULV Vector Fog C-150',
+        tipo: 'NEBULIZACION',
+        estadoOperativo: 'OPERATIVO',
+      });
+      expect(cierre.body.snapshotCatalogos.personal).toHaveLength(1);
+      expect(cierre.body.snapshotCatalogos.personal[0]).toMatchObject({
+        personalId: esc.tecnicoId,
+        nombreCompleto: 'Juan Perez Gomez',
+        cargo: 'TECNICO_OPERADOR',
+      });
+      expect(cierre.body.tecnicosParticipantes).toEqual([
+        { id: esc.tecnicoId, nombre: 'Juan Perez Gomez' },
+      ]);
+
+      // Modificamos el catálogo de equipos y damos de baja al técnico
+      const equipoModificado = await http.patch(`/mantenimiento/equipos/${esc.equipoId}/estado`, {
+        estadoOperativo: 'FUERA_SERVICIO',
+      });
+      expect(equipoModificado.status).toBe(200);
+
+      const personalDesactivado = await http.patch(`/mantenimiento/personal/${esc.tecnicoId}/desactivar`);
+      expect(personalDesactivado.status).toBe(200);
+
+      // Verificamos que la inspección cerrada sigue mostrando los datos originales congelados
+      const insp = await leer(id);
+      expect(insp.status).toBe(200);
+      expect(insp.body.snapshotCatalogos.equipos[0].estadoOperativo).toBe('OPERATIVO');
+      expect(insp.body.snapshotCatalogos.personal[0].nombreCompleto).toBe('Juan Perez Gomez');
+      expect(insp.body.snapshotCatalogos.personal[0].cargo).toBe('TECNICO_OPERADOR');
+    });
+
+    it('cerrar con un equipo inexistente en catálogo responde 400 y mantiene la inspección en borrador', async () => {
+      const esc = await crearEscenario(http);
+      const id = await crearInspeccion(esc);
+
+      const res = await http.post(`/operaciones/inspecciones/${id}/cerrar`, {
+        consumos: [consumoDe(esc)],
+        equiposIds: [randomUUID()],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain('no existe en el catálogo');
+      const insp = await leer(id);
+      expect(insp.body.estado).toBe('BORRADOR');
+    });
+
+    it('cerrar con personal inexistente en catálogo responde 400 y mantiene la inspección en borrador', async () => {
+      const esc = await crearEscenario(http);
+      const id = await crearInspeccion(esc);
+
+      const res = await http.post(`/operaciones/inspecciones/${id}/cerrar`, {
+        consumos: [consumoDe(esc)],
+        personalIds: [randomUUID()],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain('no existe en el catálogo');
+      const insp = await leer(id);
+      expect(insp.body.estado).toBe('BORRADOR');
+    });
   });
 });

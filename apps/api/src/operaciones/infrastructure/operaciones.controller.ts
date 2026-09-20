@@ -58,6 +58,28 @@ export class CerrarInspeccionDto {
   @ValidateNested({ each: true })
   @Type(() => ConsumoInsumoDto)
   consumos?: ConsumoInsumoDto[];
+
+  @ApiProperty({
+    type: [String],
+    required: false,
+    example: ['e1111111-1111-1111-1111-111111111111'],
+    description: 'IDs de equipos utilizados en campo',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('all', { each: true, message: 'Cada equipoId debe ser un UUID válido' })
+  equiposIds?: string[];
+
+  @ApiProperty({
+    type: [String],
+    required: false,
+    example: ['p1111111-1111-1111-1111-111111111111'],
+    description: 'IDs del personal técnico participante',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('all', { each: true, message: 'Cada personalId debe ser un UUID válido' })
+  personalIds?: string[];
 }
 
 export class CrearInspeccionDto {
@@ -144,10 +166,13 @@ export class OperacionesController {
     const inspeccion = await this.cerrarInspeccion.execute({
       inspeccionId: id,
       consumos: dto?.consumos,
+      equiposIds: dto?.equiposIds,
+      personalIds: dto?.personalIds,
     });
     return {
       id: inspeccion.id,
       estado: inspeccion.getEstado(),
+      tecnicosParticipantes: inspeccion.tecnicosParticipantes,
       snapshotCatalogos: inspeccion.getSnapshot(),
       versionSync: inspeccion.getVersionSync(),
     };
