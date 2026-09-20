@@ -1,14 +1,20 @@
 /**
- * REGISTRO DE DEFECTOS CONOCIDOS (fuente única para el informe de calidad).
+ * known-bugs.ts
+ * Lista de errores conocidos del sistema y cómo se marcan en las pruebas.
  *
- * Cada defecto tiene un id. Los tests que dependen de él se declaran con `itBug('BUG-xx', ...)`:
- *   - Mientras `abierto: true`  -> el test se ejecuta con `it.failing`: pasa (verde) SOLO si el bug
- *     sigue ocurriendo. Así la CI no se rompe, pero el defecto queda documentado y reproducible.
- *   - Cuando el responsable lo arregla, el test se pone ROJO con el mensaje
- *     "Failing test passed even though it was supposed to fail": esa es la alarma para poner
- *     `abierto: false` (un cambio de una línea) y que el test vuelva a ser una prueba normal.
+ * Cómo funciona
+ *   - Una prueba marcada con itBug('BUG-01', ...) depende de un error que todavía existe.
+ *   - Mientras el error siga abierto (abierto: true), la prueba se da por buena si FALLA. Así el
+ *     reporte sale en verde y el error queda documentado.
+ *   - Cuando alguien arregla el error, esa prueba pasa a fallar en rojo con el mensaje
+ *     "Failing test passed...". Es el aviso para cambiar abierto a false; desde entonces la
+ *     prueba es normal y protege contra que el error vuelva.
+ *   - Para comprobar un arreglo sin editar este archivo:
+ *       Linux / Mac:  FIXED_BUGS=BUG-01 pnpm test:e2e
+ *       PowerShell:   $env:FIXED_BUGS="BUG-01"; pnpm test:e2e
  *
- * Para verificar un fix sin editar este archivo:  FIXED_BUGS=BUG-01,BUG-03 pnpm --filter @gafer/api test:e2e
+ * Historial de versiones
+ *   v1.0  2026-09-20  ahilacondo  Creación del archivo.
  */
 export interface DefectoConocido {
   abierto: boolean;
@@ -20,16 +26,14 @@ export interface DefectoConocido {
 export const BUGS = {
   'BUG-01': {
     abierto: true,
-    titulo:
-      'POST /operaciones/inspecciones/:id/cerrar responde 500 con Postgres real: fecha_ejecucion se mapea con String(Date) y Postgres rechaza ese texto (además GET devuelve la fecha con formato "Sun Sep 20 2026 ...").',
-    responsable: 'Cristian',
+    titulo: 'Cerrar una inspección responde error 500 con la base real (la fecha se convierte mal).',
+    responsable: 'Backend',
     donde: 'apps/api/src/operaciones/infrastructure/adapters/kysely-inspeccion.repository.ts (mapToDomain)',
   },
   'BUG-03': {
     abierto: true,
-    titulo:
-      'La base de datos acepta UPDATE directo de snapshot_catalogos sobre una inspección CERRADA (no hay trigger ni restricción). La inmutabilidad depende solo del código de la app.',
-    responsable: 'Cristian',
+    titulo: 'La base de datos permite modificar el snapshot de una inspección cerrada.',
+    responsable: 'Backend',
     donde: 'infra/migrations/001_initial_schema.up.sql',
   },
 } satisfies Record<string, DefectoConocido>;
@@ -49,7 +53,7 @@ export function bugAbierto(id: BugId): boolean {
 
 type Cuerpo = () => Promise<unknown> | unknown;
 
-/** Igual que `it`, pero marcado con el defecto conocido del que depende. */
+/** Igual que `it`, pero para pruebas que dependen de un error conocido. */
 export function itBug(id: BugId, nombre: string, fn: Cuerpo, timeout?: number): void {
   const declarar = bugAbierto(id) ? it.failing : it;
   declarar(`[${id}] ${nombre}`, fn as jest.ProvidesCallback, timeout);

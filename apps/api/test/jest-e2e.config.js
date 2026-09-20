@@ -1,12 +1,9 @@
 /**
- * Configuración de Jest para las pruebas E2E / integración (QA).
+ * jest-e2e.config.js
+ * Configuración de las pruebas de integración (pnpm test:e2e).
  *
- * - Levanta la aplicación NestJS REAL contra un PostgreSQL REAL de pruebas
- *   (base `gafer_test`, nunca la de desarrollo).
- * - Se ejecuta aparte de `pnpm test` para que ese comando siga sin depender de Docker.
- *
- * Uso:  pnpm --filter @gafer/api test:e2e
- *       pnpm --filter @gafer/api test:e2e:cov   (con reporte de cobertura)
+ * Historial de versiones
+ *   v1.0  2026-09-20  ahilacondo  Creación del archivo.
  */
 module.exports = {
   rootDir: '..', // apps/api

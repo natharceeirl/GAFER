@@ -1,6 +1,13 @@
+/**
+ * fixtures.ts
+ * Crea los datos de ejemplo (cliente, servicio, insumo, etc.) usando la API.
+ *
+ * Historial de versiones
+ *   v1.0  2026-09-20  ahilacondo  Creación del archivo.
+ */
 import request = require('supertest');
 
-/** Cliente HTTP mínimo contra la app de pruebas. */
+/** Envía peticiones a la aplicación de pruebas. */
 export function api(baseUrl: string) {
   return {
     get: (url: string) => request(baseUrl).get(`/api${url}`),
@@ -19,15 +26,11 @@ export interface Escenario {
   insumoId: string;
   equipoId: string;
   tecnicoId: string;
-  /** Valores originales del insumo, tal como se registraron en el catálogo */
+  /** Datos del insumo tal como se registraron */
   insumoOriginal: { nombreComercial: string; principioActivo: string; registroDigesa: string; concentracion: string };
 }
 
-/**
- * Crea por la API (así también se ejercitan las validaciones reales) la cadena completa:
- * cliente -> proyecto -> servicio, más un insumo, un equipo y un técnico.
- * Cada llamada genera datos únicos, por lo que se puede invocar varias veces en un mismo test.
- */
+/** Crea cliente, proyecto, servicio, insumo, equipo y técnico. Cada llamada usa datos distintos. */
 export async function crearEscenario(http: Api): Promise<Escenario> {
   contador += 1;
   const n = String(contador).padStart(3, '0');

@@ -1,20 +1,20 @@
 /**
- * T3.1 — Suite de integración de INMUTABILIDAD CONTRACTUAL (Sección 13 de la especificación v6).
+ * inmutabilidad.e2e-spec.ts
+ * Pruebas de la regla de inmutabilidad
  *
- * Regla bajo prueba: "agregar o editar cualquier catálogo NUNCA afecta la información ya registrada
- * en servicios anteriores". GAFER verificará esto en la entrega (es condición de pago de la fase).
+ * Estas pruebas usan la aplicación real y una base PostgreSQL real (gafer_test).
  *
- * Estas pruebas levantan la API real (NestJS + Kysely) contra PostgreSQL real (base gafer_test),
- * a diferencia de src/operaciones/inmutabilidad.spec.ts que usa repositorios falsos en memoria.
+ * Grupos
+ *   A. Una inspección cerrada no cambia cuando se editan los catálogos.
+ *   B. Recorrido completo: crear la inspección, cerrarla y luego cambiar el catálogo.
+ *   C. La base de datos protege por sí misma la inspección cerrada.
+ *   D. Errores de validación (datos mal enviados, registros que no existen).
+ *   E. Casos pendientes hasta que el equipo decida o exista la función.
  *
- * Secciones:
- *   A. Lectura del histórico (inspección CERRADA sembrada en BD)  -> no depende del flujo de cierre
- *   B. Flujo completo por la API: crear -> cerrar -> editar catálogo
- *   C. Guardas de la base de datos
- *   D. Validaciones y errores HTTP
- *   E. Pendientes de decisión del equipo (it.todo)
+ * Las pruebas marcadas [BUG-xx] dependen de un error conocido (ver support/known-bugs.ts).
  *
- * Los tests marcados con itBug('BUG-xx') dependen de un defecto abierto (ver support/known-bugs.ts).
+ * Historial de versiones
+ *   v1.0  2026-09-20  ahilacondo  Creación de la suite (25 casos).
  */
 import { randomUUID } from 'crypto';
 import { createTestApp, TestApp } from '../support/app';
@@ -29,6 +29,7 @@ import {
 import { Api, api, crearEscenario, Escenario } from '../support/fixtures';
 import { itBug } from '../support/known-bugs';
 
+// Datos nuevos que se usan para simular que un insumo fue editado
 const CAMBIOS_REFORMULACION = {
   nombre_comercial: 'Cipermetrina 50% Ultra Concentrada (REFORMULADO 2028)',
   principio_activo: 'Cipermetrina Pura',
@@ -37,7 +38,7 @@ const CAMBIOS_REFORMULACION = {
   dosis_estandar: '2.5 ml/L',
 };
 
-describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres real)', () => {
+describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
   let t: TestApp;
   let http: Api;
 
@@ -54,9 +55,7 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
     await t.close();
   });
 
-  // ---------------------------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------------------------
+  // Funciones de ayuda
   const consumoDe = (esc: Escenario) => ({
     insumoId: esc.insumoId,
     dosisAplicada: '7.5 ml/L',
@@ -70,7 +69,7 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
     return res.body.id as string;
   }
 
-  /** Inserta una inspección CERRADA con un snapshot conocido (independiente del flujo de cierre). */
+  /** Deja lista una inspección ya cerrada con datos conocidos. */
   async function sembrarCerrada(esc: Escenario): Promise<{ id: string; snapshot: Record<string, unknown> }> {
     const id = randomUUID();
     const snapshot = {
@@ -97,11 +96,10 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
 
   const leer = (id: string) => http.get(`/operaciones/inspecciones/${id}`);
 
-  // ---------------------------------------------------------------------------------------------
-  // A. Lectura del histórico
-  // ---------------------------------------------------------------------------------------------
-  describe('A. El histórico ya guardado no cambia cuando cambian los catálogos', () => {
-    it('editar el insumo en el catálogo (nombre, DIGESA, concentración, dosis) no altera la inspección cerrada', async () => {
+  // A. Una inspección cerrada no cambia cuando se editan los catálogos
+  describe('A. La inspección cerrada no cambia al editar los catálogos', () => {
+    // Se cambian el nombre, el registro y la dosis del insumo. La inspección debe seguir mostrando los valores de cuando se cerró.
+    it('editar un insumo del catálogo no cambia la inspección cerrada', async () => {
       const esc = await crearEscenario(http);
       const { id, snapshot } = await sembrarCerrada(esc);
       const antes = await leer(id);
@@ -119,7 +117,8 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
       expect(item.nombreHistorico).not.toBe(CAMBIOS_REFORMULACION.nombre_comercial);
     });
 
-    it('desactivar el insumo (PATCH /mantenimiento/insumos/:id/desactivar) no altera la inspección cerrada', async () => {
+    // Se da de baja el insumo. La inspección debe quedar igual.
+    it('desactivar un insumo no cambia la inspección cerrada', async () => {
       const esc = await crearEscenario(http);
       const { id } = await sembrarCerrada(esc);
       const antes = await leer(id);
@@ -131,7 +130,8 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
       expect((await leer(id)).body).toEqual(antes.body);
     });
 
-    it('eliminar el insumo del catálogo no rompe ni altera la inspección cerrada (el snapshot no depende de un JOIN)', async () => {
+    // Se borra el insumo. La inspección debe seguir mostrándose completa, porque guarda su propia copia.
+    it('eliminar un insumo no cambia ni rompe la inspección cerrada', async () => {
       const esc = await crearEscenario(http);
       const { id } = await sembrarCerrada(esc);
       const antes = await leer(id);
@@ -143,7 +143,8 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
       expect(despues.body).toEqual(antes.body);
     });
 
-    it('renombrar y desactivar al cliente no altera la inspección cerrada', async () => {
+    // Se cambia el nombre del cliente y se lo da de baja. La inspección debe quedar igual.
+    it('renombrar o desactivar al cliente no cambia la inspección cerrada', async () => {
       const esc = await crearEscenario(http);
       const { id } = await sembrarCerrada(esc);
       const antes = await leer(id);
@@ -156,7 +157,8 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
       expect((await leer(id)).body).toEqual(antes.body);
     });
 
-    it('poner el equipo en mantenimiento y desactivar al técnico no altera la inspección cerrada', async () => {
+    // Se pone un equipo fuera de servicio y se da de baja a un técnico. La inspección debe quedar igual.
+    it('cambiar el estado de un equipo o dar de baja a un técnico no cambia la inspección cerrada', async () => {
       const esc = await crearEscenario(http);
       const { id } = await sembrarCerrada(esc);
       const antes = await leer(id);
@@ -169,7 +171,8 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
       expect((await leer(id)).body).toEqual(antes.body);
     });
 
-    it('consultar por id y por servicioId devuelve el mismo snapshot histórico', async () => {
+    // Las dos formas de consultar la inspección deben dar los mismos datos, incluso después de editar el catálogo.
+    it('consultar por identificador o por servicio devuelve la misma copia guardada', async () => {
       const esc = await crearEscenario(http);
       const { id, snapshot } = await sembrarCerrada(esc);
       await editarInsumoEnCatalogo(t.db, esc.insumoId, CAMBIOS_REFORMULACION);
@@ -181,7 +184,8 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
       expect(porServicio.body.snapshotCatalogos).toEqual(snapshot);
     });
 
-    it('no se puede borrar un servicio ni un cliente que ya tienen inspecciones (FK RESTRICT)', async () => {
+    // La base de datos debe impedir el borrado, para no perder el historial.
+    it('no se puede borrar un servicio ni un cliente que ya tienen inspecciones', async () => {
       const esc = await crearEscenario(http);
       await sembrarCerrada(esc);
 
@@ -192,11 +196,10 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
     });
   });
 
-  // ---------------------------------------------------------------------------------------------
-  // B. Flujo completo por la API
-  // ---------------------------------------------------------------------------------------------
-  describe('B. Flujo completo: crear inspección → cerrar con consumos → cambiar catálogo', () => {
-    itBug('BUG-01', 'cerrar congela en el snapshot los datos vigentes del insumo y sube la versión de sync', async () => {
+  // B. Recorrido completo por la API
+  describe('B. Recorrido completo: crear, cerrar y cambiar el catálogo', () => {
+    // Se crea y se cierra una inspección. Debe quedar CERRADA con la copia de los datos del insumo.
+    itBug('BUG-01', 'al cerrar, la inspección guarda una copia de los datos del insumo', async () => {
       const esc = await crearEscenario(http);
       const creada = await http.post('/operaciones/inspecciones', { servicioId: esc.servicioId });
       expect(creada.status).toBe(201);
@@ -220,7 +223,8 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
       expect(new Date(cierre.body.snapshotCatalogos.fechaCierre).toISOString()).toBe(cierre.body.snapshotCatalogos.fechaCierre);
     });
 
-    itBug('BUG-01', 'editar el catálogo después del cierre deja el JSONB guardado idéntico byte a byte', async () => {
+    // Se cierra la inspección y luego se edita el insumo. La copia guardada no debe cambiar en nada.
+    itBug('BUG-01', 'editar el catálogo después de cerrar deja la copia guardada exactamente igual', async () => {
       const esc = await crearEscenario(http);
       const id = await crearInspeccion(esc);
       const cierre = await http.post(`/operaciones/inspecciones/${id}/cerrar`, { consumos: [consumoDe(esc)] });
@@ -239,7 +243,8 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
       expect((await leer(id)).body).toEqual(apiAntes.body);
     });
 
-    itBug('BUG-01', 'desactivar y eliminar el insumo después del cierre no altera el snapshot', async () => {
+    // Se cierra la inspección y luego se da de baja y se borra el insumo. La copia no debe cambiar.
+    itBug('BUG-01', 'desactivar o eliminar el insumo después de cerrar no cambia la copia', async () => {
       const esc = await crearEscenario(http);
       const id = await crearInspeccion(esc);
       await http.post(`/operaciones/inspecciones/${id}/cerrar`, { consumos: [consumoDe(esc)] });
@@ -252,7 +257,8 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
       expect((await leer(id)).body).toEqual(antes.body);
     });
 
-    itBug('BUG-01', 'cada inspección conserva el catálogo de SU momento (la antigua no cambia, la nueva ve la reformulación)', async () => {
+    // Se cierra una inspección, se cambia el insumo y se cierra otra. La primera conserva los datos viejos y la segunda los nuevos.
+    itBug('BUG-01', 'cada inspección conserva los datos del momento en que se cerró', async () => {
       const esc = await crearEscenario(http);
 
       const idAntigua = await crearInspeccion(esc);
@@ -272,7 +278,8 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
       expect(nueva.registroDigesa).toBe(CAMBIOS_REFORMULACION.registro_digesa);
     });
 
-    itBug('BUG-01', 'el snapshot refleja el catálogo al momento del CIERRE, no al de crear el borrador', async () => {
+    // Se crea el borrador, se cambia el insumo y recién se cierra. La copia debe tener el dato nuevo.
+    itBug('BUG-01', 'la copia toma los datos del momento del cierre, no de cuando se creó el borrador', async () => {
       const esc = await crearEscenario(http);
       const id = await crearInspeccion(esc); // borrador con el insumo original
       await editarInsumoEnCatalogo(t.db, esc.insumoId, CAMBIOS_REFORMULACION); // cambia ANTES de cerrar
@@ -283,7 +290,8 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
       expect(cierre.body.snapshotCatalogos.insumos[0].nombreHistorico).toBe(CAMBIOS_REFORMULACION.nombre_comercial);
     });
 
-    itBug('BUG-01', 'una inspección cerrada no se puede cerrar de nuevo (409) y su snapshot y versión no cambian', async () => {
+    // Un segundo cierre debe responder 409 y no cambiar nada de lo guardado.
+    itBug('BUG-01', 'una inspección cerrada no se puede volver a cerrar', async () => {
       const esc = await crearEscenario(http);
       const id = await crearInspeccion(esc);
       const primero = await http.post(`/operaciones/inspecciones/${id}/cerrar`, { consumos: [consumoDe(esc)] });
@@ -299,7 +307,8 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
       expect((await leer(id)).body.versionSync).toBe(2);
     });
 
-    itBug('BUG-01', 'la fecha de ejecución se devuelve en formato ISO (YYYY-MM-DD)', async () => {
+    // La fecha debe verse como 2026-09-20 y no como texto largo en inglés.
+    itBug('BUG-01', 'la fecha de ejecución se muestra con formato AAAA-MM-DD', async () => {
       const esc = await crearEscenario(http);
       const id = await crearInspeccion(esc);
 
@@ -310,11 +319,10 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
     });
   });
 
-  // ---------------------------------------------------------------------------------------------
-  // C. Guardas de la base de datos
-  // ---------------------------------------------------------------------------------------------
-  describe('C. La base de datos protege el histórico (defensa en profundidad)', () => {
-    itBug('BUG-03', 'la BD rechaza un UPDATE directo de snapshot_catalogos sobre una inspección CERRADA', async () => {
+  // C. Protección desde la base de datos
+  describe('C. La base de datos protege la inspección cerrada', () => {
+    // Se intenta cambiar la copia directamente en la base. Debe rechazarlo.
+    itBug('BUG-03', 'la base de datos no deja modificar la copia de una inspección cerrada', async () => {
       const esc = await crearEscenario(http);
       const { id } = await sembrarCerrada(esc);
 
@@ -324,27 +332,29 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
     });
   });
 
-  // ---------------------------------------------------------------------------------------------
-  // D. Validaciones y errores HTTP (no dependen de defectos)
-  // ---------------------------------------------------------------------------------------------
-  describe('D. Validaciones y errores HTTP', () => {
-    it('cerrar con un id que no es UUID responde 400', async () => {
+  // D. Errores de validación
+  describe('D. Errores de validación', () => {
+    // Un identificador que no tiene el formato correcto debe rechazarse.
+    it('cerrar con un identificador inválido responde 400', async () => {
       const res = await http.post('/operaciones/inspecciones/no-es-uuid/cerrar', {});
       expect(res.status).toBe(400);
     });
 
-    it('cerrar una inspección inexistente responde 404', async () => {
+    // Se intenta cerrar una inspección que nadie creó.
+    it('cerrar una inspección que no existe responde 404', async () => {
       const res = await http.post(`/operaciones/inspecciones/${randomUUID()}/cerrar`, {});
       expect(res.status).toBe(404);
       expect(res.body.message).toContain('no encontrada');
     });
 
-    it('consultar una inspección inexistente responde 404', async () => {
+    // Se consulta una inspección que nadie creó.
+    it('consultar una inspección que no existe responde 404', async () => {
       const res = await http.get(`/operaciones/inspecciones/${randomUUID()}`);
       expect(res.status).toBe(404);
     });
 
-    it('rechaza un consumo con cantidad 0 o sin lote (400)', async () => {
+    // Al cerrar, la cantidad debe ser mayor que cero y el lote no puede ir vacío.
+    it('rechaza un consumo con cantidad 0 o sin lote', async () => {
       const id = randomUUID();
       const sinCantidad = await http.post(`/operaciones/inspecciones/${id}/cerrar`, {
         consumos: [{ insumoId: randomUUID(), dosisAplicada: '5 ml/L', lote: 'L-1', cantidadUtilizada: 0 }],
@@ -356,12 +366,14 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
       expect(sinLote.status).toBe(400);
     });
 
-    it('crear una inspección con servicioId que no es UUID responde 400', async () => {
+    // El servicio debe enviarse con identificador válido.
+    it('crear una inspección con un servicio inválido responde 400', async () => {
       const res = await http.post('/operaciones/inspecciones', { servicioId: 'servicio-demo' });
       expect(res.status).toBe(400);
     });
 
-    it('crear una inspección para un servicio que no existe responde 400 (FK) y no deja filas', async () => {
+    // No debe quedar ningún registro a medias.
+    it('crear una inspección para un servicio que no existe responde 400 y no guarda nada', async () => {
       const res = await http.post('/operaciones/inspecciones', { servicioId: randomUUID() });
       expect(res.status).toBe(400);
       const { rows } = await t.db.query('SELECT count(*)::int AS n FROM inspecciones');
@@ -369,13 +381,11 @@ describe('T3.1 · Sección 13 — Inmutabilidad contractual (E2E con Postgres re
     });
   });
 
-  // ---------------------------------------------------------------------------------------------
-  // E. Pendientes de decisión del equipo
-  // ---------------------------------------------------------------------------------------------
-  describe('E. Pendientes (esperan decisión del equipo o funcionalidad nueva)', () => {
-    it.todo('DECISIÓN-2a: cerrar con un insumo que NO existe en el catálogo (hoy se omite del snapshot sin avisar; recomendado: rechazar)');
-    it.todo('DECISIÓN-2b: cerrar con un insumo INACTIVO (recomendado: aceptar y congelar, porque ya se aplicó en campo)');
-    it.todo('SNAPSHOT-EQUIPOS-PERSONAL: design.md exige congelar equipos y personal; hoy solo se congelan insumos y no hay API para asignarlos');
-    it.todo('BUG-05: cuando exista PATCH de insumos, editarInsumoEnCatalogo() debe usar la API en vez de SQL directo');
+  // E. Pendientes
+  describe('E. Pendientes (falta una decisión del equipo o una función nueva)', () => {
+    it.todo('Cerrar con un insumo que no existe en el catálogo (hoy se ignora sin avisar; se propone rechazar)');
+    it.todo('Cerrar con un insumo desactivado (se propone aceptarlo, porque ya se usó en campo)');
+    it.todo('Guardar también equipos y personal en la copia de la inspección cerrada (hoy solo se guardan insumos)');
+    it.todo('Cuando la API permita editar insumos, usarla en las pruebas en vez de la base directa');
   });
 });

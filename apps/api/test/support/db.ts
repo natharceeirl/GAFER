@@ -1,7 +1,14 @@
+/**
+ * db.ts
+ * Funciones para preparar, cambiar y leer datos directamente en la base de pruebas.
+ *
+ * Historial de versiones
+ *   v1.0  2026-09-20  ahilacondo  Creación del archivo.
+ */
 import { Pool } from 'pg';
 import { assertTestDatabase, TEST_DATABASE_URL } from './config';
 
-/** Deja todas las tablas vacías. Solo funciona sobre bases `*_test`. */
+/** Vacía todas las tablas (solo en bases _test). */
 export async function resetDb(db: Pool): Promise<void> {
   assertTestDatabase(TEST_DATABASE_URL);
   await db.query(
@@ -18,11 +25,7 @@ export interface CambiosInsumo {
   dosis_estandar?: string;
 }
 
-/**
- * Simula que un administrador EDITA un insumo del catálogo.
- * Hoy la API no expone un PATCH para esto (BUG-05: la entidad Insumo es de solo lectura),
- * así que se edita directo en la BD. Cuando exista el endpoint, solo se cambia esta función.
- */
+/** Edita un insumo del catálogo. Se hace en la base porque la API aún no tiene esta opción (GAP-01). */
 export async function editarInsumoEnCatalogo(db: Pool, insumoId: string, cambios: CambiosInsumo): Promise<void> {
   const columnas = Object.keys(cambios) as Array<keyof CambiosInsumo>;
   if (columnas.length === 0) return;
@@ -37,7 +40,7 @@ export async function eliminarInsumoDelCatalogo(db: Pool, insumoId: string): Pro
   if (res.rowCount !== 1) throw new Error(`Insumo ${insumoId} no existe en la BD de pruebas`);
 }
 
-/** JSONB del snapshot tal cual está guardado en la fila (para comparar byte a byte). */
+/** Copia guardada de la inspección, tal como está en la base. */
 export async function leerSnapshotCrudo(db: Pool, inspeccionId: string): Promise<string> {
   const res = await db.query('SELECT snapshot_catalogos::text AS s FROM inspecciones WHERE id = $1', [inspeccionId]);
   return res.rows[0].s as string;
@@ -48,10 +51,7 @@ export async function leerFilaInspeccion(db: Pool, inspeccionId: string): Promis
   return res.rows[0] as Record<string, unknown>;
 }
 
-/**
- * Inserta directamente una inspección ya CERRADA con un snapshot conocido.
- * Sirve para probar la lectura del histórico sin depender del flujo de cierre.
- */
+/** Crea una inspección ya cerrada, sin pasar por el cierre normal. */
 export async function sembrarInspeccionCerrada(
   db: Pool,
   args: { id: string; servicioId: string; codigo: string; snapshot: Record<string, unknown> },

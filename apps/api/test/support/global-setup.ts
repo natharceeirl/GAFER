@@ -1,3 +1,10 @@
+/**
+ * global-setup.ts
+ * Antes de las pruebas: crea la base de pruebas si no existe y le aplica las tablas.
+ *
+ * Historial de versiones
+ *   v1.0  2026-09-20  ahilacondo  Creación del archivo.
+ */
 import * as fs from 'fs';
 import * as path from 'path';
 import { Client } from 'pg';

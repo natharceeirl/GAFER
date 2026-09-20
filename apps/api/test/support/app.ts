@@ -1,3 +1,11 @@
+/**
+ * app.ts
+ * Enciende la aplicación real en un puerto libre para probarla.
+ *
+ * Historial de versiones
+ *   v1.0  2026-09-20  ahilacondo  Creación del archivo.
+ *   v1.1  2026-09-20  ahilacondo  Cierra bien las conexiones al terminar.
+ */
 import 'reflect-metadata';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -10,21 +18,14 @@ import { TEST_DATABASE_URL } from './config';
 
 export interface TestApp {
   app: INestApplication;
-  /** URL base del servidor HTTP real (ej. http://127.0.0.1:53211), sin prefijo /api */
+  /** Dirección del servidor de pruebas */
   baseUrl: string;
-  /** Conexión directa a la base de pruebas para preparar datos o inspeccionar filas */
+  /** Conexión directa a la base de pruebas */
   db: Pool;
   close(): Promise<void>;
 }
 
-/**
- * Levanta la aplicación con la MISMA configuración de main.ts (prefijo /api,
- * filtro de excepciones de dominio y ValidationPipe), escuchando en un puerto real.
- *
- * Se usa un puerto real (listen(0)) en vez de supertest sobre getHttpServer() porque
- * las pruebas de concurrencia (T3.2) disparan muchas peticiones simultáneas y ese modo
- * produce ECONNRESET.
- */
+/** Enciende la aplicación con la misma configuración que main.ts, en un puerto libre. */
 export async function createTestApp(): Promise<TestApp> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = moduleRef.createNestApplication({ logger: false });
@@ -43,8 +44,7 @@ export async function createTestApp(): Promise<TestApp> {
     db,
     async close() {
       await db.end();
-      // Nest no cierra por sí solo el pool de Postgres que crea DatabaseModule; sin esto Jest queda
-      // esperando ~10 s a que expire la conexión ociosa ("Jest did not exit one second after...").
+      // Cierra las conexiones a la base para que Jest termine sin esperar.
       const kysely = app.get<Kysely<unknown>>(KYSELY_DATABASE);
       await app.close();
       await kysely.destroy();
