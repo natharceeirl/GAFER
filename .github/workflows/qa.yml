@@ -1,0 +1,90 @@
+name: QA
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas:
+    name: Pruebas unitarias y e2e (PostgreSQL 16)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gafer
+          POSTGRES_PASSWORD: gafer
+          POSTGRES_DB: gafer_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gafer -d gafer_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgresql://gafer:gafer@localhost:5432/gafer_test
+
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v4
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # La versión exacta de pnpm está fijada en el campo "packageManager" de package.json.
+      - name: Activar pnpm
+        run: corepack enable
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      # Ejecuta los tests unitarios de todo el monorepo. Su script "pretest" compila contracts y api.
+      - name: Pruebas unitarias
+        run: pnpm test
+
+      # Levanta la API real contra el PostgreSQL del servicio de arriba y mide cobertura.
+      - name: Pruebas e2e de inmutabilidad (con cobertura)
+        run: pnpm --filter @gafer/api test:e2e:cov
+
+      - name: Resumen de cobertura
+        if: always()
+        run: |
+          node - <<'JS' >> "$GITHUB_STEP_SUMMARY"
+          const fs = require('fs');
+          const ruta = 'apps/api/coverage-e2e/coverage-summary.json';
+          if (!fs.existsSync(ruta)) {
+            console.log('No se generó el reporte de cobertura e2e.');
+            process.exit(0);
+          }
+          const t = JSON.parse(fs.readFileSync(ruta, 'utf8')).total;
+          const fila = (nombre, k) => `| ${nombre} | ${t[k].pct}% | ${t[k].covered} / ${t[k].total} |`;
+          console.log('### Cobertura de las pruebas e2e\n');
+          console.log('| Métrica | Porcentaje | Cubierto |');
+          console.log('|---|---|---|');
+          console.log(fila('Sentencias', 'statements'));
+          console.log(fila('Ramas', 'branches'));
+          console.log(fila('Funciones', 'functions'));
+          console.log(fila('Líneas', 'lines'));
+          JS
+
+      - name: Publicar reporte de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura-e2e
+          path: apps/api/coverage-e2e
+          retention-days: 30
