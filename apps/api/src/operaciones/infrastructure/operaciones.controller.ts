@@ -20,10 +20,13 @@ import {
   ApiObtenerInspeccionPorIdDoc,
   ApiConsultarInspeccionDoc,
   ApiConsultarAuditoriaDoc,
+  ApiSincronizarInspeccionDoc,
 } from './operaciones.controller.doc';
+import { SincronizarInspeccionUseCase } from '../application/sincronizar-inspeccion.usecase';
+import { OperacionSync, TipoOperacionSync } from '@gafer/contracts';
 import { AuditoriaService } from '../../shared/auditoria/auditoria.service';
 import { Optional } from '@nestjs/common';
-import { IsArray, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsDefined, IsNotEmpty, IsNumber, IsObject, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ConsumoInsumoDto implements ConsumoInsumoCommand {
@@ -94,6 +97,51 @@ export class CrearInspeccionDto {
   servicioId!: string;
 }
 
+export class OperacionSyncDto implements OperacionSync {
+  @ApiProperty({ example: '11111111-1111-1111-1111-111111111111' })
+  @IsUUID('all')
+  operationId!: string;
+
+  @ApiProperty({
+    example: 'REGISTRO_ESTACION',
+    enum: ['REGISTRO_ESTACION', 'ACTUALIZACION_ESTACION', 'REGISTRO_OBSERVACIONES'],
+  })
+  @IsString()
+  @IsNotEmpty()
+  tipo!: TipoOperacionSync;
+
+  @ApiProperty({ example: '22222222-2222-2222-2222-222222222222' })
+  @IsUUID('all')
+  agregadoId!: string;
+
+  @ApiProperty({ example: '33333333-3333-3333-3333-333333333333' })
+  @IsUUID('all')
+  actorId!: string;
+
+  @ApiProperty({ example: '2026-09-20T18:00:00.000Z' })
+  @IsString()
+  @IsNotEmpty()
+  clienteTimestamp!: string;
+
+  @ApiProperty({ example: { numeroEstacion: 1, huboConsumo: true } })
+  @IsObject()
+  @IsDefined()
+  payload!: Record<string, unknown>;
+}
+
+export class SincronizarLoteDto {
+  @ApiProperty({ example: '22222222-2222-2222-2222-222222222222', required: false })
+  @IsOptional()
+  @IsUUID('all')
+  inspeccionId?: string;
+
+  @ApiProperty({ type: [OperacionSyncDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OperacionSyncDto)
+  operaciones!: OperacionSyncDto[];
+}
+
 @ApiTags('Operaciones')
 @Controller('operaciones/inspecciones')
 export class OperacionesController {
@@ -103,6 +151,8 @@ export class OperacionesController {
     private readonly obtenerInspeccion: ObtenerInspeccionUseCase,
     @Optional()
     private readonly auditoriaService?: AuditoriaService,
+    @Optional()
+    private readonly sincronizarInspeccion?: SincronizarInspeccionUseCase,
   ) {}
 
   @Post()
@@ -190,5 +240,17 @@ export class OperacionesController {
   ) {
     if (!this.auditoriaService) return [];
     return this.auditoriaService.listarPorInspeccion(id);
+  }
+
+  @Post(':id/sincronizar')
+  @ApiSincronizarInspeccionDoc()
+  async sincronizar(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: SincronizarLoteDto,
+  ) {
+    if (!this.sincronizarInspeccion) {
+      throw new Error('SincronizarInspeccionUseCase no configurado');
+    }
+    return this.sincronizarInspeccion.ejecutar(id, dto.operaciones);
   }
 }

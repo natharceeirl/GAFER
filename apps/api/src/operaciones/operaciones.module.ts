@@ -3,6 +3,7 @@ import { OperacionesController } from './infrastructure/operaciones.controller';
 import { RegistrarInspeccionUseCase } from './application/registrar-inspeccion.usecase';
 import { CerrarInspeccionUseCase } from './application/cerrar-inspeccion.usecase';
 import { ObtenerInspeccionUseCase } from './application/obtener-inspeccion.usecase';
+import { SincronizarInspeccionUseCase } from './application/sincronizar-inspeccion.usecase';
 import { INSPECCION_REPOSITORY } from './domain/ports/inspeccion.repository';
 import { KyselyInspeccionRepository } from './infrastructure/adapters/kysely-inspeccion.repository';
 import { MantenimientoModule } from '../mantenimiento/mantenimiento.module';
@@ -14,12 +15,14 @@ import { MantenimientoModule } from '../mantenimiento/mantenimiento.module';
     RegistrarInspeccionUseCase,
     CerrarInspeccionUseCase,
     ObtenerInspeccionUseCase,
+    SincronizarInspeccionUseCase,
     { provide: INSPECCION_REPOSITORY, useClass: KyselyInspeccionRepository },
   ],
   exports: [
     RegistrarInspeccionUseCase,
     CerrarInspeccionUseCase,
     ObtenerInspeccionUseCase,
+    SincronizarInspeccionUseCase,
     INSPECCION_REPOSITORY,
   ],
 })

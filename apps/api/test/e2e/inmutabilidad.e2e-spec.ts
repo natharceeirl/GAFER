@@ -614,4 +614,181 @@ describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
       expect(res.body.message).toContain('no corresponde a un personal técnico registrado');
     });
   });
+
+  // G. Brechas resueltas: Sincronización de Campo y Resolución de Colisiones (GAP-02)
+  describe('G. Brechas resueltas: Sincronización de Campo (GAP-02)', () => {
+    it('dos técnicos sincronizan estaciones distintas en paralelo y ambas cargas se conservan (GAP-02)', async () => {
+      const esc = await crearEscenario(http);
+      const id = await crearInspeccion(esc);
+
+      // Crear segundo técnico
+      const tec2Res = await http.post('/mantenimiento/personal', {
+        dni: '87654321',
+        nombres: 'Roberto',
+        apellidos: 'Gomez',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '999888777',
+        usuario: 'RGOMEZ',
+      });
+      expect(tec2Res.status).toBe(201);
+      const tec2Id = tec2Res.body.id;
+
+      // Técnico 1 carga estaciones 1 y 2
+      const op1Id = randomUUID();
+      const op2Id = randomUUID();
+      const syncTec1 = await http.post(`/operaciones/inspecciones/${id}/sincronizar`, {
+        operaciones: [
+          {
+            operationId: op1Id,
+            tipo: 'REGISTRO_ESTACION',
+            agregadoId: id,
+            actorId: esc.tecnicoId,
+            clienteTimestamp: new Date().toISOString(),
+            payload: { numeroEstacion: 1, huboConsumo: false, colorAura: 'VERDE' },
+          },
+          {
+            operationId: op2Id,
+            tipo: 'REGISTRO_ESTACION',
+            agregadoId: id,
+            actorId: esc.tecnicoId,
+            clienteTimestamp: new Date().toISOString(),
+            payload: { numeroEstacion: 2, huboConsumo: true, colorAura: 'AMARILLO' },
+          },
+        ],
+      });
+      expect(syncTec1.status).toBe(201);
+      expect(syncTec1.body.procesadas).toEqual([op1Id, op2Id]);
+
+      // Técnico 2 carga estaciones 51 y 52
+      const op3Id = randomUUID();
+      const op4Id = randomUUID();
+      const syncTec2 = await http.post(`/operaciones/inspecciones/${id}/sincronizar`, {
+        operaciones: [
+          {
+            operationId: op3Id,
+            tipo: 'REGISTRO_ESTACION',
+            agregadoId: id,
+            actorId: tec2Id,
+            clienteTimestamp: new Date().toISOString(),
+            payload: { numeroEstacion: 51, huboConsumo: false, colorAura: 'VERDE' },
+          },
+          {
+            operationId: op4Id,
+            tipo: 'REGISTRO_ESTACION',
+            agregadoId: id,
+            actorId: tec2Id,
+            clienteTimestamp: new Date().toISOString(),
+            payload: { numeroEstacion: 52, huboConsumo: true, colorAura: 'ROJO' },
+          },
+        ],
+      });
+      expect(syncTec2.status).toBe(201);
+      expect(syncTec2.body.procesadas).toEqual([op3Id, op4Id]);
+
+      // Verificar que las 4 operaciones quedaron persistidas en la bitácora de auditoría
+      const { rows } = await t.db.query(
+        'SELECT count(*)::int AS n FROM inspecciones_auditoria WHERE inspeccion_id = $1 AND accion = $2',
+        [id, 'REGISTRO_ESTACION'],
+      );
+      expect(rows[0].n).toBe(4);
+    });
+
+    it('dos técnicos modifican la misma estación: prevalece el cambio más reciente y el desplazado se archiva (GAP-02)', async () => {
+      const esc = await crearEscenario(http);
+      const id = await crearInspeccion(esc);
+
+      const opAId = randomUUID();
+      await http.post(`/operaciones/inspecciones/${id}/sincronizar`, {
+        operaciones: [
+          {
+            operationId: opAId,
+            tipo: 'REGISTRO_ESTACION',
+            agregadoId: id,
+            actorId: esc.tecnicoId,
+            clienteTimestamp: '2026-09-20T10:00:00.000Z',
+            payload: { numeroEstacion: 10, huboConsumo: false, colorAura: 'VERDE' },
+          },
+        ],
+      });
+
+      // Técnico B envía actualización para la misma estación 10
+      const opBId = randomUUID();
+      const syncColision = await http.post(`/operaciones/inspecciones/${id}/sincronizar`, {
+        operaciones: [
+          {
+            operationId: opBId,
+            tipo: 'ACTUALIZACION_ESTACION',
+            agregadoId: id,
+            actorId: esc.tecnicoId,
+            clienteTimestamp: '2026-09-20T10:05:00.000Z',
+            payload: { numeroEstacion: 10, huboConsumo: true, colorAura: 'ROJO' },
+          },
+        ],
+      });
+
+      expect(syncColision.status).toBe(201);
+      expect(syncColision.body.procesadas).toContain(opBId);
+      expect(syncColision.body.conflictos).toHaveLength(1);
+      expect(syncColision.body.conflictos[0].operationId).toBe(opBId);
+      expect(syncColision.body.conflictos[0].valorDesplazado).toMatchObject({
+        numeroEstacion: 10,
+        colorAura: 'VERDE',
+      });
+    });
+
+    it('re-enviar una operación con el mismo operationId se procesa de forma idempotente (GAP-02)', async () => {
+      const esc = await crearEscenario(http);
+      const id = await crearInspeccion(esc);
+      const opId = randomUUID();
+
+      const operacion = {
+        operationId: opId,
+        tipo: 'REGISTRO_ESTACION',
+        agregadoId: id,
+        actorId: esc.tecnicoId,
+        clienteTimestamp: new Date().toISOString(),
+        payload: { numeroEstacion: 7, huboConsumo: false },
+      };
+
+      const primera = await http.post(`/operaciones/inspecciones/${id}/sincronizar`, {
+        operaciones: [operacion],
+      });
+      expect(primera.status).toBe(201);
+      expect(primera.body.procesadas).toContain(opId);
+
+      const segunda = await http.post(`/operaciones/inspecciones/${id}/sincronizar`, {
+        operaciones: [operacion],
+      });
+      expect(segunda.status).toBe(201);
+      expect(segunda.body.omitidasIdempotentes).toContain(opId);
+      expect(segunda.body.procesadas).toHaveLength(0);
+    });
+
+    it('tras el cierre de inspección, cualquier intento de sincronización se rechaza con 409 (GAP-02)', async () => {
+      const esc = await crearEscenario(http);
+      const id = await crearInspeccion(esc);
+
+      await http.post(`/operaciones/inspecciones/${id}/cerrar`, {
+        consumos: [consumoDe(esc)],
+        equiposIds: [esc.equipoId],
+        personalIds: [esc.tecnicoId],
+      });
+
+      const res = await http.post(`/operaciones/inspecciones/${id}/sincronizar`, {
+        operaciones: [
+          {
+            operationId: randomUUID(),
+            tipo: 'REGISTRO_ESTACION',
+            agregadoId: id,
+            actorId: esc.tecnicoId,
+            clienteTimestamp: new Date().toISOString(),
+            payload: { numeroEstacion: 1 },
+          },
+        ],
+      });
+
+      expect(res.status).toBe(409);
+      expect(res.body.message).toContain('cerrada y no acepta más sincronizaciones');
+    });
+  });
 });
