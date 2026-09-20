@@ -13,8 +13,26 @@ export class RegistrarInspeccionUseCase {
   ) {}
 
   async ejecutar(servicioId: string): Promise<Inspeccion> {
-    const inspeccion = new Inspeccion(randomUUID(), servicioId);
-    await this.repo.guardar(inspeccion);
-    return inspeccion;
+    const existente = await this.repo.buscarPorServicioId(servicioId);
+    if (existente && existente.getEstado() === 'BORRADOR') {
+      return existente;
+    }
+
+    try {
+      const inspeccion = new Inspeccion(randomUUID(), servicioId);
+      await this.repo.guardar(inspeccion);
+      return inspeccion;
+    } catch (error: any) {
+      if (
+        error?.code === '23505' ||
+        error?.message?.includes('idx_inspecciones_servicio_borrador_unico')
+      ) {
+        const borrador = await this.repo.buscarPorServicioId(servicioId);
+        if (borrador) {
+          return borrador;
+        }
+      }
+      throw error;
+    }
   }
 }

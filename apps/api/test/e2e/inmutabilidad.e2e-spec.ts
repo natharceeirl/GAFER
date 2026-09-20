@@ -337,6 +337,23 @@ describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
       expect(fila.estado).toBe('CERRADO');
       expect(fila.version_sync).toBe(2);
     });
+
+    // Crear inspección sobre el mismo servicio reutiliza el borrador existente y no duplica filas (BUG-06)
+    it('dos creaciones de inspección para el mismo servicio devuelven el mismo borrador sin duplicar filas (BUG-06)', async () => {
+      const esc = await crearEscenario(http);
+      const res1 = await http.post('/operaciones/inspecciones', { servicioId: esc.servicioId });
+      const res2 = await http.post('/operaciones/inspecciones', { servicioId: esc.servicioId });
+
+      expect(res1.status).toBe(201);
+      expect(res2.status).toBe(201);
+      expect(res1.body.id).toBe(res2.body.id);
+
+      const { rows } = await t.db.query(
+        'SELECT count(*)::int AS total FROM inspecciones WHERE servicio_id = $1 AND estado = $2',
+        [esc.servicioId, 'BORRADOR'],
+      );
+      expect(rows[0].total).toBe(1);
+    });
   });
 
   // C. Protección desde la base de datos

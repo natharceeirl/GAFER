@@ -5,6 +5,9 @@
 -- =============================================================================
 
 DROP TABLE IF EXISTS inspecciones_auditoria CASCADE;
+DROP TRIGGER IF EXISTS trg_proteger_snapshot_inspeccion ON inspecciones;
+DROP FUNCTION IF EXISTS fn_proteger_snapshot_inspeccion_cerrada();
+DROP INDEX IF EXISTS idx_inspecciones_servicio_borrador_unico;
 DROP TABLE IF EXISTS inspecciones CASCADE;
 DROP TABLE IF EXISTS personal CASCADE;
 DROP TABLE IF EXISTS equipos CASCADE;

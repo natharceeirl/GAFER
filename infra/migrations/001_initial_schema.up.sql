@@ -152,6 +152,31 @@ CREATE INDEX IF NOT EXISTS idx_inspecciones_servicio_id ON inspecciones(servicio
 CREATE INDEX IF NOT EXISTS idx_inspecciones_codigo ON inspecciones(codigo_inspeccion);
 CREATE INDEX IF NOT EXISTS idx_inspecciones_estado ON inspecciones(estado);
 CREATE INDEX IF NOT EXISTS idx_inspecciones_fecha ON inspecciones(fecha_ejecucion);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_inspecciones_servicio_borrador_unico ON inspecciones(servicio_id) WHERE estado = 'BORRADOR';
+
+-- Disparador de inmutabilidad para snapshot_catalogos (BUG-03 / Sección 13)
+CREATE OR REPLACE FUNCTION fn_proteger_snapshot_inspeccion_cerrada()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Si la inspección ya no está en BORRADOR, el snapshot_catalogos no puede alterarse
+    IF OLD.estado != 'BORRADOR' AND NEW.snapshot_catalogos IS DISTINCT FROM OLD.snapshot_catalogos THEN
+        RAISE EXCEPTION 'Operación denegada: snapshot_catalogos es inmutable una vez cerrada la inspección (Sección 13)';
+    END IF;
+
+    -- Prevenir revertir estado de una inspección cerrada a BORRADOR
+    IF OLD.estado != 'BORRADOR' AND NEW.estado = 'BORRADOR' THEN
+        RAISE EXCEPTION 'Operación denegada: no se puede revertir una inspección cerrada a estado BORRADOR';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_proteger_snapshot_inspeccion ON inspecciones;
+CREATE TRIGGER trg_proteger_snapshot_inspeccion
+    BEFORE UPDATE ON inspecciones
+    FOR EACH ROW
+    EXECUTE FUNCTION fn_proteger_snapshot_inspeccion_cerrada();
 
 -- 8. Bitácora de Auditoría Concurrente
 CREATE TABLE IF NOT EXISTS inspecciones_auditoria (

@@ -74,6 +74,7 @@ export class KyselyInspeccionRepository implements InspeccionRepository {
       .selectFrom('inspecciones')
       .selectAll()
       .where('servicio_id', '=', servicioId)
+      .orderBy('created_at', 'desc')
       .executeTakeFirst();
 
     return row ? this.mapToDomain(row) : null;

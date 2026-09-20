@@ -31,7 +31,7 @@ export const BUGS = {
     donde: 'apps/api/src/operaciones/infrastructure/adapters/kysely-inspeccion.repository.ts (mapToDomain)',
   },
   'BUG-03': {
-    abierto: true,
+    abierto: false,
     titulo: 'La base de datos permite modificar el snapshot de una inspección cerrada.',
     responsable: 'Backend',
     donde: 'infra/migrations/001_initial_schema.up.sql',
