@@ -1,4 +1,10 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Inspeccion } from '../domain/inspeccion';
 import {
   INSPECCION_REPOSITORY,
@@ -45,21 +51,25 @@ export class CerrarInspeccionUseCase {
     if (command.consumos && command.consumos.length > 0) {
       for (const consumo of command.consumos) {
         const insumoCatalogo = await this.insumoRepo.buscarPorId(consumo.insumoId);
-        if (insumoCatalogo) {
-          snapshotInsumos.push({
-            insumoId: insumoCatalogo.id,
-            nombreHistorico: insumoCatalogo.nombreComercial,
-            principioActivo: insumoCatalogo.principioActivo,
-            presentacion: insumoCatalogo.presentacion,
-            unidadMedida: insumoCatalogo.unidadMedida,
-            registroDigesa: insumoCatalogo.registroDigesa,
-            concentracion: insumoCatalogo.concentracion,
-            dosisAplicada: consumo.dosisAplicada,
-            lote: consumo.lote,
-            cantidadUtilizada: consumo.cantidadUtilizada,
-            congeladoEn: new Date().toISOString(),
-          });
+        if (!insumoCatalogo) {
+          throw new BadRequestException(
+            `El insumo con ID ${consumo.insumoId} no existe en el catálogo`,
+          );
         }
+
+        snapshotInsumos.push({
+          insumoId: insumoCatalogo.id,
+          nombreHistorico: insumoCatalogo.nombreComercial,
+          principioActivo: insumoCatalogo.principioActivo,
+          presentacion: insumoCatalogo.presentacion,
+          unidadMedida: insumoCatalogo.unidadMedida,
+          registroDigesa: insumoCatalogo.registroDigesa,
+          concentracion: insumoCatalogo.concentracion,
+          dosisAplicada: consumo.dosisAplicada,
+          lote: consumo.lote,
+          cantidadUtilizada: consumo.cantidadUtilizada,
+          congeladoEn: new Date().toISOString(),
+        });
       }
     }
 

@@ -317,6 +317,26 @@ describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
       expect(res.status).toBe(200);
       expect(res.body.fechaEjecucion).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
+
+    // Cierres simultáneos en paralelo: exactamente uno debe responder 201 y los demás 409
+    it('cierres simultáneos en paralelo solo permiten exactamente una respuesta 201 y el resto 409', async () => {
+      const esc = await crearEscenario(http);
+      const id = await crearInspeccion(esc);
+
+      const promesas = Array.from({ length: 25 }, () =>
+        http.post(`/operaciones/inspecciones/${id}/cerrar`, { consumos: [consumoDe(esc)] }),
+      );
+      const respuestas = await Promise.all(promesas);
+
+      const exitosos = respuestas.filter((r) => r.status === 201);
+      const conflictos = respuestas.filter((r) => r.status === 409);
+
+      expect(exitosos).toHaveLength(1);
+      expect(conflictos).toHaveLength(24);
+      const fila = await leerFilaInspeccion(t.db, id);
+      expect(fila.estado).toBe('CERRADO');
+      expect(fila.version_sync).toBe(2);
+    });
   });
 
   // C. Protección desde la base de datos
@@ -379,12 +399,43 @@ describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
       const { rows } = await t.db.query('SELECT count(*)::int AS n FROM inspecciones');
       expect(rows[0].n).toBe(0);
     });
+
+    // Cerrar con un insumo que no existe en el catálogo debe responder 400 y no cerrar la inspección (BUG-04)
+    it('cerrar con un insumo inexistente en catálogo responde 400 y mantiene la inspección en borrador', async () => {
+      const esc = await crearEscenario(http);
+      const id = await crearInspeccion(esc);
+      const res = await http.post(`/operaciones/inspecciones/${id}/cerrar`, {
+        consumos: [
+          {
+            insumoId: randomUUID(),
+            dosisAplicada: '10 ml/L',
+            lote: 'L-FANTASMA',
+            cantidadUtilizada: 1.5,
+          },
+        ],
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain('no existe en el catálogo');
+      const insp = await leer(id);
+      expect(insp.body.estado).toBe('BORRADOR');
+    });
+
+    // Cerrar con un insumo desactivado se permite porque ya fue aplicado en campo
+    it('cerrar con un insumo desactivado se permite y congela sus datos en el snapshot', async () => {
+      const esc = await crearEscenario(http);
+      await http.patch(`/mantenimiento/insumos/${esc.insumoId}/desactivar`);
+      const id = await crearInspeccion(esc);
+      const res = await http.post(`/operaciones/inspecciones/${id}/cerrar`, {
+        consumos: [consumoDe(esc)],
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.estado).toBe('CERRADO');
+      expect(res.body.snapshotCatalogos.insumos).toHaveLength(1);
+    });
   });
 
   // E. Pendientes
   describe('E. Pendientes (falta una decisión del equipo o una función nueva)', () => {
-    it.todo('Cerrar con un insumo que no existe en el catálogo (hoy se ignora sin avisar; se propone rechazar)');
-    it.todo('Cerrar con un insumo desactivado (se propone aceptarlo, porque ya se usó en campo)');
     it.todo('Guardar también equipos y personal en la copia de la inspección cerrada (hoy solo se guardan insumos)');
     it.todo('Cuando la API permita editar insumos, usarla en las pruebas en vez de la base directa');
   });

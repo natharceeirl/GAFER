@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { Kysely } from 'kysely';
 import { GaferDatabase } from '../../../database/types';
 import { Inspeccion, EstadoInspeccion } from '../../domain/inspeccion';
@@ -9,6 +9,29 @@ export class KyselyInspeccionRepository implements InspeccionRepository {
   constructor(private readonly db: Kysely<GaferDatabase>) {}
 
   async guardar(inspeccion: Inspeccion): Promise<void> {
+    if (inspeccion.getEstado() === 'CERRADO') {
+      const result = await this.db
+        .updateTable('inspecciones')
+        .set({
+          estado: inspeccion.getEstado(),
+          version_sync: inspeccion.getVersionSync(),
+          hora_inicio: inspeccion.horaInicio,
+          hora_fin: inspeccion.horaFin,
+          tecnicos_participantes: JSON.stringify(inspeccion.tecnicosParticipantes),
+          snapshot_catalogos: JSON.stringify(inspeccion.getSnapshot()),
+        })
+        .where('id', '=', inspeccion.id)
+        .where('estado', '=', 'BORRADOR')
+        .executeTakeFirst();
+
+      if (Number(result.numUpdatedRows ?? 0) === 0) {
+        throw new ConflictException(
+          'La inspección ya está cerrada y bloqueada contra ediciones',
+        );
+      }
+      return;
+    }
+
     await this.db
       .insertInto('inspecciones')
       .values({
@@ -31,7 +54,7 @@ export class KyselyInspeccionRepository implements InspeccionRepository {
           hora_fin: inspeccion.horaFin,
           tecnicos_participantes: JSON.stringify(inspeccion.tecnicosParticipantes),
           snapshot_catalogos: JSON.stringify(inspeccion.getSnapshot()),
-        }),
+        }).where('inspecciones.estado', '=', 'BORRADOR'),
       )
       .execute();
   }
