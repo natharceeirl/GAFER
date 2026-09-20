@@ -6,6 +6,7 @@
     "pretest": "pnpm --filter @gafer/contracts build && pnpm --filter @gafer/api build",
     "build": "pnpm -r --if-present build",
     "test": "pnpm -r --if-present test",
+    "test:e2e": "pnpm --filter @gafer/api test:e2e",
     "lint": "pnpm -r --if-present lint",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down",
