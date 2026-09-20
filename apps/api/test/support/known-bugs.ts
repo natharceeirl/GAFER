@@ -25,7 +25,7 @@ export interface DefectoConocido {
 
 export const BUGS = {
   'BUG-01': {
-    abierto: true,
+    abierto: false,
     titulo: 'Cerrar una inspección responde error 500 con la base real (la fecha se convierte mal).',
     responsable: 'Backend',
     donde: 'apps/api/src/operaciones/infrastructure/adapters/kysely-inspeccion.repository.ts (mapToDomain)',

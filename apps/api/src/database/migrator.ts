@@ -38,7 +38,6 @@ export async function runMigration(direction: 'up' | 'down'): Promise<void> {
     throw error;
   } finally {
     await db.destroy();
-    await pool.end();
   }
 }
 

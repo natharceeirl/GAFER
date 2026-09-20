@@ -1,10 +1,13 @@
 import { Kysely, PostgresDialect } from 'kysely';
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
 import * as dotenv from 'dotenv';
 import { GaferDatabase } from './types';
 
 // Cargar variables de entorno locales de apps/api
 dotenv.config();
+
+// Mapear columnas DATE de PostgreSQL (OID 1082) directamente a strings 'YYYY-MM-DD' en lugar de objetos Date
+types.setTypeParser(1082, (val: string) => val);
 
 export function createDatabasePool(): Pool {
   if (process.env.DATABASE_URL) {

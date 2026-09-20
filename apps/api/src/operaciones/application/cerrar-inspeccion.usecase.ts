@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Inspeccion } from '../domain/inspeccion';
 import {
   INSPECCION_REPOSITORY,
@@ -34,6 +34,10 @@ export class CerrarInspeccionUseCase {
     const inspeccion = await this.inspeccionRepo.buscarPorId(command.inspeccionId);
     if (!inspeccion) {
       throw new NotFoundException(`Inspección ${command.inspeccionId} no encontrada`);
+    }
+
+    if (inspeccion.getEstado() === 'CERRADO') {
+      throw new ConflictException('La inspección ya está cerrada y bloqueada contra ediciones');
     }
 
     // Construir snapshot inmutable de los insumos según Sección 13

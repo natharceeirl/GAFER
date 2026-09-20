@@ -56,6 +56,22 @@ export class KyselyInspeccionRepository implements InspeccionRepository {
     return row ? this.mapToDomain(row) : null;
   }
 
+  private formatFecha(val: unknown): string {
+    if (!val) return '';
+    if (val instanceof Date) {
+      return val.toISOString().slice(0, 10);
+    }
+    const str = String(val);
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+      return str.slice(0, 10);
+    }
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().slice(0, 10);
+    }
+    return str;
+  }
+
   private mapToDomain(row: any): Inspeccion {
     const snapshotCatalogos =
       typeof row.snapshot_catalogos === 'string'
@@ -73,7 +89,7 @@ export class KyselyInspeccionRepository implements InspeccionRepository {
       codigoInspeccion: row.codigo_inspeccion,
       estado: row.estado as EstadoInspeccion,
       versionSync: row.version_sync,
-      fechaEjecucion: String(row.fecha_ejecucion),
+      fechaEjecucion: this.formatFecha(row.fecha_ejecucion),
       horaInicio: row.hora_inicio ? String(row.hora_inicio) : null,
       horaFin: row.hora_fin ? String(row.hora_fin) : null,
       tecnicosParticipantes: tecnicos,
