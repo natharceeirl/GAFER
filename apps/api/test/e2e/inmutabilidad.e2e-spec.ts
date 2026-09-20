@@ -549,4 +549,69 @@ describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
       expect(insp.body.estado).toBe('BORRADOR');
     });
   });
+
+  // F. Brechas resueltas: Persistencia de Auditoría (GAP-03)
+  describe('F. Brechas resueltas: Persistencia de Auditoría (GAP-03)', () => {
+    it('persistir evento de creación y cierre en inspecciones_auditoria con técnico verificado (GAP-03)', async () => {
+      const esc = await crearEscenario(http);
+
+      // 1. Crear inspección con técnico en header x-actor
+      const creacion = await http.post(
+        '/operaciones/inspecciones',
+        { servicioId: esc.servicioId },
+        { 'x-actor': esc.tecnicoId },
+      );
+      expect(creacion.status).toBe(201);
+      const id = creacion.body.id;
+
+      // 2. Cerrar inspección
+      const cierre = await http.post(
+        `/operaciones/inspecciones/${id}/cerrar`,
+        {
+          consumos: [consumoDe(esc)],
+          equiposIds: [esc.equipoId],
+          personalIds: [esc.tecnicoId],
+        },
+        { 'x-actor': esc.tecnicoId },
+      );
+      expect(cierre.status).toBe(201);
+
+      // 3. Consultar la bitácora de auditoría directamente en la base de datos
+      const { rows: eventosBd } = await t.db.query(
+        'SELECT inspeccion_id, actor_id, accion, server_received_at FROM inspecciones_auditoria WHERE inspeccion_id = $1 ORDER BY server_received_at ASC',
+        [id],
+      );
+
+      expect(eventosBd.length).toBeGreaterThanOrEqual(2);
+      expect(eventosBd[0]).toMatchObject({
+        inspeccion_id: id,
+        actor_id: esc.tecnicoId,
+        accion: 'CREACION',
+      });
+      expect(eventosBd[1]).toMatchObject({
+        inspeccion_id: id,
+        actor_id: esc.tecnicoId,
+        accion: 'CIERRE',
+      });
+
+      // 4. Consultar también a través del endpoint GET /operaciones/inspecciones/:id/auditoria
+      const apiAuditoria = await http.get(`/operaciones/inspecciones/${id}/auditoria`);
+      expect(apiAuditoria.status).toBe(200);
+      expect(apiAuditoria.body.length).toBeGreaterThanOrEqual(2);
+      expect(apiAuditoria.body[0].actor_id).toBe(esc.tecnicoId);
+    });
+
+    it('rechaza una operación con x-actor que no corresponde a un técnico registrado (GAP-03)', async () => {
+      const esc = await crearEscenario(http);
+
+      const res = await http.post(
+        '/operaciones/inspecciones',
+        { servicioId: esc.servicioId },
+        { 'x-actor': 'tecnico-fantasma' },
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain('no corresponde a un personal técnico registrado');
+    });
+  });
 });

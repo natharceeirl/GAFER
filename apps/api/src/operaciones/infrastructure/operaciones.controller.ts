@@ -19,7 +19,10 @@ import {
   ApiCerrarInspeccionDoc,
   ApiObtenerInspeccionPorIdDoc,
   ApiConsultarInspeccionDoc,
+  ApiConsultarAuditoriaDoc,
 } from './operaciones.controller.doc';
+import { AuditoriaService } from '../../shared/auditoria/auditoria.service';
+import { Optional } from '@nestjs/common';
 import { IsArray, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -98,6 +101,8 @@ export class OperacionesController {
     private readonly registrarInspeccion: RegistrarInspeccionUseCase,
     private readonly cerrarInspeccion: CerrarInspeccionUseCase,
     private readonly obtenerInspeccion: ObtenerInspeccionUseCase,
+    @Optional()
+    private readonly auditoriaService?: AuditoriaService,
   ) {}
 
   @Post()
@@ -176,5 +181,14 @@ export class OperacionesController {
       snapshotCatalogos: inspeccion.getSnapshot(),
       versionSync: inspeccion.getVersionSync(),
     };
+  }
+
+  @Get(':id/auditoria')
+  @ApiConsultarAuditoriaDoc()
+  async consultarAuditoria(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    if (!this.auditoriaService) return [];
+    return this.auditoriaService.listarPorInspeccion(id);
   }
 }

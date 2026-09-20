@@ -116,3 +116,27 @@ export function ApiConsultarInspeccionDoc() {
     }),
   );
 }
+
+export function ApiConsultarAuditoriaDoc() {
+  return applyDecorators(
+    ApiOperation({
+      summary: 'Consultar bitácora de auditoría de una inspección (Sección 8.4 / GAP-03)',
+      description:
+        'Obtiene el historial de eventos persistidos en inspecciones_auditoria (creación, cierre, guardado) asociados a la inspección.',
+    }),
+    ApiParam({
+      name: 'id',
+      description: 'UUID de la inspección',
+      example: 'insp-1111111-1111-1111-1111-111111111111',
+    }),
+    ApiResponse({
+      status: 200,
+      description: 'Eventos de auditoría de la inspección',
+    }),
+    ApiResponse({
+      status: 400,
+      description: 'UUID de inspección inválido',
+      type: BadRequestErrorDto,
+    }),
+  );
+}
