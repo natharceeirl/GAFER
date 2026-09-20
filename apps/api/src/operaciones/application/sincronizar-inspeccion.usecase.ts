@@ -69,6 +69,12 @@ export class SincronizarInspeccionUseCase {
         .execute();
     }
 
+    // TECH-DEBT (Fase 3 - Mapa Murino):
+    // Alcance provisorio Fase 1: Reconstrucción de estado previo de estaciones directamente desde 'inspecciones_auditoria'.
+    // Justificación: La entidad y tabla persistida de Estaciones pertenece a Fase 3.
+    // Migración programada (Fase 3):
+    // 1. Sustituir esta proyección de auditoría por consultas al nuevo EstacionRepository.
+    // 2. Persistir cada cambio de estación en su tabla de dominio dedicada (mapa_murino_estaciones).
     // Mapa de último valor por número de estación
     const estacionesMap = new Map<number, { payload: any; actorId: string }>();
     const operacionesVistas = new Set<string>();

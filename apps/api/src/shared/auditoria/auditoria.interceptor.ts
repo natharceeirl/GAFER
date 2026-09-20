@@ -62,6 +62,12 @@ export class AuditoriaInterceptor implements NestInterceptor {
     }
   }
 
+  // TECH-DEBT / REFACTOR PENDING:
+  // Alcance provisorio Fase 1: Inferencia de acción y entidad mediante strings de handler name y URL.
+  // Justificación: Provee auditoría concurrente inmediata sin requerir infraestructura previa de decoradores o Domain Events.
+  // Migración programada:
+  // 1. Implementar decorador declarativo @Auditable({ entidad: 'INSPECCION', accion: 'CREACION' | 'CIERRE' }) o EventEmitter de dominio.
+  // 2. Extraer los metadatos de auditoría limpiamente sin acoplarse al nombre del método del controlador.
   private async manejarAuditoriaInspeccion(handler: string, req: any, res: any): Promise<void> {
     const actorHeader = req?.headers?.['x-actor'];
     let actorId = await this.auditoriaService.resolverActorId(actorHeader);

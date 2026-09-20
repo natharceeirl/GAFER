@@ -123,6 +123,11 @@ export class OperacionSyncDto implements OperacionSync {
   @IsNotEmpty()
   clienteTimestamp!: string;
 
+  // TECH-DEBT / REFACTOR PENDING (Fase 3):
+  // Alcance provisorio Fase 1: Uso de Record<string, unknown> con validación @IsObject().
+  // Justificación: Permite recibir payloads de estaciones y observaciones sin congelar prematuramente el esquema de Fase 3.
+  // Migración programada:
+  // Sustituir por una unión discriminada estricta según el campo 'tipo' (PayloadRegistroEstacionDto | PayloadObservacionDto).
   @ApiProperty({ example: { numeroEstacion: 1, huboConsumo: true } })
   @IsObject()
   @IsDefined()
