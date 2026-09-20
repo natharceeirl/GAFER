@@ -14,6 +14,7 @@ import { RegistrarPersonalUseCase } from './application/registrar-personal.useca
 import { ActualizarClienteUseCase } from './application/actualizar-cliente.usecase';
 import { DesactivarClienteUseCase } from './application/desactivar-cliente.usecase';
 import { ActivarClienteUseCase } from './application/activar-cliente.usecase';
+import { ActualizarInsumoUseCase } from './application/actualizar-insumo.usecase';
 import { DesactivarInsumoUseCase } from './application/desactivar-insumo.usecase';
 import { ActualizarEstadoEquipoUseCase } from './application/actualizar-estado-equipo.usecase';
 import { DesactivarPersonalUseCase } from './application/desactivar-personal.usecase';
@@ -46,6 +47,7 @@ import { KyselyPersonalRepository } from './infrastructure/adapters/kysely-perso
     RegistrarProyectoUseCase,
     RegistrarServicioContratadoUseCase,
     RegistrarInsumoUseCase,
+    ActualizarInsumoUseCase,
     DesactivarInsumoUseCase,
     RegistrarEquipoUseCase,
     ActualizarEstadoEquipoUseCase,
@@ -71,6 +73,7 @@ import { KyselyPersonalRepository } from './infrastructure/adapters/kysely-perso
     RegistrarProyectoUseCase,
     RegistrarServicioContratadoUseCase,
     RegistrarInsumoUseCase,
+    ActualizarInsumoUseCase,
     DesactivarInsumoUseCase,
     RegistrarEquipoUseCase,
     ActualizarEstadoEquipoUseCase,

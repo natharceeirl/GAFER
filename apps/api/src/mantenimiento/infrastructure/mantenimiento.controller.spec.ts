@@ -34,6 +34,7 @@ describe('MantenimientoController', () => {
   let mockProyectoUseCase: jest.Mocked<RegistrarProyectoUseCase>;
   let mockServicioUseCase: jest.Mocked<RegistrarServicioContratadoUseCase>;
   let mockInsumoUseCase: jest.Mocked<RegistrarInsumoUseCase>;
+  let mockActualizarInsumoUseCase: jest.Mocked<any>;
   let mockDesactivarInsumoUseCase: jest.Mocked<DesactivarInsumoUseCase>;
   let mockEquipoUseCase: jest.Mocked<RegistrarEquipoUseCase>;
   let mockActualizarEstadoEquipoUseCase: jest.Mocked<ActualizarEstadoEquipoUseCase>;
@@ -57,6 +58,7 @@ describe('MantenimientoController', () => {
     mockProyectoUseCase = { execute: jest.fn() } as any;
     mockServicioUseCase = { execute: jest.fn() } as any;
     mockInsumoUseCase = { execute: jest.fn() } as any;
+    mockActualizarInsumoUseCase = { execute: jest.fn() } as any;
     mockDesactivarInsumoUseCase = { execute: jest.fn() } as any;
     mockEquipoUseCase = { execute: jest.fn() } as any;
     mockActualizarEstadoEquipoUseCase = { execute: jest.fn() } as any;
@@ -116,6 +118,7 @@ describe('MantenimientoController', () => {
       mockProyectoUseCase,
       mockServicioUseCase,
       mockInsumoUseCase,
+      mockActualizarInsumoUseCase,
       mockDesactivarInsumoUseCase,
       mockEquipoUseCase,
       mockActualizarEstadoEquipoUseCase,
@@ -254,6 +257,35 @@ describe('MantenimientoController', () => {
       const res = await controller.listarInsumos({ limit: 10, offset: 0 });
       expect(res.items).toEqual([]);
       expect(mockInsumoRepo.listarActivos).toHaveBeenCalledTimes(1);
+    });
+
+    it('debe actualizar un insumo a través del use case', async () => {
+      const insumoActualizado = new Insumo({
+        id: 'ins-1',
+        nombreComercial: 'Cipermetrina 50%',
+        principioActivo: 'Cipermetrina',
+        presentacion: 'LIQUIDO',
+        unidadMedida: 'L',
+        registroDigesa: 'RD-9999',
+        concentracion: '50%',
+        dosisEstandar: '2.5 ml/L',
+        fichaTecnicaKey: 'fichas/ciper50.pdf',
+        hojaMsdsKey: 'msds/ciper50.pdf',
+        estado: 'ACTIVO',
+      });
+      mockActualizarInsumoUseCase.execute.mockResolvedValue(insumoActualizado);
+
+      const res = await controller.actualizarInsumo('ins-1', {
+        nombreComercial: 'Cipermetrina 50%',
+        concentracion: '50%',
+      });
+
+      expect(res.nombreComercial).toBe('Cipermetrina 50%');
+      expect(mockActualizarInsumoUseCase.execute).toHaveBeenCalledWith({
+        id: 'ins-1',
+        nombreComercial: 'Cipermetrina 50%',
+        concentracion: '50%',
+      });
     });
 
     it('debe desactivar un insumo', async () => {

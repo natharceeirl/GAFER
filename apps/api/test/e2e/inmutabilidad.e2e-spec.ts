@@ -449,11 +449,29 @@ describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
       expect(res.body.estado).toBe('CERRADO');
       expect(res.body.snapshotCatalogos.insumos).toHaveLength(1);
     });
+
+    // Editar un insumo vía PATCH /mantenimiento/insumos/:id (GAP-01)
+    it('editar un insumo vía PATCH /mantenimiento/insumos/:id actualiza el catálogo y no altera inspecciones cerradas (GAP-01)', async () => {
+      const esc = await crearEscenario(http);
+      const { id, snapshot } = await sembrarCerrada(esc);
+
+      const res = await http.patch(`/mantenimiento/insumos/${esc.insumoId}`, {
+        nombreComercial: 'Cipermetrina 50% Reformulada',
+        concentracion: '50% p/v',
+        dosisEstandar: '2.5 ml/L',
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.nombreComercial).toBe('Cipermetrina 50% Reformulada');
+      expect(res.body.concentracion).toBe('50% p/v');
+
+      const insp = await leer(id);
+      expect(insp.body.snapshotCatalogos).toEqual(snapshot);
+    });
   });
 
   // E. Pendientes
   describe('E. Pendientes (falta una decisión del equipo o una función nueva)', () => {
     it.todo('Guardar también equipos y personal en la copia de la inspección cerrada (hoy solo se guardan insumos)');
-    it.todo('Cuando la API permita editar insumos, usarla en las pruebas en vez de la base directa');
   });
 });

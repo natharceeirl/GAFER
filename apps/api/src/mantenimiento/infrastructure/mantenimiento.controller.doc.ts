@@ -163,6 +163,16 @@ export function ApiListarInsumosDoc() {
   );
 }
 
+export function ApiActualizarInsumoDoc() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Actualizar parcialmente un insumo del catálogo' }),
+    ApiParam({ name: 'id', description: 'UUID del insumo' }),
+    ApiResponse({ status: 200, description: 'Insumo actualizado exitosamente', type: InsumoResponseDto }),
+    ApiResponse({ status: 400, description: 'Datos de entrada inválidos', type: BadRequestErrorDto }),
+    ApiResponse({ status: 404, description: 'Insumo no encontrado', type: NotFoundErrorDto }),
+  );
+}
+
 export function ApiDesactivarInsumoDoc() {
   return applyDecorators(
     ApiOperation({ summary: 'Desactivar un insumo del catálogo' }),

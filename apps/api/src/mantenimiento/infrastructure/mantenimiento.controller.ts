@@ -24,6 +24,7 @@ import { RegistrarPersonalUseCase } from '../application/registrar-personal.usec
 import { ActualizarClienteUseCase } from '../application/actualizar-cliente.usecase';
 import { DesactivarClienteUseCase } from '../application/desactivar-cliente.usecase';
 import { ActivarClienteUseCase } from '../application/activar-cliente.usecase';
+import { ActualizarInsumoUseCase } from '../application/actualizar-insumo.usecase';
 import { DesactivarInsumoUseCase } from '../application/desactivar-insumo.usecase';
 import { ActualizarEstadoEquipoUseCase } from '../application/actualizar-estado-equipo.usecase';
 import { DesactivarPersonalUseCase } from '../application/desactivar-personal.usecase';
@@ -64,6 +65,7 @@ import {
   CrearProyectoDto,
   CrearServicioContratadoDto,
   CrearInsumoDto,
+  ActualizarInsumoDto,
   CrearEquipoDto,
   CambiarEstadoEquipoDto,
   CrearPersonalDto,
@@ -104,6 +106,7 @@ import {
   ApiListarServiciosPorProyectoDoc,
   ApiCrearInsumoDoc,
   ApiListarInsumosDoc,
+  ApiActualizarInsumoDoc,
   ApiDesactivarInsumoDoc,
   ApiCrearEquipoDoc,
   ApiListarEquiposDoc,
@@ -126,6 +129,7 @@ export class MantenimientoController {
     private readonly registrarProyectoUseCase: RegistrarProyectoUseCase,
     private readonly registrarServicioContratadoUseCase: RegistrarServicioContratadoUseCase,
     private readonly registrarInsumoUseCase: RegistrarInsumoUseCase,
+    private readonly actualizarInsumoUseCase: ActualizarInsumoUseCase,
     private readonly desactivarInsumoUseCase: DesactivarInsumoUseCase,
     private readonly registrarEquipoUseCase: RegistrarEquipoUseCase,
     private readonly actualizarEstadoEquipoUseCase: ActualizarEstadoEquipoUseCase,
@@ -422,6 +426,32 @@ export class MantenimientoController {
         proveedor: i.proveedor,
         estado: i.getEstado(),
       })),
+    };
+  }
+
+  @Patch('insumos/:id')
+  @ApiActualizarInsumoDoc()
+  async actualizarInsumo(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: ActualizarInsumoDto,
+  ): Promise<InsumoResponseDto> {
+    const insumo = await this.actualizarInsumoUseCase.execute({
+      id,
+      ...dto,
+    });
+    return {
+      id: insumo.id,
+      nombreComercial: insumo.nombreComercial,
+      registroDigesa: insumo.registroDigesa,
+      principioActivo: insumo.principioActivo,
+      presentacion: insumo.presentacion,
+      unidadMedida: insumo.unidadMedida,
+      concentracion: insumo.concentracion,
+      dosisEstandar: insumo.dosisEstandar,
+      fichaTecnicaKey: insumo.fichaTecnicaKey,
+      hojaMsdsKey: insumo.hojaMsdsKey,
+      proveedor: insumo.proveedor,
+      estado: insumo.getEstado(),
     };
   }
 

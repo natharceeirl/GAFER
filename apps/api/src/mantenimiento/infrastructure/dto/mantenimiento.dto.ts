@@ -265,6 +265,70 @@ export class CrearInsumoDto {
   proveedor?: string;
 }
 
+export class ActualizarInsumoDto {
+  @ApiProperty({ example: 'Cipermetrina 50% Ultra Concentrada (REFORMULADO 2028)', required: false })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty({ message: 'El nombre comercial no puede estar vacío' })
+  nombreComercial?: string;
+
+  @ApiProperty({ example: 'Cipermetrina Pura', required: false })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  principioActivo?: string;
+
+  @ApiProperty({ example: 'LIQUIDO', enum: ['LIQUIDO', 'POLVO', 'BLOQUE', 'SOBRE', 'GEL', 'OTRO'], required: false })
+  @IsOptional()
+  @IsIn(['LIQUIDO', 'POLVO', 'BLOQUE', 'SOBRE', 'GEL', 'OTRO'])
+  presentacion?: 'LIQUIDO' | 'POLVO' | 'BLOQUE' | 'SOBRE' | 'GEL' | 'OTRO';
+
+  @ApiProperty({ example: 'L', enum: ['ML', 'L', 'G', 'KG', 'SOBRE', 'BLOQUE', 'UNIDAD'], required: false })
+  @IsOptional()
+  @IsIn(['ML', 'L', 'G', 'KG', 'SOBRE', 'BLOQUE', 'UNIDAD'])
+  unidadMedida?: 'ML' | 'L' | 'G' | 'KG' | 'SOBRE' | 'BLOQUE' | 'UNIDAD';
+
+  @ApiProperty({ example: 'RD-9999-2028/DIGESA/SA', required: false })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty({ message: 'El registro DIGESA no puede estar vacío' })
+  registroDigesa?: string;
+
+  @ApiProperty({ example: '50% p/v', required: false })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  concentracion?: string;
+
+  @ApiProperty({ example: '2.5 ml/L', required: false })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  dosisEstandar?: string;
+
+  @ApiProperty({ example: 'insumos/fichas/cipermetrina-50.pdf', required: false })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  fichaTecnicaKey?: string;
+
+  @ApiProperty({ example: 'insumos/msds/cipermetrina-50.pdf', required: false })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  hojaMsdsKey?: string;
+
+  @ApiProperty({ example: 'insumos/resoluciones/rd-9999.pdf', required: false })
+  @IsOptional()
+  @IsString()
+  resolucionKey?: string;
+
+  @ApiProperty({ example: 'Bayer S.A.', required: false })
+  @IsOptional()
+  @IsString()
+  proveedor?: string;
+}
+
 export class CrearEquipoDto {
   @ApiProperty({ example: 'EQ-NEB-01', description: 'Código único interno GAFER' })
   @IsString()
