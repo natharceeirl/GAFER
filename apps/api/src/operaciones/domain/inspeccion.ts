@@ -80,13 +80,17 @@ export class Inspeccion {
     }
   }
 
-  cerrar(snapshot?: Record<string, unknown>): void {
+  cerrar(snapshot?: Record<string, unknown>, tecnicos?: Array<{ id: string; nombre: string }>): void {
     if (this.estado === 'CERRADO') {
       throw new Error('La inspección ya está cerrada y bloqueada contra ediciones');
     }
 
     if (snapshot) {
       this.snapshotCatalogos = Object.freeze({ ...snapshot });
+    }
+
+    if (tecnicos && tecnicos.length > 0) {
+      this.tecnicosParticipantes.splice(0, this.tecnicosParticipantes.length, ...tecnicos);
     }
 
     this.estado = 'CERRADO';

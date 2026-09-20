@@ -11,4 +11,5 @@ module.exports = {
   collectCoverageFrom: ['**/*.(t|j)s'],
   coverageDirectory: '../coverage',
   testEnvironment: 'node',
+  setupFilesAfterEnv: ['<rootDir>/../test/support/quiet.ts'],
 };

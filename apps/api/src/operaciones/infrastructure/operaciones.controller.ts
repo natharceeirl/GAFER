@@ -19,8 +19,14 @@ import {
   ApiCerrarInspeccionDoc,
   ApiObtenerInspeccionPorIdDoc,
   ApiConsultarInspeccionDoc,
+  ApiConsultarAuditoriaDoc,
+  ApiSincronizarInspeccionDoc,
 } from './operaciones.controller.doc';
-import { IsArray, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
+import { SincronizarInspeccionUseCase } from '../application/sincronizar-inspeccion.usecase';
+import { OperacionSync, TipoOperacionSync } from '@gafer/contracts';
+import { AuditoriaService } from '../../shared/auditoria/auditoria.service';
+import { Optional } from '@nestjs/common';
+import { IsArray, IsDefined, IsNotEmpty, IsNumber, IsObject, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ConsumoInsumoDto implements ConsumoInsumoCommand {
@@ -58,6 +64,28 @@ export class CerrarInspeccionDto {
   @ValidateNested({ each: true })
   @Type(() => ConsumoInsumoDto)
   consumos?: ConsumoInsumoDto[];
+
+  @ApiProperty({
+    type: [String],
+    required: false,
+    example: ['e1111111-1111-1111-1111-111111111111'],
+    description: 'IDs de equipos utilizados en campo',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('all', { each: true, message: 'Cada equipoId debe ser un UUID válido' })
+  equiposIds?: string[];
+
+  @ApiProperty({
+    type: [String],
+    required: false,
+    example: ['p1111111-1111-1111-1111-111111111111'],
+    description: 'IDs del personal técnico participante',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('all', { each: true, message: 'Cada personalId debe ser un UUID válido' })
+  personalIds?: string[];
 }
 
 export class CrearInspeccionDto {
@@ -69,6 +97,56 @@ export class CrearInspeccionDto {
   servicioId!: string;
 }
 
+export class OperacionSyncDto implements OperacionSync {
+  @ApiProperty({ example: '11111111-1111-1111-1111-111111111111' })
+  @IsUUID('all')
+  operationId!: string;
+
+  @ApiProperty({
+    example: 'REGISTRO_ESTACION',
+    enum: ['REGISTRO_ESTACION', 'ACTUALIZACION_ESTACION', 'REGISTRO_OBSERVACIONES'],
+  })
+  @IsString()
+  @IsNotEmpty()
+  tipo!: TipoOperacionSync;
+
+  @ApiProperty({ example: '22222222-2222-2222-2222-222222222222' })
+  @IsUUID('all')
+  agregadoId!: string;
+
+  @ApiProperty({ example: '33333333-3333-3333-3333-333333333333' })
+  @IsUUID('all')
+  actorId!: string;
+
+  @ApiProperty({ example: '2026-09-20T18:00:00.000Z' })
+  @IsString()
+  @IsNotEmpty()
+  clienteTimestamp!: string;
+
+  // TECH-DEBT / REFACTOR PENDING (Fase 3):
+  // Alcance provisorio Fase 1: Uso de Record<string, unknown> con validación @IsObject().
+  // Justificación: Permite recibir payloads de estaciones y observaciones sin congelar prematuramente el esquema de Fase 3.
+  // Migración programada:
+  // Sustituir por una unión discriminada estricta según el campo 'tipo' (PayloadRegistroEstacionDto | PayloadObservacionDto).
+  @ApiProperty({ example: { numeroEstacion: 1, huboConsumo: true } })
+  @IsObject()
+  @IsDefined()
+  payload!: Record<string, unknown>;
+}
+
+export class SincronizarLoteDto {
+  @ApiProperty({ example: '22222222-2222-2222-2222-222222222222', required: false })
+  @IsOptional()
+  @IsUUID('all')
+  inspeccionId?: string;
+
+  @ApiProperty({ type: [OperacionSyncDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OperacionSyncDto)
+  operaciones!: OperacionSyncDto[];
+}
+
 @ApiTags('Operaciones')
 @Controller('operaciones/inspecciones')
 export class OperacionesController {
@@ -76,6 +154,10 @@ export class OperacionesController {
     private readonly registrarInspeccion: RegistrarInspeccionUseCase,
     private readonly cerrarInspeccion: CerrarInspeccionUseCase,
     private readonly obtenerInspeccion: ObtenerInspeccionUseCase,
+    @Optional()
+    private readonly auditoriaService?: AuditoriaService,
+    @Optional()
+    private readonly sincronizarInspeccion?: SincronizarInspeccionUseCase,
   ) {}
 
   @Post()
@@ -144,12 +226,36 @@ export class OperacionesController {
     const inspeccion = await this.cerrarInspeccion.execute({
       inspeccionId: id,
       consumos: dto?.consumos,
+      equiposIds: dto?.equiposIds,
+      personalIds: dto?.personalIds,
     });
     return {
       id: inspeccion.id,
       estado: inspeccion.getEstado(),
+      tecnicosParticipantes: inspeccion.tecnicosParticipantes,
       snapshotCatalogos: inspeccion.getSnapshot(),
       versionSync: inspeccion.getVersionSync(),
     };
+  }
+
+  @Get(':id/auditoria')
+  @ApiConsultarAuditoriaDoc()
+  async consultarAuditoria(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    if (!this.auditoriaService) return [];
+    return this.auditoriaService.listarPorInspeccion(id);
+  }
+
+  @Post(':id/sincronizar')
+  @ApiSincronizarInspeccionDoc()
+  async sincronizar(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: SincronizarLoteDto,
+  ) {
+    if (!this.sincronizarInspeccion) {
+      throw new Error('SincronizarInspeccionUseCase no configurado');
+    }
+    return this.sincronizarInspeccion.ejecutar(id, dto.operaciones);
   }
 }

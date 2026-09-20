@@ -10,9 +10,27 @@ import request = require('supertest');
 /** Envía peticiones a la aplicación de pruebas. */
 export function api(baseUrl: string) {
   return {
-    get: (url: string) => request(baseUrl).get(`/api${url}`),
-    post: (url: string, body?: object) => request(baseUrl).post(`/api${url}`).send(body ?? {}),
-    patch: (url: string, body?: object) => request(baseUrl).patch(`/api${url}`).send(body ?? {}),
+    get: (url: string, headers?: Record<string, string>) => {
+      let req = request(baseUrl).get(`/api${url}`);
+      if (headers) {
+        for (const [k, v] of Object.entries(headers)) req = req.set(k, v);
+      }
+      return req;
+    },
+    post: (url: string, body?: object, headers?: Record<string, string>) => {
+      let req = request(baseUrl).post(`/api${url}`);
+      if (headers) {
+        for (const [k, v] of Object.entries(headers)) req = req.set(k, v);
+      }
+      return req.send(body ?? {});
+    },
+    patch: (url: string, body?: object, headers?: Record<string, string>) => {
+      let req = request(baseUrl).patch(`/api${url}`);
+      if (headers) {
+        for (const [k, v] of Object.entries(headers)) req = req.set(k, v);
+      }
+      return req.send(body ?? {});
+    },
   };
 }
 export type Api = ReturnType<typeof api>;

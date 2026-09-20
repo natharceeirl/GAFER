@@ -116,3 +116,61 @@ export function ApiConsultarInspeccionDoc() {
     }),
   );
 }
+
+export function ApiConsultarAuditoriaDoc() {
+  return applyDecorators(
+    ApiOperation({
+      summary: 'Consultar bitácora de auditoría de una inspección (Sección 8.4 / GAP-03)',
+      description:
+        'Obtiene el historial de eventos persistidos en inspecciones_auditoria (creación, cierre, guardado) asociados a la inspección.',
+    }),
+    ApiParam({
+      name: 'id',
+      description: 'UUID de la inspección',
+      example: 'insp-1111111-1111-1111-1111-111111111111',
+    }),
+    ApiResponse({
+      status: 200,
+      description: 'Eventos de auditoría de la inspección',
+    }),
+    ApiResponse({
+      status: 400,
+      description: 'UUID de inspección inválido',
+      type: BadRequestErrorDto,
+    }),
+  );
+}
+
+export function ApiSincronizarInspeccionDoc() {
+  return applyDecorators(
+    ApiOperation({
+      summary: 'Sincronizar lote de operaciones offline de campo (sync.v1 - GAP-02)',
+      description:
+        'Recibe y procesa idempotentemente un lote de operaciones capturadas en campo por técnicos, resolviendo colisiones y registrando auditoría.',
+    }),
+    ApiParam({
+      name: 'id',
+      description: 'UUID de la inspección a sincronizar',
+      example: 'insp-1111111-1111-1111-1111-111111111111',
+    }),
+    ApiResponse({
+      status: 200,
+      description: 'Lote de sincronización procesado exitosamente',
+    }),
+    ApiResponse({
+      status: 400,
+      description: 'Parámetros o payload de operación inválidos',
+      type: BadRequestErrorDto,
+    }),
+    ApiResponse({
+      status: 404,
+      description: 'Inspección no encontrada',
+      type: NotFoundErrorDto,
+    }),
+    ApiResponse({
+      status: 409,
+      description: 'La inspección ya está cerrada y no acepta sincronizaciones',
+      type: ConflictErrorDto,
+    }),
+  );
+}

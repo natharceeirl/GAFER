@@ -6,9 +6,14 @@ interface InspeccionRemota {
 }
 
 async function fetchInspeccion(servicioId: string): Promise<InspeccionRemota | null> {
-  const response = await fetch(`/api/operaciones/inspecciones?servicioId=${servicioId}`);
+  const baseUrl = import.meta.env.VITE_API_URL || '';
+  const response = await fetch(
+    `${baseUrl}/api/operaciones/inspecciones?servicioId=${encodeURIComponent(servicioId)}`,
+  );
   if (!response.ok) return null;
-  return response.json();
+  const text = await response.text();
+  if (!text || !text.trim()) return null;
+  return JSON.parse(text);
 }
 
 /**

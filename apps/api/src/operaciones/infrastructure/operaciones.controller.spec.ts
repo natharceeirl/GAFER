@@ -98,6 +98,8 @@ describe('OperacionesController', () => {
     expect(mockCerrar.execute).toHaveBeenCalledWith({
       inspeccionId: 'insp-1',
       consumos: undefined,
+      equiposIds: undefined,
+      personalIds: undefined,
     });
   });
 });
