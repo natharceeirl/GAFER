@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-18T00:00:00Z",
+  "title": "Design System: GAFER Saneamiento Ambiental",
+  "extensions": {
+    "colorMeta": {
+      "kraft-ground": { "role": "neutral", "displayName": "Kraft Ground", "canonical": "#d7d7ca", "tonalRamp": ["#232320", "#3d3d38", "#585850", "#74746a", "#918f81", "#aeac9c", "#c9c8b9", "#d7d7ca"] },
+      "kraft-panel": { "role": "neutral", "displayName": "Kraft Panel", "canonical": "#ecede6", "tonalRamp": ["#232320", "#3f4038", "#5b5c51", "#787a6c", "#969888", "#b4b6a4", "#d3d4c4", "#ecede6"] },
+      "kraft-panel-raised": { "role": "neutral", "displayName": "Kraft Panel Raised", "canonical": "#f4f5ef", "tonalRamp": ["#232320", "#3f4038", "#5b5c52", "#797b6d", "#98998a", "#b7b9a7", "#d6d7c7", "#f4f5ef"] },
+      "rule-hairline": { "role": "neutral", "displayName": "Rule Hairline", "canonical": "#a8ab9b", "tonalRamp": ["#26271f", "#3c3d33", "#54554848", "#6d6f5e", "#878a75", "#a3a58d", "#c0c2a6", "#a8ab9b"] },
+      "rule-strong": { "role": "neutral", "displayName": "Rule Strong", "canonical": "#82866f", "tonalRamp": ["#1c1d17", "#2f3026", "#434436", "#585a47", "#6e7059", "#82866f", "#a4a793", "#c8cbb8"] },
+      "carbon-ink": { "role": "primary", "displayName": "Carbon Ink", "canonical": "#23241f", "tonalRamp": ["#0f0f0c", "#1a1b16", "#23241f", "#3c3d34", "#57584c", "#737465", "#918f7e", "#b0ae9a"] },
+      "carbon-ink-soft": { "role": "neutral", "displayName": "Carbon Ink Soft", "canonical": "#56564b", "tonalRamp": ["#151512", "#282822", "#3d3d34", "#56564b", "#717164", "#8d8d7d", "#aaaa98", "#c8c8b4"] },
+      "carbon-ink-faint": { "role": "neutral", "displayName": "Carbon Ink Faint", "canonical": "#837e6c", "tonalRamp": ["#201e17", "#353228", "#4b473a", "#625d4d", "#7a7561", "#837e6c", "#a8a28a", "#c8c3a8"] },
+      "verified-verde": { "role": "secondary", "displayName": "Verified Verde", "canonical": "#2f6b3e", "tonalRamp": ["#0e1f13", "#173420", "#20492d", "#295e39", "#2f6b3e", "#4a8a58", "#6fab7a", "#a0cca8"] },
+      "warning-amarillo": { "role": "secondary", "displayName": "Warning Amarillo", "canonical": "#93701c", "tonalRamp": ["#241b08", "#3b2d0e", "#524015", "#6a531a", "#93701c", "#b28d2f", "#d1ad4f", "#e8cd88"] },
+      "alert-naranja": { "role": "secondary", "displayName": "Alert Naranja", "canonical": "#b3501e", "tonalRamp": ["#2b1206", "#45200b", "#602e11", "#8a3f17", "#b3501e", "#d06e3a", "#e6905e", "#f3ba91"] },
+      "danger-rojo": { "role": "secondary", "displayName": "Danger Rojo", "canonical": "#9c2c21", "tonalRamp": ["#260b08", "#3d130f", "#551b15", "#78261d", "#9c2c21", "#bb4a3d", "#d5715f", "#e8a291"] },
+      "no-trend-sin-color": { "role": "secondary", "displayName": "No-Trend Sin Color", "canonical": "#8c8670", "tonalRamp": ["#201e19", "#35322a", "#4a473c", "#635f4f", "#8c8670", "#a29c85", "#bcb69f", "#d8d3c0"] }
+    },
+    "typographyMeta": {
+      "ui": { "displayName": "Archivo (UI)", "purpose": "All running UI: labels, body, section titles, headings. Never uppercase-stamp-only text." },
+      "headline": { "displayName": "TicketHeader Title", "purpose": "The one bold headline per screen, inside TicketHeader." },
+      "stamp": { "displayName": "Big Shoulders Display (Stamp)", "purpose": "Ink-stamp contexts only: StateStamp, Badge, CancelledStampOverlay, numeric-count contexts. Never page or section headings." },
+      "mono": { "displayName": "JetBrains Mono (Ticket Code)", "purpose": "Ticket/correlativo codes and station icon numerals — the stamped serial-number read." }
+    },
+    "shadows": [
+      { "name": "step-offset", "value": "0 3px 0 var(--gf-rule)", "purpose": "Flat hard-edged 'step' shadow under TicketHeader and above barra-acciones; never blurred." },
+      { "name": "stamp-lift", "value": "1px 2px 3px 0 rgb(0 0 0 / 0.18)", "purpose": "Isolated blurred shadow on StateStamp only, simulating physical ink-stamp lift." }
+    ],
+    "motion": [
+      { "name": "stamp-thud", "value": "220ms cubic-bezier(0.3, 1.2, 0.5, 1)", "purpose": "Ink-stamp impact on StateStamp mount: oversized+transparent enter, slight undershoot settle. Respects prefers-reduced-motion." },
+      { "name": "fold-open", "value": "220ms ease-out (rotateX + grid-template-rows 0fr->1fr)", "purpose": "FoldPanel real paper-fold disclosure via rotateX/perspective, not a scaleY accordion." },
+      { "name": "press", "value": "80ms ease-out (translateY 1px)", "purpose": "Button :active physical press." }
+    ],
+    "breakpoints": [
+      { "name": "mobile", "value": "480px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Solid carbon-ink action button; hover inverts to outline.",
+      "html": "<button class=\"ds-btn ds-btn--primary\">Nuevo cliente</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 20px; border-radius: 2px; font-family: 'Archivo', system-ui, sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 0.01em; cursor: pointer; transition: transform 80ms ease-out; } .ds-btn:active { transform: translateY(1px); } .ds-btn--primary { border: 2px solid #23241f; background: #23241f; color: #ecede6; } .ds-btn--primary:hover { background: transparent; color: #23241f; } .ds-btn--primary:focus-visible { outline: 2.5px solid #b3501e; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outline action button for secondary/exporting actions.",
+      "html": "<button class=\"ds-btn ds-btn--secondary\">Exportar alertas</button>",
+      "css": ".ds-btn--secondary { border: 2px solid #82866f; background: transparent; color: #23241f; } .ds-btn--secondary:hover { border-color: #23241f; }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-verde",
+      "description": "Rotated ink-stamp status marker, used inline in lists/tables for Mapa Murino status wherever it appears off the map.",
+      "html": "<span class=\"ds-badge ds-badge--verde\">Aprobado</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 4px; border: 1.5px solid currentColor; border-radius: 2px; font-family: 'Big Shoulders Display', 'Archivo', sans-serif; font-weight: 800; font-size: 13px; letter-spacing: 0.03em; text-transform: uppercase; transform: rotate(-4deg); } .ds-badge--verde { background: #eef3ea; color: #2f6b3e; }"
+    },
+    {
+      "name": "State Stamp",
+      "kind": "custom",
+      "refersTo": "state-stamp",
+      "description": "Large block-level ink stamp for a document's lifecycle state; thuds into place on state change.",
+      "html": "<div class=\"ds-state-stamp ds-state-stamp--aprobado\">Aprobado</div>",
+      "css": ".ds-state-stamp { display: inline-block; padding: 8px 22px; border: 3px solid currentColor; border-radius: 3px; font-family: 'Big Shoulders Display', 'Archivo', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: 0.06em; text-transform: uppercase; transform: rotate(-7deg); box-shadow: 1px 2px 3px 0 rgb(0 0 0 / 0.18); } .ds-state-stamp--aprobado { color: #2f6b3e; } @keyframes ds-stamp-thud { 0% { opacity: 0; transform: rotate(-7deg) scale(1.8); } 60% { opacity: 1; transform: rotate(-7deg) scale(0.94); } 100% { transform: rotate(-7deg) scale(1); } } .ds-state-stamp--thud { animation: ds-stamp-thud 220ms cubic-bezier(0.3, 1.2, 0.5, 1); }"
+    },
+    {
+      "name": "Cancelled Stamp Overlay",
+      "kind": "custom",
+      "refersTo": "cancelled-stamp-overlay",
+      "description": "Diagonal cancellation band over an OBSERVADO document; overlays without hiding the record beneath.",
+      "html": "<div class=\"ds-cancel-overlay\"><span class=\"ds-cancel-overlay__banda\">OBSERVADO · OBSERVADO · OBSERVADO</span></div>",
+      "css": ".ds-cancel-overlay { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 5; } .ds-cancel-overlay__banda { position: absolute; top: 46%; left: -12%; width: 124%; padding: 10px 0; transform: rotate(-9deg); border-top: 3px solid #b3501e; border-bottom: 3px solid #b3501e; background: rgba(179, 80, 30, 0.14); color: #b3501e; font-family: 'Big Shoulders Display', 'Archivo', sans-serif; font-weight: 800; font-size: clamp(20px, 3vw, 30px); letter-spacing: 0.08em; text-align: center; text-transform: uppercase; white-space: nowrap; }"
+    },
+    {
+      "name": "Ticket Header",
+      "kind": "nav",
+      "refersTo": "ticket-header",
+      "description": "Sticky per-screen header carrying ticket code, title, and identity meta line, per the 'identity never leaves view' invariant.",
+      "html": "<header class=\"ds-ticket-header\"><div><span class=\"ds-ticket-header__code\">INFORME-KALLPA-014-2026</span><h1 class=\"ds-ticket-header__title\">Cartera de clientes</h1><p class=\"ds-ticket-header__meta\">Administrador · Supervisor</p></div></header>",
+      "css": ".ds-ticket-header { position: sticky; top: 0; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 14px 20px 16px; background: #f4f5ef; border-bottom: 2px solid #23241f; box-shadow: 0 3px 0 #a8ab9b; } .ds-ticket-header__code { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #837e6c; letter-spacing: 0.04em; } .ds-ticket-header__title { margin: 2px 0 0; font-family: 'Archivo', system-ui, sans-serif; font-weight: 800; font-size: clamp(19px, 2.6vw, 25px); line-height: 1.15; letter-spacing: -0.01em; } .ds-ticket-header__meta { margin: 4px 0 0; font-size: 13px; color: #56564b; }"
+    },
+    {
+      "name": "Fold Panel",
+      "kind": "custom",
+      "refersTo": "fold-panel",
+      "description": "Progressive disclosure for dense records via a real rotateX/perspective paper fold, not an accordion.",
+      "html": "<div class=\"ds-fold-panel ds-fold-panel--open\"><button class=\"ds-fold-panel__pull\" aria-expanded=\"true\"><span class=\"ds-fold-panel__tab\"></span>Historial de estación</button><div class=\"ds-fold-panel__crease\"></div><div class=\"ds-fold-panel__stage\"><div class=\"ds-fold-panel__body\">Contenido plegado…</div></div></div>",
+      "css": ".ds-fold-panel { border: 1.5px solid #82866f; border-radius: 2px; background: #ecede6; } .ds-fold-panel__pull { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 16px; border: none; background: none; font-family: 'Archivo', system-ui, sans-serif; font-weight: 700; font-size: 14px; color: #23241f; text-align: left; cursor: pointer; } .ds-fold-panel__tab { width: 10px; height: 14px; background: #837e6c; border-radius: 1px; transition: transform 160ms ease-out; } .ds-fold-panel--open .ds-fold-panel__tab { transform: rotate(90deg); background: #23241f; } .ds-fold-panel__crease { height: 0; margin: 0 16px; border-top: 1px dashed #a8ab9b; } .ds-fold-panel__stage { display: grid; grid-template-rows: 0fr; perspective: 900px; transition: grid-template-rows 220ms ease-out; } .ds-fold-panel--open .ds-fold-panel__stage { grid-template-rows: 1fr; } .ds-fold-panel__body { transform-origin: top; transform: rotateX(-90deg); opacity: 0; padding: 4px 16px 16px; transition: transform 220ms ease-out, opacity 180ms ease-out; } .ds-fold-panel--open .ds-fold-panel__body { transform: rotateX(0deg); opacity: 1; }"
+    },
+    {
+      "name": "Station Tag",
+      "kind": "custom",
+      "refersTo": "station-tag",
+      "description": "Rodent-control station off the map: icon shows last-visit state, surrounding row floods solid with the 4-visit trend aura color.",
+      "html": "<div class=\"ds-station-tag ds-station-tag--rojo\"><span class=\"ds-station-tag__icono ds-station-tag__icono--rojo\">14</span><span class=\"ds-station-tag__label\">aura rojo</span></div>",
+      "css": ".ds-station-tag { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 2px; border: 1.5px solid #82866f; transition: background-color 160ms ease-out, color 160ms ease-out; } .ds-station-tag__icono { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 999px; border: 2.5px solid currentColor; font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 600; font-size: 13px; } .ds-station-tag__icono--rojo { color: #9c2c21; } .ds-station-tag__label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; } .ds-station-tag--rojo { background: #9c2c21; color: #fbe9e6; border-color: #9c2c21; }"
+    },
+    {
+      "name": "Perforated Divider",
+      "kind": "custom",
+      "refersTo": "perforated-divider",
+      "description": "Dashed tear-line separating every row of a list, the pre-cut ticket-stub motif.",
+      "html": "<div class=\"ds-perforated-divider\" role=\"separator\"></div>",
+      "css": ".ds-perforated-divider { height: 0; border-top: 2px dashed #a8ab9b; margin: 0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Garita de control industrial (the checkpoint gate-pass)",
+    "overview": "GAFER's UI treats every client, service, and inspection as a pass through a checkpoint, not a record softly \"created\" in a dashboard. Kraft-cardstock surfaces, carbon ink rules, ticket-stub headers, and rotated ink-stamp badges replace the generic SaaS vocabulary of pastel pills and floating cards. Nothing here is decorative texture: the ground is cool-grey industrial kraft (confirmed and retuned during the build to read as cardstock, never bakery cream), and the four safety-system colors — verified green, warning amber, alert orange, danger red — are load-bearing twice over: they are both the brand accent set and the literal VERDE/AMARILLO/NARANJA/ROJO Mapa Murino status vocabulary, required by product to read identically on the map, on badges, on lists, and on dashboards. The system is deliberately flat and hairline-ruled rather than shadowed or gradiented — depth reads through boxed compartments and rule weight, not elevation. Two roles get two working modes on the same token set: dense, scan-and-decide tables and panels for desk use; large touch targets (44px minimum) and single-column stacking under 480px for gloved, sunlit field use. Motion is a small, literal vocabulary — an ink-stamp thud, a real paper fold, a solid color flood — never generic easing or a bouncy micro-interaction library.",
+    "keyCharacteristics": [
+      "Kraft/carbon industrial ground with hairline box-rules; no soft cards, no drop shadows as an ambient default.",
+      "Status color doubles as brand color: the same four hues carry Mapa Murino state everywhere they appear.",
+      "State is a rotated ink-stamp, never a pill; cancellation is a diagonal overlay banding across the record, not a replaced badge.",
+      "Three-typeface role split: grotesk for running UI/headings, slab-display strictly for stamps/badges/counts, monospace for ticket codes.",
+      "A fixed ticket-stub header (ticket code · title · meta) opens every screen."
+    ],
+    "rules": [
+      { "name": "The Status-Is-Brand Rule", "body": "VERDE/AMARILLO/NARANJA/ROJO are never \"just an accent\" — they are simultaneously the Mapa Murino trend vocabulary and the only saturated colors in the system. A new status-bearing surface reuses these four hues; it never introduces a fifth \"brand\" color.", "section": "colors" },
+      { "name": "The Solid Flood Rule", "body": "Escalating state on a StationTag floods the entire card in the solid status color (background + border + ink-contrast text), not a tinted accent or a colored dot.", "section": "colors" },
+      { "name": "The Stamp-Face Containment Rule", "body": "Big Shoulders Display renders only inside StateStamp, Badge, and CancelledStampOverlay (plus the station-tag icon numeral, which uses mono, not stamp). It never appears on a page heading, section title, or body copy — a defect from an earlier build pass, corrected before this documentation.", "section": "typography" },
+      { "name": "The Ticket-Code Rule", "body": "Any human-facing correlativo or ticket identifier renders in JetBrains Mono at reduced size and faint ink color — it reads as a stamped-on serial number, distinct from both prose and stamp text.", "section": "typography" },
+      { "name": "The Flat-Ledger Rule", "body": "Panels and headers are flat at rest; the only depth cues are rule-weight borders and hard color-offset \"step\" shadows (never blurred, except on the stamp itself). Do not add ambient box-shadow blur to cards, panels, or buttons.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do treat status color as brand color: reuse VERDE/AMARILLO/NARANJA/ROJO/SIN_COLOR everywhere a state or trend appears, through Badge/StationTag/StateStamp, never a bespoke inline color.",
+      "Do render state as a rotated ink-stamp (Badge, StateStamp) — border in currentColor, stamp-face type, fixed negative tilt — never a rounded pastel pill.",
+      "Do flood the entire element in solid status color for an escalating/aura state (StationTag), not a tinted accent or soft gradient.",
+      "Do open every screen with a TicketHeader carrying a mono ticket code, a bold title, and an identity meta line.",
+      "Do separate list rows with the dashed PerforatedDivider, never a plain solid rule or bare gap.",
+      "Do keep touch targets at 44px minimum and collapse multi-column grids to one column under 480px, honoring the field/gloved-use constraint from PRODUCT.md."
+    ],
+    "donts": [
+      "Don't use Big Shoulders Display (the stamp face) outside StateStamp, Badge, CancelledStampOverlay, or numeric/count contexts — it does not belong on page or section headings (Archivo carries those), a defect corrected during finish review.",
+      "Don't add ambient blurred box-shadow to cards, panels, or buttons — this system is flat by rule; the one blurred shadow (StateStamp) is an isolated physical-stamp exception, not a precedent.",
+      "Don't replace a cancelled/rejected document's existing badge with a new one — overlay a diagonal CancelledStampOverlay band on top instead; nothing in this system disappears on rejection, it gets cancelled visibly.",
+      "Don't animate disclosure as a generic vertical accordion (scaleY/height-slide) — dense records fold open via FoldPanel's real rotateX/perspective transform.",
+      "Don't introduce kicker/eyebrow labels above headings — none exist in the shipped system; a stray one was found and removed during finish review and must not recur."
+    ]
+  }
+}
