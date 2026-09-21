@@ -1,0 +1,78 @@
+.fold-panel {
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  background: var(--gf-panel);
+}
+
+.fold-panel__pull {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: none;
+  font-family: var(--gf-font-ui);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--gf-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.fold-panel__tab {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 14px;
+  background: var(--gf-ink-faint);
+  border-radius: 1px;
+  transition: transform 160ms ease-out;
+}
+.fold-panel--open .fold-panel__tab {
+  transform: rotate(90deg);
+  background: var(--gf-ink);
+}
+
+.fold-panel__crease {
+  height: 0;
+  margin: 0 16px;
+  border-top: 1px dashed var(--gf-rule);
+}
+
+/* el "escenario" da la perspectiva del pliegue; su altura colapsa a
+   0fr cuando está cerrado, técnica que anima sin medir el alto en JS */
+.fold-panel__stage {
+  display: grid;
+  grid-template-rows: 0fr;
+  perspective: 900px;
+  transition: grid-template-rows 220ms ease-out;
+}
+.fold-panel--open .fold-panel__stage {
+  grid-template-rows: 1fr;
+}
+
+.fold-panel__leaf {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* la "hoja" gira desde el pliegue superior, como un legajo real que
+   se abre — no una cortina que se desliza */
+.fold-panel__body {
+  transform-origin: top;
+  transform: rotateX(-90deg);
+  opacity: 0;
+  padding: 4px 16px 16px;
+  transition: transform 220ms ease-out, opacity 180ms ease-out;
+}
+.fold-panel--open .fold-panel__body {
+  transform: rotateX(0deg);
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fold-panel__stage,
+  .fold-panel__body {
+    transition: none;
+  }
+}

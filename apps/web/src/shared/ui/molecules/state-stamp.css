@@ -1,0 +1,60 @@
+.state-stamp {
+  display: inline-block;
+  padding: 8px 22px;
+  border: 3px solid currentColor;
+  border-radius: 3px;
+  font-family: var(--gf-font-stamp);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transform: rotate(-7deg);
+  box-shadow: 1px 2px 3px 0 rgb(0 0 0 / 0.18);
+}
+
+.state-stamp--borrador {
+  color: var(--gf-ink-faint);
+}
+.state-stamp--cerrado {
+  color: var(--gf-ink-soft);
+}
+.state-stamp--revision {
+  color: var(--gf-amarillo);
+}
+.state-stamp--observado {
+  color: var(--gf-naranja);
+  transform: rotate(-11deg) scale(1.05);
+}
+.state-stamp--aprobado {
+  color: var(--gf-verde);
+}
+.state-stamp--enviado {
+  color: var(--gf-ink);
+  background: var(--gf-panel-raised);
+}
+
+.state-stamp--thud {
+  /* impacto físico de un sello, no un rebote decorativo: leve
+     sobrepaso al aterrizar, no elástico */
+  animation: stamp-thud 220ms cubic-bezier(0.3, 1.2, 0.5, 1);
+}
+
+@keyframes stamp-thud {
+  0% {
+    opacity: 0;
+    transform: rotate(-7deg) scale(1.8);
+  }
+  60% {
+    opacity: 1;
+    transform: rotate(-7deg) scale(0.94);
+  }
+  100% {
+    transform: rotate(-7deg) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .state-stamp--thud {
+    animation: none;
+  }
+}

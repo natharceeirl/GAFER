@@ -1,0 +1,106 @@
+/*
+  GAFER design tokens — dirección "Garita de control industrial".
+  Ver .impeccable/surfaces/src.md para el contrato completo.
+  Kraft/carbón industrial, nunca crema de panadería. Los colores de
+  estado (verde/amarillo/naranja/rojo) SON el semáforo del Mapa Murino
+  en todo el sistema, no una paleta de acento separada.
+*/
+
+:root {
+  /* superficie: kraft industrial gris-frío, nunca crema de panadería */
+  --gf-bg: #d7d7ca;
+  --gf-panel: #ecede6;
+  --gf-panel-raised: #f4f5ef;
+  --gf-rule: #a8ab9b;
+  --gf-rule-strong: #82866f;
+
+  /* tinta */
+  --gf-ink: #23241f;
+  --gf-ink-soft: #56564b;
+  --gf-ink-faint: #837e6c;
+
+  /* semáforo Mapa Murino = estado + acento de marca */
+  --gf-verde: #2f6b3e;
+  --gf-verde-ink: #eef3ea;
+  --gf-amarillo: #93701c;
+  --gf-amarillo-ink: #fbf3e1;
+  --gf-naranja: #b3501e;
+  --gf-naranja-ink: #fbeee1;
+  --gf-rojo: #9c2c21;
+  --gf-rojo-ink: #fbe9e6;
+  --gf-sin-color: #8c8670;
+  --gf-sin-color-ink: #f1efe6;
+
+  /* tipografía */
+  --gf-font-ui: 'Archivo', system-ui, sans-serif;
+  --gf-font-stamp: 'Big Shoulders Display', 'Archivo', sans-serif;
+  --gf-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* geometría */
+  --gf-radius: 2px;
+  --gf-stamp-tilt: -4deg;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --gf-bg: #1b1b17;
+    --gf-panel: #232320;
+    --gf-panel-raised: #2b2b26;
+    --gf-rule: #46453a;
+    --gf-rule-strong: #5c5a4b;
+
+    --gf-ink: #ece7d8;
+    --gf-ink-soft: #bcb7a3;
+    --gf-ink-faint: #8b8672;
+
+    --gf-verde: #58a86c;
+    --gf-verde-ink: #12200f;
+    --gf-amarillo: #d6ab48;
+    --gf-amarillo-ink: #241d0c;
+    --gf-naranja: #e0793f;
+    --gf-naranja-ink: #271307;
+    --gf-rojo: #dd6a58;
+    --gf-rojo-ink: #240e0a;
+    --gf-sin-color: #8b8672;
+    --gf-sin-color-ink: #1d1c17;
+  }
+}
+
+body {
+  background: var(--gf-bg);
+  color: var(--gf-ink);
+  font-family: var(--gf-font-ui);
+}
+
+::selection {
+  background: var(--gf-ink);
+  color: var(--gf-panel);
+}
+
+:focus-visible {
+  outline: 2.5px solid var(--gf-naranja);
+  outline-offset: 2px;
+}
+
+* {
+  scrollbar-color: var(--gf-rule-strong) var(--gf-panel);
+  scrollbar-width: thin;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--gf-panel);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--gf-rule-strong);
+  border-radius: 999px;
+  border: 2px solid var(--gf-panel);
+}
+
+table,
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+

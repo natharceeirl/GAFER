@@ -1,0 +1,5 @@
+.perforated-divider {
+  height: 0;
+  border-top: 2px dashed var(--gf-rule);
+  margin: 0;
+}

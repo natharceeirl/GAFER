@@ -1,0 +1,28 @@
+.cancelled-stamp-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.cancelled-stamp-overlay__banda {
+  position: absolute;
+  top: 46%;
+  left: -12%;
+  width: 124%;
+  padding: 10px 0;
+  transform: rotate(-9deg);
+  border-top: 3px solid var(--gf-naranja);
+  border-bottom: 3px solid var(--gf-naranja);
+  background: color-mix(in srgb, var(--gf-naranja) 14%, transparent);
+  color: var(--gf-naranja);
+  font-family: var(--gf-font-stamp);
+  font-weight: 800;
+  font-size: clamp(20px, 3vw, 30px);
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+}

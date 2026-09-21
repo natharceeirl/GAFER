@@ -1,0 +1,132 @@
+/*
+  Patrones compartidos entre features del mundo "garita de control
+  industrial" — compartimentos, listas de chips, barra de acciones.
+  Viven acá porque más de un feature los usa (operaciones, mapa-murino).
+*/
+
+.compartimento {
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  background: var(--gf-panel);
+  padding: 14px 16px 16px;
+}
+
+.compartimento__titulo {
+  margin: 0 0 12px;
+  font-family: var(--gf-font-ui);
+  font-weight: 800;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--gf-ink-soft);
+}
+
+.compartimento input[type='text'],
+.compartimento input:not([type]),
+.compartimento input[type='date'],
+.compartimento input[type='number'],
+.compartimento select,
+.compartimento textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  background: var(--gf-panel-raised);
+  color: var(--gf-ink);
+  font-family: var(--gf-font-ui);
+  font-size: 15px;
+}
+
+.compartimento textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.compartimento input:disabled,
+.compartimento select:disabled,
+.compartimento textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.compartimento input:focus-visible,
+.compartimento select:focus-visible,
+.compartimento textarea:focus-visible {
+  outline: 2.5px solid var(--gf-naranja);
+  outline-offset: 1px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+@media (max-width: 480px) {
+  .grid-2,
+  .grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.checkbox-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.checkbox-lista label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  font-size: 14.5px;
+}
+
+.chip-lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip-lista button {
+  min-height: 40px;
+  padding: 6px 14px;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: 999px;
+  background: var(--gf-panel-raised);
+  font-family: var(--gf-font-ui);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chip-lista button[aria-pressed='true'] {
+  border-color: var(--gf-ink);
+  background: var(--gf-ink);
+  color: var(--gf-panel);
+}
+
+.barra-acciones {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: var(--gf-panel-raised);
+  border-top: 2px solid var(--gf-ink);
+  box-shadow: 0 -3px 0 var(--gf-rule);
+}
+.barra-acciones .btn {
+  flex: 1;
+}
+
+.cargando {
+  padding: 24px 16px;
+  color: var(--gf-ink-soft);
+  font-size: 14px;
+}

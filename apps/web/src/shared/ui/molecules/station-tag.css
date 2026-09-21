@@ -1,0 +1,63 @@
+.station-tag {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--gf-radius);
+  border: 1.5px solid var(--gf-rule-strong);
+  transition: background-color 160ms ease-out, color 160ms ease-out;
+}
+
+.station-tag__icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  border: 2.5px solid currentColor;
+  font-family: var(--gf-font-mono);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.station-tag__icono--verde {
+  color: var(--gf-verde);
+}
+.station-tag__icono--rojo {
+  color: var(--gf-rojo);
+}
+
+.station-tag__label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* aura: inundación total de la tarjeta, no un acento */
+.station-tag--sin-color {
+  background: var(--gf-panel);
+  color: var(--gf-ink-soft);
+}
+.station-tag--verde {
+  background: var(--gf-verde);
+  color: var(--gf-verde-ink);
+  border-color: var(--gf-verde);
+}
+.station-tag--amarillo {
+  background: var(--gf-amarillo);
+  color: var(--gf-amarillo-ink);
+  border-color: var(--gf-amarillo);
+}
+.station-tag--naranja {
+  background: var(--gf-naranja);
+  color: var(--gf-naranja-ink);
+  border-color: var(--gf-naranja);
+}
+.station-tag--rojo {
+  background: var(--gf-rojo);
+  color: var(--gf-rojo-ink);
+  border-color: var(--gf-rojo);
+}
