@@ -1,0 +1,71 @@
+.semana-chart {
+  margin: 0;
+  padding: 16px;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  background: var(--gf-panel);
+}
+
+.semana-chart__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gf-ink-soft);
+  margin-bottom: 8px;
+}
+
+.semana-chart__gridline {
+  stroke: var(--gf-rule);
+  stroke-width: 1;
+}
+.semana-chart__axis {
+  stroke: var(--gf-ink-faint);
+  stroke-width: 1.25;
+}
+.semana-chart__tick,
+.semana-chart__label {
+  font-family: var(--gf-font-mono);
+  font-size: 10px;
+  fill: var(--gf-ink-faint);
+}
+.semana-chart__valor {
+  font-family: var(--gf-font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  fill: var(--gf-ink);
+}
+
+.semana-chart__barra--ejecutado {
+  fill: var(--gf-ink);
+}
+.semana-chart__barra--programado {
+  fill: none;
+  stroke: var(--gf-ink-faint);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 2;
+}
+
+.semana-chart__legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--gf-ink-soft);
+}
+.semana-chart__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.semana-chart__swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 1px;
+}
+.semana-chart__swatch--ejecutado {
+  background: var(--gf-ink);
+}
+.semana-chart__swatch--programado {
+  background: none;
+  border: 1.5px dashed var(--gf-ink-faint);
+}

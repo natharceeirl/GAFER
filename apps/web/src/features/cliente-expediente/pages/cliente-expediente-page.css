@@ -1,0 +1,130 @@
+.expediente-page__volver {
+  border: none;
+  background: none;
+  font-family: var(--gf-font-ui);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--gf-ink-soft);
+  cursor: pointer;
+  padding: 8px;
+}
+.expediente-page__volver:hover {
+  color: var(--gf-ink);
+}
+
+.expediente-page__body {
+  display: grid;
+  gap: 16px;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 20px 20px 48px;
+}
+
+.expediente-alerta {
+  padding: 12px 16px;
+  background: var(--gf-amarillo);
+  color: var(--gf-amarillo-ink);
+  border-radius: var(--gf-radius);
+  font-size: 14px;
+}
+.expediente-alerta p {
+  margin: 0;
+}
+
+.expediente-proyectos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+.expediente-proyecto__cabecera {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.expediente-proyecto__nombre {
+  font-family: var(--gf-font-mono);
+  font-weight: 700;
+}
+.expediente-proyecto__direccion {
+  font-size: 13px;
+  color: var(--gf-ink-soft);
+}
+.expediente-proyecto--inactivo {
+  opacity: 0.65;
+}
+.expediente-proyecto__servicios {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--gf-ink-soft);
+}
+.expediente-proyecto__frecuencia {
+  color: var(--gf-ink-faint);
+}
+
+.expediente-historial,
+.expediente-pdfs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.expediente-historial__fila {
+  display: grid;
+  grid-template-columns: 90px 100px 50px 110px 1fr;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 13px;
+  align-items: baseline;
+}
+.expediente-historial__fecha {
+  font-family: var(--gf-font-mono);
+  color: var(--gf-ink-soft);
+}
+.expediente-historial__tipo {
+  font-family: var(--gf-font-mono);
+  font-weight: 700;
+}
+.expediente-historial__tecnico {
+  color: var(--gf-ink-soft);
+}
+.expediente-historial__doc {
+  font-family: var(--gf-font-mono);
+  font-size: 12px;
+  color: var(--gf-ink-faint);
+  text-align: right;
+}
+
+.expediente-pdf {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--gf-rule);
+  font-size: 13px;
+}
+.expediente-pdf:last-child {
+  border-bottom: none;
+}
+.expediente-pdf__nombre {
+  font-family: var(--gf-font-mono);
+  font-weight: 600;
+}
+.expediente-pdf__ruta {
+  color: var(--gf-ink-faint);
+}
+
+@media (max-width: 560px) {
+  .expediente-historial__fila {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      'fecha tipo'
+      'proyecto tecnico'
+      'doc doc';
+  }
+  .expediente-historial__doc {
+    text-align: left;
+  }
+}

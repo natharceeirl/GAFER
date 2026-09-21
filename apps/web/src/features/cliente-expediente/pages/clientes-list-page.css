@@ -1,0 +1,118 @@
+.clientes-page__body {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 20px 20px 48px;
+}
+
+.clientes-page__buscador {
+  width: 100%;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  background: var(--gf-panel-raised);
+  color: var(--gf-ink);
+  font-family: var(--gf-font-ui);
+  font-size: 14px;
+}
+.clientes-page__buscador::placeholder {
+  color: var(--gf-ink-faint);
+}
+
+.clientes-page__vacio {
+  padding: 24px 16px;
+  color: var(--gf-ink-soft);
+  font-style: italic;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-top: none;
+}
+
+.clientes-tabla {
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  overflow: hidden;
+  background: var(--gf-panel);
+}
+
+.clientes-tabla__cabecera,
+.clientes-tabla__fila {
+  display: grid;
+  grid-template-columns: 2fr 1fr 110px 110px 90px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 16px;
+  text-align: left;
+}
+
+.clientes-tabla__cabecera {
+  background: var(--gf-panel-raised);
+  border-bottom: 2px solid var(--gf-ink);
+}
+.clientes-tabla__th {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gf-ink-soft);
+  cursor: pointer;
+  font-family: var(--gf-font-ui);
+}
+.clientes-tabla__th:hover {
+  color: var(--gf-ink);
+}
+
+.clientes-tabla__fila {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: var(--gf-font-ui);
+  color: var(--gf-ink);
+  font-size: 14px;
+}
+.clientes-tabla__fila:hover {
+  background: var(--gf-panel-raised);
+}
+
+.clientes-tabla__cliente {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.clientes-tabla__razon {
+  font-weight: 600;
+}
+.clientes-tabla__codigo {
+  font-family: var(--gf-font-mono);
+  font-size: 11px;
+  color: var(--gf-ink-faint);
+}
+
+.clientes-tabla__venc--urgente {
+  color: var(--gf-rojo);
+  font-weight: 700;
+}
+.clientes-tabla__venc--atencion {
+  color: var(--gf-amarillo);
+  font-weight: 700;
+}
+.clientes-tabla__venc--normal {
+  color: var(--gf-ink-soft);
+}
+
+.clientes-tabla__estado {
+  justify-self: start;
+}
+
+@media (max-width: 640px) {
+  .clientes-tabla__cabecera {
+    display: none;
+  }
+  .clientes-tabla__fila {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
