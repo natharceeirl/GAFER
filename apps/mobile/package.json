@@ -1,0 +1,24 @@
+{
+  "name": "@gafer/mobile",
+  "version": "0.0.1",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@gafer/contracts": "workspace:*",
+    "expo": "~57.0.24",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "zustand": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

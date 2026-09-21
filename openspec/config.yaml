@@ -1,0 +1,51 @@
+schema: spec-driven
+
+context: |
+  Monorepo with pnpm workspaces.
+  Backend: NestJS Hexagonal + Screaming Architecture (apps/api, apps/worker).
+  Database: PostgreSQL 16 + Redis 7 + MinIO S3 (infra/docker-compose.yml).
+  Frontend: React 18 + Vite with Feature-Sliced Design (apps/web).
+  Mobile: React Native + Expo SDK 57 with FSD and Offline-First Outbox (apps/mobile).
+  Contracts: Canonical Zod schemas (packages/contracts).
+
+strict_tdd: true
+
+testing:
+  projects:
+    - path: packages/contracts
+      stack: TypeScript / Zod
+      test_command: pnpm --filter @gafer/contracts test
+      framework: vitest
+    - path: apps/api
+      stack: NestJS / TypeScript
+      test_command: pnpm --filter @gafer/api test
+      framework: jest
+    - path: apps/worker
+      stack: NestJS / BullMQ
+      test_command: pnpm --filter @gafer/worker test
+      framework: jest
+    - path: apps/web
+      stack: React 18 / Vite / FSD
+      test_command: pnpm --filter @gafer/web test
+      framework: vitest
+    - path: apps/mobile
+      stack: React Native / Expo SDK 57 / FSD
+      test_command: pnpm --filter @gafer/mobile test
+      framework: vitest
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Document database schema and architectural decisions with rationale
+  tasks:
+    - Group by role and phase with clear dependencies
+  apply:
+    tdd: true
+    test_command: pnpm test
+  verify:
+    test_command: pnpm test
+    build_command: pnpm build

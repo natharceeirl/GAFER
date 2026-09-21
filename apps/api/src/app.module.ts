@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { DatabaseModule } from './database/database.module';
+import { StorageModule } from './shared/infrastructure/storage/storage.module';
 import { AuditoriaModule } from './shared/auditoria/auditoria.module';
 import { OperacionesModule } from './operaciones/operaciones.module';
 import { DocumentosModule } from './documentos/documentos.module';
@@ -10,6 +12,8 @@ import { InventarioModule } from './inventario/inventario.module';
 
 @Module({
   imports: [
+    DatabaseModule,
+    StorageModule,
     AuditoriaModule,
     // Fase 1
     MantenimientoModule,
@@ -21,7 +25,7 @@ import { InventarioModule } from './inventario/inventario.module';
     MapaMurinoModule,
     // Fase 4
     EstadisticasModule,
-    // Fase 5 (módulo agregado por el análisis de arquitectura)
+    // Fase 5
     InventarioModule,
   ],
 })

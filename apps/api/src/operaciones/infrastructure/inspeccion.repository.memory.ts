@@ -14,4 +14,13 @@ export class InspeccionRepositoryMemory implements InspeccionRepository {
   async buscarPorId(id: string): Promise<Inspeccion | null> {
     return this.store.get(id) ?? null;
   }
+
+  async buscarPorServicioId(servicioId: string): Promise<Inspeccion | null> {
+    for (const inspeccion of this.store.values()) {
+      if (inspeccion.servicioId === servicioId) {
+        return inspeccion;
+      }
+    }
+    return null;
+  }
 }

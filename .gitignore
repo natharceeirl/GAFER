@@ -7,3 +7,5 @@ coverage/
 .DS_Store
 .turbo/
 apps/web/dev-dist/
+.expo/
+coverage-e2e/
