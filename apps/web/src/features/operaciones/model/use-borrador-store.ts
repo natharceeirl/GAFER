@@ -1,15 +1,11 @@
 import { create } from 'zustand';
-
-interface BorradorInspeccion {
-  servicioId: string;
-  observaciones: string;
-}
+import { crearBorradorVacio, type InspeccionBorrador } from './tipos';
 
 interface BorradorStore {
-  borrador: BorradorInspeccion | null;
+  borrador: InspeccionBorrador | null;
   colaEnvioPendiente: boolean;
-  iniciarBorrador: (servicioId: string) => void;
-  actualizarObservaciones: (observaciones: string) => void;
+  iniciarBorrador: (servicioId: string, inicial?: Partial<InspeccionBorrador>) => void;
+  actualizarBloque: <K extends keyof InspeccionBorrador>(bloque: K, valor: InspeccionBorrador[K]) => void;
   marcarComoPendienteDeSincronizar: () => void;
   limpiar: () => void;
 }
@@ -24,11 +20,11 @@ interface BorradorStore {
 export const useBorradorStore = create<BorradorStore>((set) => ({
   borrador: null,
   colaEnvioPendiente: false,
-  iniciarBorrador: (servicioId) =>
-    set({ borrador: { servicioId, observaciones: '' }, colaEnvioPendiente: false }),
-  actualizarObservaciones: (observaciones) =>
+  iniciarBorrador: (servicioId, inicial) =>
+    set({ borrador: { ...crearBorradorVacio(servicioId), ...inicial }, colaEnvioPendiente: false }),
+  actualizarBloque: (bloque, valor) =>
     set((state) => ({
-      borrador: state.borrador ? { ...state.borrador, observaciones } : state.borrador,
+      borrador: state.borrador ? { ...state.borrador, [bloque]: valor } : state.borrador,
     })),
   marcarComoPendienteDeSincronizar: () => set({ colaEnvioPendiente: true }),
   limpiar: () => set({ borrador: null, colaEnvioPendiente: false }),

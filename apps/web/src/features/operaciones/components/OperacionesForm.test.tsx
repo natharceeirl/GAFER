@@ -1,37 +1,58 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { OperacionesForm } from './OperacionesForm';
+import { crearBorradorVacio } from '../model/tipos';
 
 describe('OperacionesForm (presentacional)', () => {
   it('se testea sin mockear red ni IndexedDB — solo props', () => {
-    const onCambiarObservaciones = vi.fn();
+    const onActualizarBloque = vi.fn();
     render(
       <OperacionesForm
         estadoRemoto="BORRADOR"
-        observaciones="texto inicial"
-        onIniciar={() => {}}
-        onCambiarObservaciones={onCambiarObservaciones}
+        borrador={crearBorradorVacio('servicio-1')}
+        onActualizarBloque={onActualizarBloque}
+        onGuardarBorrador={() => {}}
+        onCerrarInspeccion={() => {}}
       />,
     );
 
-    expect(screen.getByText('BORRADOR')).toBeInTheDocument();
-    const textarea = screen.getByPlaceholderText('Observaciones técnicas');
-    fireEvent.change(textarea, { target: { value: 'nueva observación' } });
-    expect(onCambiarObservaciones).toHaveBeenCalledWith('nueva observación');
+    expect(screen.getByText('Borrador')).toBeInTheDocument();
+    const textarea = screen.getByPlaceholderText('Detalle por zona');
+    fireEvent.change(textarea, { target: { value: 'Actividad en zona A' } });
+    expect(onActualizarBloque).toHaveBeenCalledWith('diagnostico', {
+      hallazgoCatalogo: '',
+      textoLibre: 'Actividad en zona A',
+    });
   });
 
-  it('llama a onIniciar al hacer click en el botón', () => {
-    const onIniciar = vi.fn();
+  it('llama a onCerrarInspeccion al hacer click en el botón de cierre', () => {
+    const onCerrarInspeccion = vi.fn();
     render(
       <OperacionesForm
         estadoRemoto={null}
-        observaciones=""
-        onIniciar={onIniciar}
-        onCambiarObservaciones={() => {}}
+        borrador={crearBorradorVacio('servicio-1')}
+        onActualizarBloque={() => {}}
+        onGuardarBorrador={() => {}}
+        onCerrarInspeccion={onCerrarInspeccion}
       />,
     );
 
-    fireEvent.click(screen.getByText('Iniciar inspección'));
-    expect(onIniciar).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByText('Cerrar inspección'));
+    expect(onCerrarInspeccion).toHaveBeenCalledOnce();
+  });
+
+  it('deshabilita los campos cuando la inspección ya está CERRADO', () => {
+    render(
+      <OperacionesForm
+        estadoRemoto="CERRADO"
+        borrador={crearBorradorVacio('servicio-1')}
+        onActualizarBloque={() => {}}
+        onGuardarBorrador={() => {}}
+        onCerrarInspeccion={() => {}}
+      />,
+    );
+
+    expect(screen.getByPlaceholderText('Detalle por zona')).toBeDisabled();
+    expect(screen.getByText('Inspección cerrada')).toBeDisabled();
   });
 });

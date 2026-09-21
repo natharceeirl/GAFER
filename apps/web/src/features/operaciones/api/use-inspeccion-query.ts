@@ -5,10 +5,16 @@ interface InspeccionRemota {
   estado: 'BORRADOR' | 'CERRADO';
 }
 
+/**
+ * Mockup sin backend conectado todavía (Fase 1 usa adapters en
+ * memoria del lado del servidor, no expuestos aún a este front).
+ * Simula la latencia y la forma de la respuesta real sin pegarle a
+ * un endpoint que no existe — evita una carrera de fetch+retry real
+ * contra un 404 en cada apertura de servicio.
+ */
 async function fetchInspeccion(servicioId: string): Promise<InspeccionRemota | null> {
-  const response = await fetch(`/api/operaciones/inspecciones?servicioId=${servicioId}`);
-  if (!response.ok) return null;
-  return response.json();
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  return { id: servicioId, estado: 'BORRADOR' };
 }
 
 /**

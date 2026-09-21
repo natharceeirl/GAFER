@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useBorradorStore } from './use-borrador-store';
+import { crearBorradorVacio } from './tipos';
 
 describe('useBorradorStore', () => {
   beforeEach(() => {
@@ -8,19 +9,29 @@ describe('useBorradorStore', () => {
 
   it('inicia un borrador vacío para un servicio', () => {
     useBorradorStore.getState().iniciarBorrador('servicio-1');
-    expect(useBorradorStore.getState().borrador).toEqual({
-      servicioId: 'servicio-1',
-      observaciones: '',
-    });
+    expect(useBorradorStore.getState().borrador).toEqual(crearBorradorVacio('servicio-1'));
   });
 
-  it('actualiza las observaciones sin tocar el servicioId', () => {
-    useBorradorStore.getState().iniciarBorrador('servicio-1');
-    useBorradorStore.getState().actualizarObservaciones('Se detectó actividad en zona A');
-    expect(useBorradorStore.getState().borrador?.observaciones).toBe(
-      'Se detectó actividad en zona A',
+  it('acepta datos iniciales (para reabrir un borrador ya guardado)', () => {
+    useBorradorStore.getState().iniciarBorrador('servicio-1', {
+      observacionesTecnicas: { catalogo: '', textoLibre: 'Acceso restringido' },
+    });
+    expect(useBorradorStore.getState().borrador?.observacionesTecnicas.textoLibre).toBe(
+      'Acceso restringido',
     );
     expect(useBorradorStore.getState().borrador?.servicioId).toBe('servicio-1');
+  });
+
+  it('actualiza un bloque sin tocar el resto del borrador', () => {
+    useBorradorStore.getState().iniciarBorrador('servicio-1');
+    useBorradorStore.getState().actualizarBloque('condicionesAmbientales', {
+      temperaturaC: '27',
+      humedadPorc: '60',
+      vientoKmh: '5',
+    });
+    expect(useBorradorStore.getState().borrador?.condicionesAmbientales.temperaturaC).toBe('27');
+    expect(useBorradorStore.getState().borrador?.servicioId).toBe('servicio-1');
+    expect(useBorradorStore.getState().borrador?.personal).toEqual([]);
   });
 
   it('marca la cola de sincronización sin borrar el borrador', () => {
