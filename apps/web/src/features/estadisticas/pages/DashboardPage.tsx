@@ -5,8 +5,8 @@ import { Badge } from '../../../shared/ui/atoms/Badge';
 import { Button } from '../../../shared/ui/atoms/Button';
 import { ServiciosPorSemanaChart } from '../components/ServiciosPorSemanaChart';
 import { NOMBRE_ROL, type Rol } from '../../auth/model/roles';
-import { DOCUMENTOS_MOCK } from '../../documentos/model/documentos-mock';
 import { EstadoBadge } from '../../documentos/components/EstadoBadge';
+import type { DocumentoResumen } from '../../documentos/model/tipos';
 import { ALERTAS_MOCK, SERVICIOS_HOY_MOCK, SERVICIOS_POR_SEMANA_MOCK, type SeveridadAlerta } from '../model/dashboard-mock';
 import './dashboard-page.css';
 
@@ -19,13 +19,13 @@ function severidadClass(severidad: SeveridadAlerta) {
 interface DashboardPageProps {
   /** El dashboard es exclusivo de Administrador y Supervisor — spec §10.1. */
   rol: Extract<Rol, 'ADMINISTRADOR' | 'SUPERVISOR'>;
+  documentos: DocumentoResumen[];
   onAbrirDocumento: (id: string) => void;
 }
 
-const PENDIENTES_APROBACION = DOCUMENTOS_MOCK.filter((d) => d.estado === 'ENVIADO_A_REVISION');
-
-export function DashboardPage({ rol, onAbrirDocumento }: DashboardPageProps) {
+export function DashboardPage({ rol, documentos, onAbrirDocumento }: DashboardPageProps) {
   const completados = useMemo(() => SERVICIOS_HOY_MOCK.filter((s) => s.completado).length, []);
+  const pendientesAprobacion = documentos.filter((d) => d.estado === 'ENVIADO_A_REVISION');
 
   return (
     <div className="dashboard-page">
@@ -86,13 +86,13 @@ export function DashboardPage({ rol, onAbrirDocumento }: DashboardPageProps) {
 
         <section className="dashboard-section" aria-labelledby="pendientes-heading">
           <h2 id="pendientes-heading" className="dashboard-section__title">
-            Pendientes de aprobación <span className="tabular">({PENDIENTES_APROBACION.length})</span>
+            Pendientes de aprobación <span className="tabular">({pendientesAprobacion.length})</span>
           </h2>
-          {PENDIENTES_APROBACION.length === 0 ? (
+          {pendientesAprobacion.length === 0 ? (
             <p className="dashboard-empty">Ningún documento esperando revisión.</p>
           ) : (
             <ul className="dashboard-servicios">
-              {PENDIENTES_APROBACION.map((d, i) => (
+              {pendientesAprobacion.map((d, i) => (
                 <li key={d.id}>
                   <button type="button" className="dashboard-pendiente" onClick={() => onAbrirDocumento(d.id)}>
                     <span className="dashboard-pendiente__codigo">{d.codigo}</span>
@@ -104,7 +104,7 @@ export function DashboardPage({ rol, onAbrirDocumento }: DashboardPageProps) {
                       <EstadoBadge estado={d.estado} />
                     </span>
                   </button>
-                  {i < PENDIENTES_APROBACION.length - 1 && <PerforatedDivider />}
+                  {i < pendientesAprobacion.length - 1 && <PerforatedDivider />}
                 </li>
               ))}
             </ul>

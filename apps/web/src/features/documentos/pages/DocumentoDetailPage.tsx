@@ -4,15 +4,14 @@ import { TicketHeader } from '../../../shared/ui/molecules/TicketHeader';
 import { StateStamp } from '../../../shared/ui/molecules/StateStamp';
 import { CancelledStampOverlay } from '../../../shared/ui/molecules/CancelledStampOverlay';
 import { Button } from '../../../shared/ui/atoms/Button';
-import { DOCUMENTOS_DETALLE_MOCK } from '../model/documentos-mock';
+import type { DocumentoDetalle } from '../model/tipos';
 import './documento-detail-page.css';
 
 interface DocumentoDetailPageProps {
-  documentoId?: string;
+  detalle: DocumentoDetalle;
 }
 
-export function DocumentoDetailPage({ documentoId = 'd1' }: DocumentoDetailPageProps) {
-  const base = DOCUMENTOS_DETALLE_MOCK[documentoId] ?? DOCUMENTOS_DETALLE_MOCK.d1;
+export function DocumentoDetailPage({ detalle: base }: DocumentoDetailPageProps) {
   const [estado, setEstado] = useState<EstadoDocumento>(base.estado);
   const [justAnimated, setJustAnimated] = useState(false);
   const [mostrarObservacion, setMostrarObservacion] = useState(false);

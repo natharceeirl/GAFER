@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { AltaFormLayout, Bloque, Campo, Opciones, ariaError } from '../components/AltaForm';
+import { AltaFormLayout } from '../components/AltaForm';
+import { Bloque, Campo, Opciones, ariaError } from '../../../shared/ui/molecules/FormFields';
 import { normalizarCodigo, validarCliente, type DatosCliente } from '../model/validaciones';
 
 interface Props {
@@ -76,7 +77,7 @@ export function NuevoClientePage({ giros, codigosExistentes, rucsExistentes, onR
         >
           <input
             {...ariaError('cli-ruc', visibles.ruc)}
-            className="alta-campo__mono"
+            className="ff-campo__mono"
             type="text"
             inputMode="numeric"
             maxLength={11}
@@ -93,7 +94,7 @@ export function NuevoClientePage({ giros, codigosExistentes, rucsExistentes, onR
         >
           <input
             {...ariaError('cli-codigo', visibles.codigoCorto)}
-            className="alta-campo__mono"
+            className="ff-campo__mono"
             type="text"
             maxLength={10}
             value={datos.codigoCorto}

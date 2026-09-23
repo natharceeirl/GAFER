@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { TipoServicio } from '@gafer/contracts';
-import { AltaFormLayout, Bloque, Campo, Opciones, ariaError } from '../components/AltaForm';
+import { AltaFormLayout } from '../components/AltaForm';
+import { Bloque, Campo, Opciones, ariaError } from '../../../shared/ui/molecules/FormFields';
 import { FRECUENCIAS, TIPOS_SERVICIO } from '../model/catalogos-servicio';
 import { validarServicio, type DatosServicio } from '../model/validaciones';
 import type { ClienteFila } from '../model/clientes-mock';
@@ -122,7 +123,7 @@ export function NuevoServicioPage({ cliente, proyecto, insumos, equipos, onRegis
           </select>
         </Campo>
         <Campo id="ser-area-total" label="Área total del local" error={visibles.areaTotal}>
-          <div className="alta-sufijo">
+          <div className="ff-sufijo">
             <input
               {...ariaError('ser-area-total', visibles.areaTotal)}
               type="number"
@@ -136,7 +137,7 @@ export function NuevoServicioPage({ cliente, proyecto, insumos, equipos, onRegis
           </div>
         </Campo>
         <Campo id="ser-area-tratar" label="Área a tratar por visita" error={visibles.areaTratar}>
-          <div className="alta-sufijo">
+          <div className="ff-sufijo">
             <input
               {...ariaError('ser-area-tratar', visibles.areaTratar)}
               type="number"
@@ -161,27 +162,27 @@ export function NuevoServicioPage({ cliente, proyecto, insumos, equipos, onRegis
       </Bloque>
 
       <Bloque titulo="Insumos autorizados y dosis">
-        <div className={visibles.insumos || visibles.dosis ? 'alta-campo alta-campo--completo alta-campo--error' : 'alta-campo alta-campo--completo'}>
-          <span className="alta-campo__label">Insumos del catálogo que el técnico verá precargados</span>
-          <ul className="alta-checks">
+        <div className={visibles.insumos || visibles.dosis ? 'ff-campo ff-campo--completo ff-campo--error' : 'ff-campo ff-campo--completo'}>
+          <span className="ff-campo__label">Insumos del catálogo que el técnico verá precargados</span>
+          <ul className="ff-checks">
             {insumosActivos.map((i) => {
               const elegido = datos.insumos.includes(i.id);
               return (
-                <li key={i.id} className="alta-check">
+                <li key={i.id} className="ff-check">
                   <input
                     type="checkbox"
                     id={`ser-insumo-${i.id}`}
                     checked={elegido}
                     onChange={() => alternarInsumo(i)}
                   />
-                  <label htmlFor={`ser-insumo-${i.id}`} className="alta-check__nombre">
+                  <label htmlFor={`ser-insumo-${i.id}`} className="ff-check__nombre">
                     {i.nombre}
                   </label>
-                  <span className="alta-check__detalle">
+                  <span className="ff-check__detalle">
                     {i.principioActivo} · {i.concentracion} · DIGESA {i.registroDigesa}
                   </span>
                   {elegido ? (
-                    <div className="alta-check__dosis">
+                    <div className="ff-check__dosis">
                       <label htmlFor={`ser-dosis-${i.id}`}>Dosis referencial para este servicio</label>
                       <input
                         id={`ser-dosis-${i.id}`}
@@ -196,21 +197,21 @@ export function NuevoServicioPage({ cliente, proyecto, insumos, equipos, onRegis
             })}
           </ul>
           {visibles.insumos || visibles.dosis ? (
-            <span className="alta-campo__error">{visibles.insumos ?? visibles.dosis}</span>
+            <span className="ff-campo__error">{visibles.insumos ?? visibles.dosis}</span>
           ) : (
-            <span className="alta-campo__ayuda">Solo se listan insumos activos. La dosis se precarga desde el catálogo y se puede ajustar.</span>
+            <span className="ff-campo__ayuda">Solo se listan insumos activos. La dosis se precarga desde el catálogo y se puede ajustar.</span>
           )}
         </div>
       </Bloque>
 
       <Bloque titulo="Equipos asignados">
-        <div className={visibles.equipos ? 'alta-campo alta-campo--completo alta-campo--error' : 'alta-campo alta-campo--completo'}>
-          <span className="alta-campo__label">Equipos del catálogo para este servicio</span>
-          <ul className="alta-checks">
+        <div className={visibles.equipos ? 'ff-campo ff-campo--completo ff-campo--error' : 'ff-campo ff-campo--completo'}>
+          <span className="ff-campo__label">Equipos del catálogo para este servicio</span>
+          <ul className="ff-checks">
             {equipos.map((eq) => {
               const deshabilitado = eq.estadoOperativo === 'FUERA_DE_SERVICIO';
               return (
-                <li key={eq.id} className={deshabilitado ? 'alta-check alta-check--deshabilitado' : 'alta-check'}>
+                <li key={eq.id} className={deshabilitado ? 'ff-check ff-check--deshabilitado' : 'ff-check'}>
                   <input
                     type="checkbox"
                     id={`ser-equipo-${eq.id}`}
@@ -218,17 +219,17 @@ export function NuevoServicioPage({ cliente, proyecto, insumos, equipos, onRegis
                     disabled={deshabilitado}
                     onChange={() => alternarEquipo(eq.id)}
                   />
-                  <label htmlFor={`ser-equipo-${eq.id}`} className="alta-check__nombre">
+                  <label htmlFor={`ser-equipo-${eq.id}`} className="ff-check__nombre">
                     {eq.nombre}
                   </label>
-                  <span className="alta-check__detalle">
+                  <span className="ff-check__detalle">
                     {eq.codigoInterno} · {eq.tipo} · {ESTADO_EQUIPO[eq.estadoOperativo]}
                   </span>
                 </li>
               );
             })}
           </ul>
-          {visibles.equipos ? <span className="alta-campo__error">{visibles.equipos}</span> : null}
+          {visibles.equipos ? <span className="ff-campo__error">{visibles.equipos}</span> : null}
         </div>
       </Bloque>
 

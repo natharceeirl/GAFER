@@ -4,6 +4,7 @@ export const INSUMOS_MOCK: Insumo[] = [
   { id: 'i1', nombre: 'Brodifacoum 0.005% bloque parafinado', principioActivo: 'Brodifacoum', presentacion: 'Bloque', concentracion: '0.005%', registroDigesa: 'DIG-2451-SA', dosisReferencial: '1 bloque por estación', estado: 'ACTIVO' },
   { id: 'i2', nombre: 'Cipermetrina 25% EC', principioActivo: 'Cipermetrina', presentacion: 'Líquido', concentracion: '25%', registroDigesa: 'DIG-1980-SA', dosisReferencial: '10 ml/L', estado: 'ACTIVO' },
   { id: 'i3', nombre: 'Bromadiolona 0.005% pellet', principioActivo: 'Bromadiolona', presentacion: 'Pellet', concentracion: '0.005%', registroDigesa: 'DIG-2510-SA', dosisReferencial: '1 sobre por estación', estado: 'ACTIVO' },
+  { id: 'i5', nombre: 'Hipoclorito de sodio 7.5%', principioActivo: 'Hipoclorito de sodio', presentacion: 'Líquido', concentracion: '7.5%', registroDigesa: 'DIG-3120-SA', dosisReferencial: '50 ppm de cloro libre', estado: 'ACTIVO' },
   { id: 'i4', nombre: 'Deltametrina 2.5% SC', principioActivo: 'Deltametrina', presentacion: 'Suspensión', concentracion: '2.5%', registroDigesa: 'DIG-1765-SA', dosisReferencial: '8 ml/L', estado: 'INACTIVO' },
 ];
 

@@ -3,7 +3,7 @@ import type { EstadoDocumento } from '@gafer/contracts';
 import { TicketHeader } from '../../../shared/ui/molecules/TicketHeader';
 import { PerforatedDivider } from '../../../shared/ui/molecules/PerforatedDivider';
 import { EstadoBadge } from '../components/EstadoBadge';
-import { DOCUMENTOS_MOCK } from '../model/documentos-mock';
+import type { DocumentoResumen } from '../model/tipos';
 import './bandeja-aprobacion-page.css';
 
 const FILTROS: Array<{ id: 'TODOS' | EstadoDocumento; etiqueta: string }> = [
@@ -15,18 +15,17 @@ const FILTROS: Array<{ id: 'TODOS' | EstadoDocumento; etiqueta: string }> = [
 ];
 
 interface BandejaAprobacionPageProps {
+  /** Documentos de campo recién enviados a revisión, seguidos de los de ejemplo. */
+  documentos: DocumentoResumen[];
   onAbrirDocumento?: (id: string) => void;
 }
 
-export function BandejaAprobacionPage({ onAbrirDocumento }: BandejaAprobacionPageProps) {
+export function BandejaAprobacionPage({ documentos: todos, onAbrirDocumento }: BandejaAprobacionPageProps) {
   const [filtro, setFiltro] = useState<'TODOS' | EstadoDocumento>('TODOS');
 
-  const documentos = useMemo(
-    () => (filtro === 'TODOS' ? DOCUMENTOS_MOCK : DOCUMENTOS_MOCK.filter((d) => d.estado === filtro)),
-    [filtro],
-  );
+  const documentos = useMemo(() => (filtro === 'TODOS' ? todos : todos.filter((d) => d.estado === filtro)), [todos, filtro]);
 
-  const pendientes = DOCUMENTOS_MOCK.filter((d) => d.estado === 'ENVIADO_A_REVISION').length;
+  const pendientes = todos.filter((d) => d.estado === 'ENVIADO_A_REVISION').length;
 
   return (
     <div className="bandeja-page">

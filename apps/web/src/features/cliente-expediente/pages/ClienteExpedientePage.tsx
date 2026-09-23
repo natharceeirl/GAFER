@@ -100,8 +100,8 @@ export function ClienteExpedientePage({
                     <p className="expediente-proyecto__sin-servicios">Sin servicios contratados todavía.</p>
                   ) : (
                     <ul className="expediente-proyecto__servicios">
-                      {p.servicios.map((s, i) => (
-                        <li key={`${s.tipo}-${i}`}>
+                      {p.servicios.map((s) => (
+                        <li key={s.id}>
                           {s.tipo} <span className="expediente-proyecto__frecuencia">· {s.frecuencia}</span>
                           {s.requiereCertificado ? <span className="expediente-proyecto__frecuencia"> · con certificado</span> : null}
                         </li>

@@ -4,9 +4,8 @@ import { ClienteExpedientePage } from './ClienteExpedientePage';
 import { NuevoClientePage } from './NuevoClientePage';
 import { NuevoProyectoPage } from './NuevoProyectoPage';
 import { NuevoServicioPage } from './NuevoServicioPage';
-import { CLIENTES_MOCK, type ClienteFila } from '../model/clientes-mock';
-import { PROYECTOS_MOCK, type ProyectoExpediente } from '../model/expediente-mock';
-import { etiquetaTipoServicio } from '../model/catalogos-servicio';
+import { useCartera } from '../model/cartera-context';
+import { agregarCliente, agregarProyecto, agregarServicio, esClienteNuevo, proyectosDe } from '../model/cartera';
 import type { DatosCliente, DatosProyecto, DatosServicio } from '../model/validaciones';
 import { CATALOGOS_TEXTO_MOCK, EQUIPOS_MOCK, INSUMOS_MOCK } from '../../mantenimiento/model/mantenimiento-mock';
 
@@ -24,73 +23,36 @@ interface ClientesModuleProps {
 
 const GIROS = CATALOGOS_TEXTO_MOCK.find((c) => c.id === 'giros')?.items ?? [];
 
-/**
- * Jerarquía CLIENTE → PROYECTO (sede) → SERVICIO (§7). Todo queda en
- * memoria: es un mockup, lo registrado se pierde al recargar.
- */
+/** Jerarquía CLIENTE → PROYECTO (sede) → SERVICIO (§7), sobre la cartera compartida de la app. */
 export function ClientesModule({ puedeDarDeAlta }: ClientesModuleProps) {
-  const [clientes, setClientes] = useState<ClienteFila[]>(CLIENTES_MOCK);
-  // Los clientes de ejemplo comparten PROYECTOS_MOCK; un cliente nuevo arranca sin sedes.
-  const [proyectosPorCliente, setProyectosPorCliente] = useState<Record<string, ProyectoExpediente[]>>({});
-  const [clientesNuevos, setClientesNuevos] = useState<Set<string>>(new Set());
+  const { cartera, setCartera } = useCartera();
   const [vista, setVista] = useState<Vista>({ tipo: 'lista' });
 
-  function proyectosDe(clienteId: string) {
-    return proyectosPorCliente[clienteId] ?? (clientesNuevos.has(clienteId) ? [] : PROYECTOS_MOCK);
-  }
-
   function registrarCliente(d: DatosCliente) {
-    const id = `nuevo-${d.codigoCorto}`;
-    const nuevo: ClienteFila = {
-      id,
-      codigoCorto: d.codigoCorto,
-      razonSocial: d.razonSocial,
-      ruc: d.ruc,
-      giro: d.giro,
-      ultimoServicio: null,
-      proximoVencimiento: null,
-      estado: d.estado,
-    };
-    setClientes((prev) => [...prev, nuevo]);
-    setClientesNuevos((prev) => new Set(prev).add(id));
-    setProyectosPorCliente((prev) => ({ ...prev, [id]: [] }));
-    setVista({ tipo: 'expediente', clienteId: id, aviso: `Cliente ${d.codigoCorto} registrado. El siguiente paso es registrar su primera sede.` });
+    const { estado, clienteId } = agregarCliente(cartera, d);
+    setCartera(() => estado);
+    setVista({ tipo: 'expediente', clienteId, aviso: `Cliente ${d.codigoCorto} registrado. El siguiente paso es registrar su primera sede.` });
   }
 
   function registrarProyecto(clienteId: string, d: DatosProyecto) {
-    const proyecto: ProyectoExpediente = {
-      id: `${clienteId}-${d.nombre}`,
-      nombre: d.nombre,
-      direccion: d.direccion.trim(),
-      distrito: d.distrito.trim(),
-      estado: d.estado,
-      servicios: [],
-    };
-    setProyectosPorCliente((prev) => ({ ...prev, [clienteId]: [...proyectosDe(clienteId), proyecto] }));
+    const { estado } = agregarProyecto(cartera, clienteId, d);
+    setCartera(() => estado);
     setVista({ tipo: 'expediente', clienteId, aviso: `Sede ${d.nombre} registrada. Ya puede agregarle servicios.` });
   }
 
-  function registrarServicio(clienteId: string, proyectoId: string, d: DatosServicio) {
-    if (d.tipo === '') return;
-    const tipo = etiquetaTipoServicio(d.tipo);
-    const actualizados = proyectosDe(clienteId).map((p) =>
-      p.id === proyectoId
-        ? { ...p, servicios: [...p.servicios, { tipo, frecuencia: d.frecuencia, requiereCertificado: d.requiereCertificado === true }] }
-        : p,
-    );
-    const nombreSede = actualizados.find((p) => p.id === proyectoId)?.nombre ?? '';
-    setProyectosPorCliente((prev) => ({ ...prev, [clienteId]: actualizados }));
+  function registrarServicio(clienteId: string, proyectoId: string, nombreSede: string, d: DatosServicio) {
+    setCartera(() => agregarServicio(cartera, clienteId, proyectoId, d));
     setVista({ tipo: 'expediente', clienteId, aviso: `Servicio ${d.tipo} (${d.frecuencia.toLowerCase()}) registrado en ${nombreSede}.` });
   }
 
-  const clienteDe = (id: string) => clientes.find((c) => c.id === id);
+  const clienteDe = (id: string) => cartera.clientes.find((c) => c.id === id);
 
   if (vista.tipo === 'nuevo-cliente' && puedeDarDeAlta) {
     return (
       <NuevoClientePage
         giros={GIROS}
-        codigosExistentes={clientes.map((c) => c.codigoCorto)}
-        rucsExistentes={clientes.map((c) => c.ruc)}
+        codigosExistentes={cartera.clientes.map((c) => c.codigoCorto)}
+        rucsExistentes={cartera.clientes.map((c) => c.ruc)}
         onRegistrar={registrarCliente}
         onCancelar={() => setVista({ tipo: 'lista' })}
       />
@@ -100,13 +62,12 @@ export function ClientesModule({ puedeDarDeAlta }: ClientesModuleProps) {
   if (vista.tipo === 'nuevo-proyecto' && puedeDarDeAlta) {
     const cliente = clienteDe(vista.clienteId);
     if (cliente) {
-      const volver = () => setVista({ tipo: 'expediente', clienteId: cliente.id, aviso: null });
       return (
         <NuevoProyectoPage
           cliente={cliente}
-          nombresExistentes={proyectosDe(cliente.id).map((p) => p.nombre)}
+          nombresExistentes={proyectosDe(cartera, cliente.id).map((p) => p.nombre)}
           onRegistrar={(d) => registrarProyecto(cliente.id, d)}
-          onCancelar={volver}
+          onCancelar={() => setVista({ tipo: 'expediente', clienteId: cliente.id, aviso: null })}
         />
       );
     }
@@ -114,7 +75,7 @@ export function ClientesModule({ puedeDarDeAlta }: ClientesModuleProps) {
 
   if (vista.tipo === 'nuevo-servicio' && puedeDarDeAlta) {
     const cliente = clienteDe(vista.clienteId);
-    const proyecto = cliente ? proyectosDe(cliente.id).find((p) => p.id === vista.proyectoId) : undefined;
+    const proyecto = cliente ? proyectosDe(cartera, cliente.id).find((p) => p.id === vista.proyectoId) : undefined;
     if (cliente && proyecto) {
       return (
         <NuevoServicioPage
@@ -122,21 +83,21 @@ export function ClientesModule({ puedeDarDeAlta }: ClientesModuleProps) {
           proyecto={proyecto}
           insumos={INSUMOS_MOCK}
           equipos={EQUIPOS_MOCK}
-          onRegistrar={(d) => registrarServicio(cliente.id, proyecto.id, d)}
+          onRegistrar={(d) => registrarServicio(cliente.id, proyecto.id, proyecto.nombre, d)}
           onCancelar={() => setVista({ tipo: 'expediente', clienteId: cliente.id, aviso: null })}
         />
       );
     }
   }
 
-  if (vista.tipo === 'expediente' || vista.tipo === 'nuevo-proyecto' || vista.tipo === 'nuevo-servicio') {
+  if (vista.tipo !== 'lista' && vista.tipo !== 'nuevo-cliente') {
     const cliente = clienteDe(vista.clienteId);
     if (cliente) {
       return (
         <ClienteExpedientePage
           cliente={cliente}
-          proyectos={proyectosDe(cliente.id)}
-          sinHistorial={clientesNuevos.has(cliente.id)}
+          proyectos={proyectosDe(cartera, cliente.id)}
+          sinHistorial={esClienteNuevo(cartera, cliente.id)}
           puedeDarDeAlta={puedeDarDeAlta}
           aviso={vista.tipo === 'expediente' ? vista.aviso : null}
           onVolver={() => setVista({ tipo: 'lista' })}
@@ -149,7 +110,7 @@ export function ClientesModule({ puedeDarDeAlta }: ClientesModuleProps) {
 
   return (
     <ClientesListPage
-      clientes={clientes}
+      clientes={cartera.clientes}
       onAbrirCliente={(c) => setVista({ tipo: 'expediente', clienteId: c.id, aviso: null })}
       puedeCrearCliente={puedeDarDeAlta}
       onNuevoCliente={() => setVista({ tipo: 'nuevo-cliente' })}

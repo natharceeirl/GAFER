@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { AltaFormLayout, Bloque, Campo, Opciones, ariaError } from '../components/AltaForm';
+import { AltaFormLayout } from '../components/AltaForm';
+import { Bloque, Campo, Opciones, ariaError } from '../../../shared/ui/molecules/FormFields';
 import { validarProyecto, type DatosProyecto } from '../model/validaciones';
 import type { ClienteFila } from '../model/clientes-mock';
 
@@ -62,7 +63,7 @@ export function NuevoProyectoPage({ cliente, nombresExistentes, onRegistrar, onC
         >
           <input
             {...ariaError('pro-nombre', visibles.nombre)}
-            className="alta-campo__mono"
+            className="ff-campo__mono"
             type="text"
             maxLength={20}
             value={datos.nombre}
