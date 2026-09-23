@@ -114,7 +114,7 @@ export function AppShell() {
             }}
           />
         ) : null}
-        {pantalla === 'CLIENTES' ? <ClientesModule puedeCrearCliente={sesion.rol === 'ADMINISTRADOR'} /> : null}
+        {pantalla === 'CLIENTES' ? <ClientesModule puedeDarDeAlta={sesion.rol === 'ADMINISTRADOR'} /> : null}
         {pantalla === 'DOCUMENTOS' ? (
           documentoAbierto ? (
             <DocumentoDetailPage documentoId={documentoAbierto} />

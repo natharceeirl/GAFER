@@ -55,6 +55,48 @@
 .expediente-proyecto--inactivo {
   opacity: 0.65;
 }
+.expediente-proyecto__agregar {
+  margin-left: auto;
+  padding: 6px 10px;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  background: transparent;
+  color: var(--gf-ink-soft);
+  font-family: var(--gf-font-ui);
+  font-weight: 700;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.expediente-proyecto__agregar:hover {
+  border-color: var(--gf-ink);
+  color: var(--gf-ink);
+}
+.expediente-proyecto__sin-servicios {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--gf-ink-faint);
+}
+
+.expediente-aviso {
+  margin: 0;
+  padding: 12px 16px;
+  background: var(--gf-verde);
+  color: var(--gf-verde-ink);
+  border-radius: var(--gf-radius);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.expediente-acciones {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.expediente-vacio {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--gf-ink-soft);
+}
 .expediente-proyecto__servicios {
   margin: 6px 0 0;
   padding-left: 18px;

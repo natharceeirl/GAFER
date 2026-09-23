@@ -3,7 +3,7 @@ import { TicketHeader } from '../../../shared/ui/molecules/TicketHeader';
 import { PerforatedDivider } from '../../../shared/ui/molecules/PerforatedDivider';
 import { Badge } from '../../../shared/ui/atoms/Badge';
 import { Button } from '../../../shared/ui/atoms/Button';
-import { CLIENTES_MOCK, type ClienteFila } from '../model/clientes-mock';
+import type { ClienteFila } from '../model/clientes-mock';
 import './clientes-list-page.css';
 
 type Columna = 'razonSocial' | 'proximoVencimiento';
@@ -20,12 +20,14 @@ function formatearFecha(fecha: string | null): string {
 }
 
 interface Props {
+  clientes: ClienteFila[];
   onAbrirCliente: (cliente: ClienteFila) => void;
   /** Spec §12: solo el Administrador crea clientes (§7.1 lo contradice; se sigue la tabla de roles). */
   puedeCrearCliente: boolean;
+  onNuevoCliente: () => void;
 }
 
-export function ClientesListPage({ onAbrirCliente, puedeCrearCliente }: Props) {
+export function ClientesListPage({ clientes, onAbrirCliente, puedeCrearCliente, onNuevoCliente }: Props) {
   const [busqueda, setBusqueda] = useState('');
   const [columna, setColumna] = useState<Columna>('razonSocial');
   const [direccion, setDireccion] = useState<Direccion>('asc');
@@ -33,13 +35,13 @@ export function ClientesListPage({ onAbrirCliente, puedeCrearCliente }: Props) {
   const filas = useMemo(() => {
     const texto = busqueda.trim().toLowerCase();
     const filtradas = texto
-      ? CLIENTES_MOCK.filter(
+      ? clientes.filter(
           (c) =>
             c.razonSocial.toLowerCase().includes(texto) ||
             c.codigoCorto.toLowerCase().includes(texto) ||
             c.ruc.includes(texto),
         )
-      : CLIENTES_MOCK;
+      : clientes;
 
     const signo = direccion === 'asc' ? 1 : -1;
     return [...filtradas].sort((a, b) => {
@@ -50,7 +52,7 @@ export function ClientesListPage({ onAbrirCliente, puedeCrearCliente }: Props) {
       const db = diasHasta(b.proximoVencimiento) ?? Number.POSITIVE_INFINITY;
       return signo * (da - db);
     });
-  }, [busqueda, columna, direccion]);
+  }, [clientes, busqueda, columna, direccion]);
 
   function alternarOrden(col: Columna) {
     if (columna === col) {
@@ -64,10 +66,10 @@ export function ClientesListPage({ onAbrirCliente, puedeCrearCliente }: Props) {
   return (
     <div className="clientes-page">
       <TicketHeader
-        code={`${filas.length} DE ${CLIENTES_MOCK.length}`}
+        code={`${filas.length} DE ${clientes.length}`}
         title="Cartera de clientes"
         meta="Administrador · Supervisor"
-        action={puedeCrearCliente ? <Button>Nuevo cliente</Button> : undefined}
+        action={puedeCrearCliente ? <Button onClick={onNuevoCliente}>Nuevo cliente</Button> : undefined}
       />
 
       <div className="clientes-page__body">

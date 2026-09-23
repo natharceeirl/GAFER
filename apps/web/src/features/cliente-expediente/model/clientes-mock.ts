@@ -4,7 +4,7 @@ export interface ClienteFila {
   razonSocial: string;
   ruc: string;
   giro: string;
-  ultimoServicio: string;
+  ultimoServicio: string | null;
   proximoVencimiento: string | null;
   estado: 'ACTIVO' | 'INACTIVO';
 }

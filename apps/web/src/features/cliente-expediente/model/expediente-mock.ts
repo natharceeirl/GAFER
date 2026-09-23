@@ -1,12 +1,14 @@
 export interface ServicioContratado {
   tipo: string;
   frecuencia: string;
+  requiereCertificado?: boolean;
 }
 
 export interface ProyectoExpediente {
   id: string;
   nombre: string;
   direccion: string;
+  distrito?: string;
   estado: 'ACTIVO' | 'INACTIVO';
   servicios: ServicioContratado[];
 }
