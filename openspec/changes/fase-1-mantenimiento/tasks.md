@@ -34,6 +34,6 @@
 - [x] **T3.1: Suite de Pruebas de Integración de Inmutabilidad (Sección 13)** <!-- id: 3.1 -->
   - Crear tests E2E / Integración con Supertest validando que cambios en catálogos no mutan inspecciones históricas.
   - DoD: Pipeline de test pasando con reporte de cobertura.
-- [ ] **T3.2: Pruebas de Concurrencia y Sincronización de Campo** <!-- id: 3.2 -->
+- [x] **T3.2: Pruebas de Concurrencia y Sincronización de Campo** <!-- id: 3.2 -->
   - Simular dos técnicos enviando datos de inspección concurrentes y verificar resolución de colisión sin pérdida de datos.
   - DoD: Test suite automatizada con reporte de pruebas de estrés.
