@@ -1,6 +1,6 @@
 import type { TipoServicio } from '@gafer/contracts';
 import { CLIENTES_MOCK, type ClienteFila } from '../../cliente-expediente/model/clientes-mock';
-import type { EstacionCritica, ServicioRegistro, VencimientoCertificado } from './estadisticas';
+import type { ServicioRegistro, VencimientoCertificado } from './estadisticas';
 
 interface Contrato {
   tipo: TipoServicio;
@@ -148,12 +148,3 @@ export function tiposContratadosDe(codigoCorto: string): TipoServicio[] {
 }
 
 export const TIPOS_CONTRATADOS: TipoServicio[] = [...new Set(Object.values(CONTRATOS).flatMap((cs) => cs.map((c) => c.tipo)))].sort();
-
-/** Estaciones con aura ROJO activa (4+ visitas consecutivas con consumo), como llegan desde los planos. */
-export const ESTACIONES_ROJO: EstacionCritica[] = [
-  { cliente: 'KALLPA', proyecto: 'CSF_SUNNY', plano: 'Planta baja', estacion: 12, visitasConsecutivas: 4 },
-  { cliente: 'KALLPA', proyecto: 'CSF_SUNNY', plano: 'Primer piso', estacion: 1, visitasConsecutivas: 5 },
-  { cliente: 'KALLPA', proyecto: 'CSF_SUNNY', plano: 'Primer piso', estacion: 2, visitasConsecutivas: 4 },
-  { cliente: 'SAMAY', proyecto: 'ALMACEN_02', plano: 'Planta baja', estacion: 7, visitasConsecutivas: 4 },
-  { cliente: 'FRIGOSUR', proyecto: 'ALMACEN_02', plano: 'Cámara 2', estacion: 3, visitasConsecutivas: 6 },
-];

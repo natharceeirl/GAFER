@@ -92,3 +92,7 @@
   display: flex;
   gap: 8px;
 }
+
+.terreno-canvas__lienzo--lectura {
+  cursor: pointer;
+}

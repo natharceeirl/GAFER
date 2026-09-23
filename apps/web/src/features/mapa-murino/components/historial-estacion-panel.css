@@ -126,3 +126,12 @@
   padding-top: 10px;
   border-top: 2px dashed var(--gf-rule);
 }
+
+.historial-panel__ubicacion {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--gf-info);
+  background: var(--gf-panel);
+  font-size: 12.5px;
+  color: var(--gf-ink-soft);
+}

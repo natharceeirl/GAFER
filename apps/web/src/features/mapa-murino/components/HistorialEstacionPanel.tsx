@@ -6,8 +6,16 @@ import './historial-estacion-panel.css';
 interface HistorialEstacionPanelProps {
   estacion: Estacion;
   historial: InspeccionRegistrada[];
+  /** Fechas en que el técnico la reubicó; conserva su aura (decisión A). */
+  reubicaciones?: string[];
+  instaladaEnVisita?: boolean;
   onCerrar: () => void;
 }
+
+const fecha = (f: string) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(f)
+    ? new Date(`${f}T00:00:00`).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })
+    : f;
 
 const TIPO_ESTACION: Record<Estacion['tipoEstacion'], string> = {
   CEBO_RATICIDA: 'Cebo raticida',
@@ -19,7 +27,13 @@ const TIPO_ESTACION: Record<Estacion['tipoEstacion'], string> = {
  * es solo consulta; las inspecciones se registran desde la app Android
  * (decisión C11).
  */
-export function HistorialEstacionPanel({ estacion, historial, onCerrar }: HistorialEstacionPanelProps) {
+export function HistorialEstacionPanel({
+  estacion,
+  historial,
+  reubicaciones = [],
+  instaladaEnVisita = false,
+  onCerrar,
+}: HistorialEstacionPanelProps) {
   const ultimasTres = historial.slice(-3).reverse();
 
   return (
@@ -43,6 +57,13 @@ export function HistorialEstacionPanel({ estacion, historial, onCerrar }: Histor
         </button>
       </div>
 
+      {instaladaEnVisita ? (
+        <p className="historial-panel__ubicacion">Instalada en esta visita: su consumo se evalúa desde la próxima.</p>
+      ) : null}
+      {reubicaciones.length > 0 ? (
+        <p className="historial-panel__ubicacion">Reubicada el {reubicaciones.map(fecha).join(', ')}. Conserva su historial y su aura.</p>
+      ) : null}
+
       <section className="historial-panel__lista">
         <h3>Últimas inspecciones</h3>
         {ultimasTres.length === 0 ? (
@@ -52,7 +73,7 @@ export function HistorialEstacionPanel({ estacion, historial, onCerrar }: Histor
             {ultimasTres.map((insp, i) => (
               <li key={`${insp.fecha}-${i}`}>
                 <div className="historial-panel__fila">
-                  <span className="tabular">{insp.fecha}</span>
+                  <span className="tabular">{fecha(insp.fecha)}</span>
                   <span className={insp.huboConsumo ? 'historial-panel__consumo--si' : 'historial-panel__consumo--no'}>
                     {insp.huboConsumo ? `consumo ${insp.porcentajeConsumo}%` : 'sin consumo'}
                   </span>

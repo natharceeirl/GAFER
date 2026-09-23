@@ -8,7 +8,7 @@ import { ClientesModule } from '../features/cliente-expediente/pages/ClientesMod
 import { BandejaAprobacionPage } from '../features/documentos/pages/BandejaAprobacionPage';
 import { DocumentoDetailPage } from '../features/documentos/pages/DocumentoDetailPage';
 import { useDocumentos } from '../features/documentos/model/documentos-context';
-import { MapaMurinoPage } from '../features/mapa-murino/pages/MapaMurinoPage';
+import { MapaMurinoPage, type SeleccionMapa } from '../features/mapa-murino/pages/MapaMurinoPage';
 import { MantenimientoPage } from '../features/mantenimiento/pages/MantenimientoPage';
 import { InventarioPage } from '../features/inventario/pages/InventarioPage';
 import { ProgramacionPage } from '../features/programacion/pages/ProgramacionPage';
@@ -53,6 +53,7 @@ export function AppShell() {
   const [sesion, setSesion] = useState<Sesion | null>(null);
   const [pantalla, setPantalla] = useState<Pantalla>('DASHBOARD');
   const [documentoAbierto, setDocumentoAbierto] = useState<string | null>(null);
+  const [mapaSeleccion, setMapaSeleccion] = useState<SeleccionMapa | null>(null);
   const { documentos } = useDocumentos();
 
   if (!sesion) {
@@ -113,7 +114,16 @@ export function AppShell() {
       <div className="app-shell__stage">
         {pantalla === 'DASHBOARD' ? <DashboardPage rol={sesion.rol} documentos={documentos} onAbrirDocumento={abrirDocumento} /> : null}
         {pantalla === 'PROGRAMACION' ? <ProgramacionPage usuario={sesion.usuario} rol={sesion.rol} /> : null}
-        {pantalla === 'CLIENTES' ? <ClientesModule usuario={sesion.usuario} rol={sesion.rol} onAbrirMapaMurino={() => setPantalla('MAPA_MURINO')} /> : null}
+        {pantalla === 'CLIENTES' ? (
+          <ClientesModule
+            usuario={sesion.usuario}
+            rol={sesion.rol}
+            onAbrirMapaMurino={(clienteId) => {
+              setMapaSeleccion({ clienteId });
+              setPantalla('MAPA_MURINO');
+            }}
+          />
+        ) : null}
         {pantalla === 'DOCUMENTOS' ? (
           detalleAbierto ? (
             <DocumentoDetailPage
@@ -127,7 +137,7 @@ export function AppShell() {
             <BandejaAprobacionPage documentos={documentos} onAbrirDocumento={setDocumentoAbierto} />
           )
         ) : null}
-        {pantalla === 'MAPA_MURINO' ? <MapaMurinoPage /> : null}
+        {pantalla === 'MAPA_MURINO' ? <MapaMurinoPage seleccion={mapaSeleccion} onSeleccionar={setMapaSeleccion} /> : null}
         {pantalla === 'MANTENIMIENTO' ? <MantenimientoPage rol={sesion.rol} /> : null}
         {pantalla === 'INVENTARIO' ? <InventarioPage rol={sesion.rol} /> : null}
         {pantalla === 'AUDITORIA' && sesion.rol === 'ADMINISTRADOR' ? <AuditoriaPage /> : null}

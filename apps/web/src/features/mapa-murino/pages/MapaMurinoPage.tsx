@@ -1,155 +1,97 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
 import { TicketHeader } from '../../../shared/ui/molecules/TicketHeader';
-import { StationTag } from '../../../shared/ui/molecules/StationTag';
-import { FoldPanel } from '../../../shared/ui/molecules/FoldPanel';
-import { TerrenoCanvas } from '../components/TerrenoCanvas';
-import { HistorialEstacionPanel } from '../components/HistorialEstacionPanel';
-import { PLANOS_MOCK, ESTACIONES_POR_PLANO, HISTORIAL_POR_ESTACION, resumenPorAura } from '../model/estaciones-mock';
-import { estacionInicial, type EstadoPlano, type Punto } from '../model/aura';
+import { fechaLocal } from '../../../shared/lib/fecha';
+import { useCartera } from '../../cliente-expediente/model/cartera-context';
+import { esClienteNuevo, proyectosDe } from '../../cliente-expediente/model/cartera';
+import { generarHistorial } from '../../estadisticas/model/historial-mock';
+import { mapasDeLaCartera, type MapaProyecto } from '../model/mapas-mock';
+import { MapaConVisitas } from '../components/MapaConVisitas';
+import { PlanoBaseEditor } from '../components/PlanoBaseEditor';
 import './mapa-murino-page.css';
 
-function planosIniciales(): EstadoPlano[] {
-  return PLANOS_MOCK.map((p) => ({
-    id: p.id,
-    nombre: p.nombre,
-    puntos: [],
-    cerrado: false,
-    estaciones: ESTACIONES_POR_PLANO[p.id].map((e) => estacionInicial(e, HISTORIAL_POR_ESTACION[e.id])),
-  }));
+export interface SeleccionMapa {
+  clienteId: string;
+  proyecto?: string;
 }
 
-export function MapaMurinoPage() {
-  // Un EstadoPlano por plano del proyecto — terreno y estaciones son
-  // independientes entre planos (spec §5.5, "hasta 20 planos por
-  // proyecto"; un edificio con pisos/habitaciones es varios planos,
-  // no subdivisiones dentro de uno solo).
-  const [planos, setPlanos] = useState<EstadoPlano[]>(planosIniciales);
-  const [planoActivoId, setPlanoActivoId] = useState(PLANOS_MOCK[0].id);
-  const [seleccionadaId, setSeleccionadaId] = useState<string | null>(null);
+interface Props {
+  seleccion: SeleccionMapa | null;
+  onSeleccionar: (seleccion: SeleccionMapa) => void;
+}
 
-  const planoActivo = planos.find((p) => p.id === planoActivoId)!;
-  const resumen = resumenPorAura(planoActivo.estaciones.map((e) => e.estacion));
-  const seleccionada = planoActivo.estaciones.find((e) => e.estacion.id === seleccionadaId) ?? null;
+interface Opcion {
+  clienteId: string;
+  cliente: string;
+  proyecto: string;
+  mapa: MapaProyecto | null;
+}
 
-  function actualizarPlanoActivo(cambio: Partial<EstadoPlano>) {
-    setPlanos((prev) => prev.map((p) => (p.id === planoActivoId ? { ...p, ...cambio } : p)));
-  }
+const clave = (o: { clienteId: string; proyecto: string }) => `${o.clienteId}/${o.proyecto}`;
 
-  function cambiarPlano(id: string) {
-    setPlanoActivoId(id);
-    setSeleccionadaId(null);
-  }
+/** Mapa murino por proyecto (§5): hasta 20 planos, hasta 100 estaciones por plano, a lo largo de todas sus visitas. */
+export function MapaMurinoPage({ seleccion, onSeleccionar }: Props) {
+  const { cartera } = useCartera();
+  const hoy = fechaLocal();
+  const historial = useMemo(() => generarHistorial(hoy), [hoy]);
+  const mapas = useMemo(() => mapasDeLaCartera(historial, cartera.clientes), [historial, cartera.clientes]);
 
-  function colocarEnPlano(id: string, punto: Punto | null) {
-    actualizarPlanoActivo({
-      estaciones: planoActivo.estaciones.map((e) => (e.estacion.id === id ? { ...e, posicion: punto } : e)),
-    });
-  }
+  const opciones: Opcion[] = [
+    ...mapas.map((m) => ({ clienteId: m.clienteId, cliente: m.cliente, proyecto: m.proyecto, mapa: m })),
+    ...cartera.clientes
+      .filter((c) => esClienteNuevo(cartera, c.id))
+      .flatMap((c) =>
+        proyectosDe(cartera, c.id)
+          .filter((p) => p.estado === 'ACTIVO' && p.servicios.some((s) => s.tipoId === 'DRT'))
+          .map((p) => ({ clienteId: c.id, cliente: c.codigoCorto, proyecto: p.nombre, mapa: null })),
+      ),
+  ];
+
+  const actual =
+    opciones.find((o) => o.clienteId === seleccion?.clienteId && (!seleccion.proyecto || o.proyecto === seleccion.proyecto)) ?? opciones[0];
+  const cliente = actual ? cartera.clientes.find((c) => c.id === actual.clienteId) : undefined;
 
   return (
     <div className="mapa-page">
       <TicketHeader
-        code={`${planoActivo.estaciones.length} estaciones`}
-        title={`Plano de KALLPA · ${planoActivo.nombre.toUpperCase()}`}
-        meta="Mapa Murino Dinámico — programa quincenal de roedores"
+        code={actual ? `${actual.cliente} · ${actual.proyecto}` : 'MAPA MURINO'}
+        title={cliente ? `Mapa murino · ${cliente.razonSocial}` : 'Mapa murino'}
+        meta={
+          actual?.mapa
+            ? `${actual.mapa.planos.length} ${actual.mapa.planos.length === 1 ? 'plano' : 'planos'} · ${actual.mapa.visitas.length} visitas de desratización`
+            : 'Programa de control de roedores'
+        }
       />
 
       <div className="mapa-page__body">
-        <nav className="mapa-planos" aria-label="Planos del proyecto">
-          {planos.map((plano) => (
-            <button
-              type="button"
-              key={plano.id}
-              className={plano.id === planoActivoId ? 'mapa-planos__item mapa-planos__item--activo' : 'mapa-planos__item'}
-              onClick={() => cambiarPlano(plano.id)}
-            >
-              {plano.nombre}
-              <span className="mapa-planos__conteo tabular">{plano.estaciones.length}</span>
-            </button>
-          ))}
-        </nav>
+        {opciones.length === 0 ? (
+          <p className="mapa-aviso">Ningún cliente tiene desratización contratada todavía.</p>
+        ) : (
+          <>
+            <label className="mapa-selector">
+              <span>Proyecto</span>
+              <select
+                value={clave(actual)}
+                onChange={(e) => {
+                  const o = opciones.find((x) => clave(x) === e.target.value);
+                  if (o) onSeleccionar({ clienteId: o.clienteId, proyecto: o.proyecto });
+                }}
+              >
+                {opciones.map((o) => (
+                  <option key={clave(o)} value={clave(o)}>
+                    {o.cliente} · {o.proyecto}
+                    {o.mapa ? ` (${o.mapa.visitas.length} visitas)` : ' (sin visitas)'}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        <section className="mapa-resumen" aria-label="Resumen por color de aura">
-          <div className="mapa-resumen__item mapa-resumen__item--sin-color">
-            <span className="tabular">{resumen.SIN_COLOR}</span>
-            <small>sin aura</small>
-          </div>
-          <div className="mapa-resumen__item mapa-resumen__item--verde">
-            <span className="tabular">{resumen.VERDE}</span>
-            <small>aura verde</small>
-          </div>
-          <div className="mapa-resumen__item mapa-resumen__item--amarillo">
-            <span className="tabular">{resumen.AMARILLO}</span>
-            <small>aura amarilla</small>
-          </div>
-          <div className="mapa-resumen__item mapa-resumen__item--naranja">
-            <span className="tabular">{resumen.NARANJA}</span>
-            <small>aura naranja</small>
-          </div>
-          <div className="mapa-resumen__item mapa-resumen__item--rojo">
-            <span className="tabular">{resumen.ROJO}</span>
-            <small>aura roja</small>
-          </div>
-        </section>
-
-        <section className="mapa-leyenda">
-          <p>
-            <strong>Ícono</strong> = estado de la última inspección (verde sin consumo, rojo con consumo). <strong>Aura</strong> = tendencia
-            acumulada de las últimas 4 inspecciones — sube o baja exactamente un nivel por visita. Son dos capas independientes.
-          </p>
-        </section>
-
-        <FoldPanel label={`Trazar terreno — ${planoActivo.nombre}`} defaultOpen>
-          <p className="mapa-terreno__ayuda">
-            Marque el contorno del local punto por punto: cada clic agrega un vértice. Vuelva a hacer clic en el primer punto para
-            cerrar el terreno y luego ubique las estaciones. Cada plano de la lista de arriba tiene su propio terreno y sus propias
-            estaciones. Las inspecciones de cada estación llegan desde la app Android de los técnicos.
-          </p>
-          <div className="mapa-page__lienzo-fila">
-            <TerrenoCanvas
-              puntos={planoActivo.puntos}
-              cerrado={planoActivo.cerrado}
-              estaciones={planoActivo.estaciones}
-              seleccionadaId={seleccionadaId}
-              onAgregarPunto={(punto) => actualizarPlanoActivo({ puntos: [...planoActivo.puntos, punto] })}
-              onCerrarTerreno={() => actualizarPlanoActivo({ cerrado: true })}
-              onDeshacerPunto={() => actualizarPlanoActivo({ puntos: planoActivo.puntos.slice(0, -1) })}
-              onReabrirTerreno={() => actualizarPlanoActivo({ cerrado: false })}
-              onLimpiarPlano={() =>
-                actualizarPlanoActivo({
-                  puntos: [],
-                  cerrado: false,
-                  estaciones: planoActivo.estaciones.map((e) => ({ ...e, posicion: null })),
-                })
-              }
-              onColocar={colocarEnPlano}
-              onSeleccionar={setSeleccionadaId}
-            />
-            {seleccionada ? (
-              <HistorialEstacionPanel
-                estacion={seleccionada.estacion}
-                historial={seleccionada.historial}
-                onCerrar={() => setSeleccionadaId(null)}
-              />
-            ) : null}
-          </div>
-        </FoldPanel>
-
-        <section
-          className="mapa-grid"
-          aria-label={`Estaciones de ${planoActivo.nombre} — seleccione una para ver su historial de inspecciones`}
-        >
-          {planoActivo.estaciones.map(({ estacion }) => (
-            <button
-              type="button"
-              key={estacion.id}
-              className={estacion.id === seleccionadaId ? 'mapa-grid__item mapa-grid__item--activo' : 'mapa-grid__item'}
-              onClick={() => setSeleccionadaId(estacion.id)}
-            >
-              <StationTag estacion={estacion} />
-            </button>
-          ))}
-        </section>
+            {actual.mapa ? (
+              <MapaConVisitas key={clave(actual)} mapa={actual.mapa} />
+            ) : (
+              <PlanoBaseEditor key={clave(actual)} proyecto={actual.proyecto} />
+            )}
+          </>
+        )}
       </div>
     </div>
   );

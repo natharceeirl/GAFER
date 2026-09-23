@@ -14,7 +14,8 @@ import { useProgramacion } from '../../programacion/model/programacion-context';
 import { agendaDelDia, type EstadoCampo } from '../../programacion/model/programacion';
 import { PERSONAL_MOCK } from '../../mantenimiento/model/mantenimiento-mock';
 import { alertasActivas, clientesSinServicio, type Alerta } from '../model/estadisticas';
-import { ESTACIONES_ROJO, generarHistorial, vencimientosDe } from '../model/historial-mock';
+import { generarHistorial, vencimientosDe } from '../model/historial-mock';
+import { estacionesRojoDe } from '../../mapa-murino/model/mapas-mock';
 import { EstadisticasPanel } from '../components/EstadisticasPanel';
 import { ResumenClientes } from '../components/ResumenClientes';
 import { ControlActividades } from '../components/ControlActividades';
@@ -66,12 +67,13 @@ export function DashboardPage({ rol, documentos, onAbrirDocumento }: DashboardPa
   const { visitas } = useProgramacion();
   const [pestana, setPestana] = useState<Pestana>('hoy');
   const historial = useMemo(() => generarHistorial(hoy), [hoy]);
+  const estacionesRojo = useMemo(() => estacionesRojoDe(historial, cartera.clientes), [historial, cartera.clientes]);
 
   const pendientes = documentos.filter((d) => d.estado === 'ENVIADO_A_REVISION');
   const alertas = alertasActivas({
     hoy,
     vencimientos: vencimientosDe(cartera.clientes),
-    estaciones: ESTACIONES_ROJO,
+    estaciones: estacionesRojo,
     pendientes,
     sinServicio: clientesSinServicio(historial, cartera.clientes, hoy, null),
   });

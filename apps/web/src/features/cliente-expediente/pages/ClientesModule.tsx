@@ -11,7 +11,8 @@ import type { DatosCliente, DatosProyecto, DatosServicio } from '../model/valida
 import { CATALOGOS_TEXTO_MOCK, EQUIPOS_MOCK, INSUMOS_MOCK, PERSONAL_MOCK } from '../../mantenimiento/model/mantenimiento-mock';
 import { useProgramacion } from '../../programacion/model/programacion-context';
 import { vistaTecnico } from '../model/vista-tecnico';
-import { ESTACIONES_ROJO, generarHistorial, tiposContratadosDe } from '../../estadisticas/model/historial-mock';
+import { generarHistorial, tiposContratadosDe } from '../../estadisticas/model/historial-mock';
+import { estacionesRojoDe } from '../../mapa-murino/model/mapas-mock';
 import { useAuditoria } from '../../auditoria/model/auditoria-context';
 import type { AccionAuditoria } from '../../auditoria/model/evento';
 import type { Rol } from '../../auth/model/roles';
@@ -28,7 +29,7 @@ type Vista =
 interface ClientesModuleProps {
   usuario: string;
   rol: Rol;
-  onAbrirMapaMurino: () => void;
+  onAbrirMapaMurino: (clienteId: string) => void;
 }
 
 /** Técnico con el que se muestra la maqueta de la app. */
@@ -59,6 +60,7 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
   const [vista, setVista] = useState<Vista>({ tipo: 'lista' });
   const hoy = fechaLocal();
   const historial = useMemo(() => generarHistorial(hoy), [hoy]);
+  const estacionesRojo = useMemo(() => estacionesRojoDe(historial, cartera.clientes), [historial, cartera.clientes]);
   /** Solo el Administrador da de alta clientes, sedes y servicios (§12, decisión C1). */
   const puedeDarDeAlta = rol === 'ADMINISTRADOR';
 
@@ -169,7 +171,7 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
           historial={historial}
           hoy={hoy}
           programaRoedores={
-            contrataDesratizacion ? { estacionesRojo: ESTACIONES_ROJO.filter((e) => e.cliente === cliente.codigoCorto) } : null
+            contrataDesratizacion ? { estacionesRojo: estacionesRojo.filter((e) => e.cliente === cliente.codigoCorto) } : null
           }
           vistaApp={{
             tecnico: TECNICO_DEMO,
@@ -181,7 +183,7 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
               hoy,
               insumos: INSUMOS_MOCK,
               equipos: EQUIPOS_MOCK,
-              estacionesRojo: ESTACIONES_ROJO,
+              estacionesRojo,
             }).sedes,
           }}
           puedeDarDeAlta={puedeDarDeAlta}
@@ -190,7 +192,7 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
           onEditarFicha={() => setVista({ tipo: 'editar-cliente', clienteId: cliente.id })}
           onNuevoProyecto={() => setVista({ tipo: 'nuevo-proyecto', clienteId: cliente.id })}
           onNuevoServicio={(proyectoId) => setVista({ tipo: 'nuevo-servicio', clienteId: cliente.id, proyectoId })}
-          onAbrirMapaMurino={onAbrirMapaMurino}
+          onAbrirMapaMurino={() => onAbrirMapaMurino(cliente.id)}
         />
       );
     }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { Button } from '../../../shared/ui/atoms/Button';
 import type { Estacion } from '@gafer/contracts';
 import type { EstacionConEstado, Punto } from '../model/aura';
+import { dentroDelPoligono } from '../model/geometria';
 import './terreno-canvas.css';
 
 const RADIO_VERTICE = 5;
@@ -27,6 +28,7 @@ function leerPaleta(el: HTMLElement) {
     amarillo: leer('--gf-amarillo'),
     naranja: leer('--gf-naranja'),
     rojo: leer('--gf-rojo'),
+    info: leer('--gf-info'),
   };
 }
 
@@ -59,6 +61,12 @@ function colorAura(paleta: ReturnType<typeof leerPaleta>, color: Estacion['color
   }
 }
 
+/** El mismo color con alfa 0, para que el degradé no pase por tonos grises. */
+function transparente(color: string): string {
+  const hex = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color);
+  return hex ? `rgba(${parseInt(hex[1], 16)}, ${parseInt(hex[2], 16)}, ${parseInt(hex[3], 16)}, 0)` : 'transparent';
+}
+
 /**
  * Intensidad del halo irradiado según el nivel de aura — a mayor
  * severidad, mayor opacidad, para que la mancha de calor "pese" más
@@ -88,18 +96,6 @@ function imantarAGrilla(punto: Punto): Punto {
   };
 }
 
-/** Ray casting — ¿el punto cae dentro del polígono cerrado? */
-function dentroDelPoligono(punto: Punto, poligono: Punto[]): boolean {
-  let dentro = false;
-  for (let i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
-    const pi = poligono[i];
-    const pj = poligono[j];
-    const cruza = pi.y > punto.y !== pj.y > punto.y && punto.x < ((pj.x - pi.x) * (punto.y - pi.y)) / (pj.y - pi.y) + pi.x;
-    if (cruza) dentro = !dentro;
-  }
-  return dentro;
-}
-
 interface TerrenoCanvasProps {
   puntos: Punto[];
   cerrado: boolean;
@@ -112,6 +108,12 @@ interface TerrenoCanvasProps {
   onLimpiarPlano: () => void;
   onColocar: (id: string, punto: Punto | null) => void;
   onSeleccionar: (id: string) => void;
+  /** Mapa de una visita ya registrada: solo se consultan las estaciones. */
+  soloLectura?: boolean;
+  /** Estaciones que el técnico movió en la visita mirada, con su lugar anterior. */
+  reubicaciones?: Array<{ id: string; desde: Punto }>;
+  /** Estaciones instaladas en la visita mirada. */
+  nuevas?: string[];
 }
 
 /**
@@ -134,6 +136,9 @@ export function TerrenoCanvas({
   onLimpiarPlano,
   onColocar,
   onSeleccionar,
+  soloLectura = false,
+  reubicaciones = [],
+  nuevas = [],
 }: TerrenoCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [cursor, setCursor] = useState<Punto | null>(null);
@@ -193,11 +198,13 @@ export function TerrenoCanvas({
 
     // mapa de calor — irradiación del aura entre estaciones próximas
     // (spec §5.4). Cada estación con aura activa aporta un halo radial
-    // que se desvanece con la distancia; donde dos halos se superponen,
-    // el modo de mezcla "lighter" los combina, así el área ENTRE dos
-    // estaciones cercanas también queda coloreada. Una estación sin
-    // aura (SIN_COLOR) no aporta nada. Va recortado al polígono para no
-    // pintar fuera del terreno.
+    // que se desvanece con la distancia; donde dos halos se superponen
+    // el color se intensifica, así el área ENTRE dos estaciones cercanas
+    // también queda coloreada. Cada halo se desvanece hacia su propio
+    // color transparente: mezclar hacia negro transparente, o sumar con
+    // "lighter", oscurece los focos cuando se juntan varias auras. Una
+    // estación sin aura (SIN_COLOR) no aporta nada. Va recortado al
+    // polígono para no pintar fuera del terreno.
     if (cerrado) {
       const conAura = colocadas.filter((c) => c.estacion.colorAura !== 'SIN_COLOR');
       if (conAura.length > 0) {
@@ -207,13 +214,12 @@ export function TerrenoCanvas({
         puntos.slice(1).forEach((p) => ctx.lineTo(p.x, p.y));
         ctx.closePath();
         ctx.clip();
-        ctx.globalCompositeOperation = 'lighter';
         conAura.forEach(({ estacion, posicion }) => {
           const color = colorAura(paleta, estacion.colorAura);
           if (!color) return;
           const gradiente = ctx.createRadialGradient(posicion.x, posicion.y, 0, posicion.x, posicion.y, RADIO_IRRADIACION);
           gradiente.addColorStop(0, color);
-          gradiente.addColorStop(1, 'transparent');
+          gradiente.addColorStop(1, transparente(color));
           ctx.globalAlpha = intensidadAura(estacion.colorAura);
           ctx.fillStyle = gradiente;
           ctx.beginPath();
@@ -221,7 +227,6 @@ export function TerrenoCanvas({
           ctx.fill();
         });
         ctx.globalAlpha = 1;
-        ctx.globalCompositeOperation = 'source-over';
         ctx.restore();
       }
     }
@@ -254,6 +259,35 @@ export function TerrenoCanvas({
       ctx.stroke();
     });
 
+    // reubicaciones de la visita: contorno punteado donde estaba y flecha hasta donde quedó
+    reubicaciones.forEach(({ id, desde }) => {
+      const destino = colocadas.find((c) => c.estacion.id === id);
+      if (!destino) return;
+      const { x, y } = destino.posicion;
+      const angulo = Math.atan2(y - desde.y, x - desde.x);
+      const fin = {
+        x: x - Math.cos(angulo) * (RADIO_AURA + 2),
+        y: y - Math.sin(angulo) * (RADIO_AURA + 2),
+      };
+      ctx.strokeStyle = paleta.info;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      trazarFormaEstacion(ctx, desde.x, desde.y, RADIO_ESTACION, destino.estacion.tipoEstacion);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(desde.x + Math.cos(angulo) * RADIO_ESTACION, desde.y + Math.sin(angulo) * RADIO_ESTACION);
+      ctx.lineTo(fin.x, fin.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(fin.x, fin.y);
+      ctx.lineTo(fin.x - Math.cos(angulo - 0.45) * 8, fin.y - Math.sin(angulo - 0.45) * 8);
+      ctx.lineTo(fin.x - Math.cos(angulo + 0.45) * 8, fin.y - Math.sin(angulo + 0.45) * 8);
+      ctx.closePath();
+      ctx.fillStyle = paleta.info;
+      ctx.fill();
+    });
+
     // estaciones colocadas — halo individual de aura (capa 2, spec §5.2) + ícono (última visita) + número
     colocadas.forEach(({ estacion, posicion }) => {
       const { x, y } = posicion;
@@ -283,6 +317,16 @@ export function TerrenoCanvas({
       ctx.textBaseline = 'middle';
       ctx.fillText(String(estacion.numero), x, y + 1);
 
+      if (nuevas.includes(estacion.id)) {
+        ctx.beginPath();
+        ctx.arc(x, y, RADIO_AURA + 3, 0, Math.PI * 2);
+        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = paleta.info;
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
       if (estacion.id === seleccionadaId) {
         ctx.beginPath();
         ctx.arc(x, y, RADIO_ESTACION + 5, 0, Math.PI * 2);
@@ -307,7 +351,7 @@ export function TerrenoCanvas({
       ctx.stroke();
       ctx.setLineDash([]);
     }
-  }, [puntos, cerrado, cursor, colocadas, todasColocadas, siguienteEstacion, seleccionadaId]);
+  }, [puntos, cerrado, cursor, colocadas, todasColocadas, siguienteEstacion, seleccionadaId, reubicaciones, nuevas]);
 
   useEffect(() => {
     dibujar();
@@ -317,7 +361,10 @@ export function TerrenoCanvas({
     mediaOscuro.addEventListener('change', onCambio);
     // El botón de tema cambia data-theme en <html> sin tocar la preferencia del sistema.
     const observador = new MutationObserver(onCambio);
-    observador.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    observador.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
     return () => {
       window.removeEventListener('resize', onCambio);
       mediaOscuro.removeEventListener('change', onCambio);
@@ -342,6 +389,7 @@ export function TerrenoCanvas({
         onSeleccionar(tocada.estacion.id);
         return;
       }
+      if (soloLectura) return;
 
       // si no tocó ninguna existente, coloca la próxima en la lista.
       // Las estaciones NO se imantan: una trampa va donde hay actividad
@@ -372,6 +420,7 @@ export function TerrenoCanvas({
   }
 
   function manejarMovimiento(e: ReactPointerEvent<HTMLCanvasElement>) {
+    if (soloLectura) return;
     const punto = posicionDesdeEvento(e);
     setCursor(cerrado ? punto : imantarAGrilla(punto));
   }
@@ -395,7 +444,7 @@ export function TerrenoCanvas({
       <div className="terreno-canvas__stage">
         <canvas
           ref={canvasRef}
-          className="terreno-canvas__lienzo"
+          className={soloLectura ? 'terreno-canvas__lienzo terreno-canvas__lienzo--lectura' : 'terreno-canvas__lienzo'}
           onPointerDown={manejarClic}
           onPointerMove={manejarMovimiento}
           onPointerLeave={() => setCursor(null)}
@@ -403,13 +452,13 @@ export function TerrenoCanvas({
         {puntos.length === 0 ? (
           <p className="terreno-canvas__vacio">Haga clic en el lienzo para marcar el primer punto del terreno</p>
         ) : null}
-        {cerrado && !todasColocadas ? (
+        {!soloLectura && cerrado && !todasColocadas ? (
           <div className="terreno-canvas__aviso" aria-hidden="true">
-            Estación N.° {siguienteEstacion?.estacion.numero}: haga clic dentro del terreno para ubicarla, o en una estación ya
-            ubicada para ver su historial
+            Estación N.° {siguienteEstacion?.estacion.numero}: haga clic dentro del terreno para ubicarla, o en una estación ya ubicada para
+            ver su historial
           </div>
         ) : null}
-        {todasColocadas && !seleccionadaId ? (
+        {soloLectura ? null : todasColocadas && !seleccionadaId ? (
           <div className="terreno-canvas__sello" aria-hidden="true">
             {estaciones.length}/{estaciones.length} ESTACIONES UBICADAS
           </div>
@@ -420,20 +469,26 @@ export function TerrenoCanvas({
         ) : null}
       </div>
 
-      <div className="terreno-canvas__barra">
-        <span className="terreno-canvas__conteo tabular">
-          {puntos.length} {puntos.length === 1 ? 'punto' : 'puntos'}
-          {cerrado ? ` · cerrado · ${colocadas.length}/${estaciones.length} estaciones` : puntos.length >= 3 ? ' · haga clic en el primer punto para cerrar' : ''}
-        </span>
-        <div className="terreno-canvas__botones">
-          <Button type="button" variant="secondary" onClick={deshacer} disabled={puntos.length === 0 && colocadas.length === 0}>
-            {etiquetaDeshacer}
-          </Button>
-          <Button type="button" variant="secondary" onClick={onLimpiarPlano} disabled={puntos.length === 0}>
-            Limpiar
-          </Button>
+      {soloLectura ? null : (
+        <div className="terreno-canvas__barra">
+          <span className="terreno-canvas__conteo tabular">
+            {puntos.length} {puntos.length === 1 ? 'punto' : 'puntos'}
+            {cerrado
+              ? ` · cerrado · ${colocadas.length}/${estaciones.length} estaciones`
+              : puntos.length >= 3
+                ? ' · haga clic en el primer punto para cerrar'
+                : ''}
+          </span>
+          <div className="terreno-canvas__botones">
+            <Button type="button" variant="secondary" onClick={deshacer} disabled={puntos.length === 0 && colocadas.length === 0}>
+              {etiquetaDeshacer}
+            </Button>
+            <Button type="button" variant="secondary" onClick={onLimpiarPlano} disabled={puntos.length === 0}>
+              Limpiar
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

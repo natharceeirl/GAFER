@@ -12,7 +12,8 @@ import {
   vencimientosCertificados,
   type ServicioRegistro,
 } from '../model/estadisticas';
-import { ESTACIONES_ROJO, TIPOS_CONTRATADOS, VENCIMIENTOS } from '../model/historial-mock';
+import { TIPOS_CONTRATADOS, VENCIMIENTOS } from '../model/historial-mock';
+import { estacionesRojoDe } from '../../mapa-murino/model/mapas-mock';
 import { BarrasAgrupadas, BarrasApiladas, BarrasHorizontales, Filtro, Tarjeta } from './Graficos';
 
 interface Props {
@@ -35,6 +36,7 @@ export function EstadisticasPanel({ historial, hoy, clientes }: Props) {
   const tecnicos = useMemo(() => [...new Set(historial.flatMap((s) => (s.tecnico ? [s.tecnico] : [])))].sort(), [historial]);
   const productos = useMemo(() => [...new Set(historial.flatMap((s) => s.consumos.map((c) => c.producto)))].sort(), [historial]);
   const unidades = useMemo(() => new Map(historial.flatMap((s) => s.consumos.map((c) => [c.producto, c.unidad] as const))), [historial]);
+  const estacionesRojo = useMemo(() => estacionesRojoDe(historial, clientes), [historial, clientes]);
   const activos = clientes.filter((c) => c.estado === 'ACTIVO');
 
   const [cumpl, setCumpl] = useState({ meses: '6', tecnico: TODOS, clienteId: TODOS, tipo: TODOS });
@@ -53,7 +55,7 @@ export function EstadisticasPanel({ historial, hoy, clientes }: Props) {
   const totalProg = datosCumpl.reduce((s, d) => s + d.programados, 0);
   const totalEjec = datosCumpl.reduce((s, d) => s + d.ejecutados, 0);
   const venc = vencimientosCertificados(VENCIMIENTOS, hoy, (tipoVenc || null) as TipoServicio | null);
-  const estaciones = estacionesCriticas(ESTACIONES_ROJO, { cliente: rojo.cliente || undefined, proyecto: rojo.proyecto || undefined });
+  const estaciones = estacionesCriticas(estacionesRojo, { cliente: rojo.cliente || undefined, proyecto: rojo.proyecto || undefined });
   const sinServicio = clientesSinServicio(historial, clientes, hoy, (tipoSinServicio || null) as TipoServicio | null);
 
   return (
@@ -185,14 +187,14 @@ export function EstadisticasPanel({ historial, hoy, clientes }: Props) {
               id="est-rojo-cliente"
               etiqueta="Cliente"
               valor={rojo.cliente}
-              opciones={[{ valor: TODOS, texto: 'Todos' }, ...[...new Set(ESTACIONES_ROJO.map((e) => e.cliente))].map((c) => ({ valor: c, texto: c }))]}
+              opciones={[{ valor: TODOS, texto: 'Todos' }, ...[...new Set(estacionesRojo.map((e) => e.cliente))].map((c) => ({ valor: c, texto: c }))]}
               onCambiar={(v) => setRojo((p) => ({ ...p, cliente: v }))}
             />
             <Filtro
               id="est-rojo-proyecto"
               etiqueta="Proyecto"
               valor={rojo.proyecto}
-              opciones={[{ valor: TODOS, texto: 'Todos' }, ...[...new Set(ESTACIONES_ROJO.map((e) => e.proyecto))].map((p) => ({ valor: p, texto: p }))]}
+              opciones={[{ valor: TODOS, texto: 'Todos' }, ...[...new Set(estacionesRojo.map((e) => e.proyecto))].map((p) => ({ valor: p, texto: p }))]}
               onCambiar={(v) => setRojo((p) => ({ ...p, proyecto: v }))}
             />
           </>
