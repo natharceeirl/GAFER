@@ -8,6 +8,9 @@ import { useCartera } from '../model/cartera-context';
 import { agregarCliente, agregarProyecto, agregarServicio, esClienteNuevo, proyectosDe } from '../model/cartera';
 import type { DatosCliente, DatosProyecto, DatosServicio } from '../model/validaciones';
 import { CATALOGOS_TEXTO_MOCK, EQUIPOS_MOCK, INSUMOS_MOCK } from '../../mantenimiento/model/mantenimiento-mock';
+import { useAuditoria } from '../../auditoria/model/auditoria-context';
+import type { Rol } from '../../auth/model/roles';
+import { ahora } from '../../../shared/lib/fecha';
 
 type Vista =
   | { tipo: 'lista' }
@@ -17,20 +20,33 @@ type Vista =
   | { tipo: 'nuevo-servicio'; clienteId: string; proyectoId: string };
 
 interface ClientesModuleProps {
-  /** Spec §12: solo el Administrador da de alta clientes, proyectos y servicios. */
-  puedeDarDeAlta: boolean;
+  usuario: string;
+  rol: Rol;
 }
 
 const GIROS = CATALOGOS_TEXTO_MOCK.find((c) => c.id === 'giros')?.items ?? [];
 
 /** Jerarquía CLIENTE → PROYECTO (sede) → SERVICIO (§7), sobre la cartera compartida de la app. */
-export function ClientesModule({ puedeDarDeAlta }: ClientesModuleProps) {
+export function ClientesModule({ usuario, rol }: ClientesModuleProps) {
   const { cartera, setCartera } = useCartera();
+  const { registrar } = useAuditoria();
   const [vista, setVista] = useState<Vista>({ tipo: 'lista' });
+  /** Solo el Administrador da de alta clientes, sedes y servicios (§12, decisión C1). */
+  const puedeDarDeAlta = rol === 'ADMINISTRADOR';
 
   function registrarCliente(d: DatosCliente) {
     const { estado, clienteId } = agregarCliente(cartera, d);
     setCartera(() => estado);
+    const fechaHora = ahora();
+    registrar({
+      id: `${fechaHora}-alta-${d.codigoCorto}`,
+      fechaHora,
+      usuario,
+      rol,
+      accion: 'Alta de cliente',
+      referencia: d.codigoCorto,
+      detalle: `${d.razonSocial.trim()} · RUC ${d.ruc}`,
+    });
     setVista({ tipo: 'expediente', clienteId, aviso: `Cliente ${d.codigoCorto} registrado. El siguiente paso es registrar su primera sede.` });
   }
 

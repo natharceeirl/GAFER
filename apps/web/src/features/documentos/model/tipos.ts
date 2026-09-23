@@ -34,6 +34,14 @@ export interface DocumentoDetalle extends DocumentoResumen {
   numeroCertificado: string;
   vencimientoCertificado: string;
   firmaCliente: string;
+  /** Sincronización en dos fases (C15): las fotos llegan después que los datos. */
+  fotosRecibidas?: number;
+  fotosSeleccionadas?: number[];
+  comentarioObservacion?: string;
+  /** Al aprobar (C7, C13, C14). */
+  firmaDirector?: string;
+  generados?: string[];
+  anexos?: string[];
 }
 
 export const SIGUIENTE_ESTADO: Partial<Record<EstadoDocumento, EstadoDocumento>> = {

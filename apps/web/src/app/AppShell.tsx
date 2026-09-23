@@ -5,14 +5,23 @@ import { DashboardPage } from '../features/estadisticas/pages/DashboardPage';
 import { ClientesModule } from '../features/cliente-expediente/pages/ClientesModule';
 import { BandejaAprobacionPage } from '../features/documentos/pages/BandejaAprobacionPage';
 import { DocumentoDetailPage } from '../features/documentos/pages/DocumentoDetailPage';
-import { DOCUMENTOS_DETALLE_MOCK, DOCUMENTOS_MOCK } from '../features/documentos/model/documentos-mock';
+import { useDocumentos } from '../features/documentos/model/documentos-context';
 import { MapaMurinoPage } from '../features/mapa-murino/pages/MapaMurinoPage';
 import { MantenimientoPage } from '../features/mantenimiento/pages/MantenimientoPage';
 import { InventarioPage } from '../features/inventario/pages/InventarioPage';
 import { ProgramacionPage } from '../features/programacion/pages/ProgramacionPage';
+import { AuditoriaPage } from '../features/auditoria/pages/AuditoriaPage';
 import './app-shell.css';
 
-type Pantalla = 'DASHBOARD' | 'PROGRAMACION' | 'CLIENTES' | 'DOCUMENTOS' | 'MAPA_MURINO' | 'MANTENIMIENTO' | 'INVENTARIO';
+type Pantalla =
+  | 'DASHBOARD'
+  | 'PROGRAMACION'
+  | 'CLIENTES'
+  | 'DOCUMENTOS'
+  | 'MAPA_MURINO'
+  | 'MANTENIMIENTO'
+  | 'INVENTARIO'
+  | 'AUDITORIA';
 
 interface Sesion {
   rol: Rol;
@@ -32,12 +41,17 @@ const PANTALLAS: Array<{ id: Pantalla; etiqueta: string }> = [
   { id: 'MAPA_MURINO', etiqueta: 'Mapa Murino' },
   { id: 'MANTENIMIENTO', etiqueta: 'Mantenimiento' },
   { id: 'INVENTARIO', etiqueta: 'Inventario' },
+  { id: 'AUDITORIA', etiqueta: 'Auditoría' },
 ];
+
+/** La bitácora de auditoría es exclusiva del Administrador (decisión C6). */
+const SOLO_ADMINISTRADOR: Pantalla[] = ['AUDITORIA'];
 
 export function AppShell() {
   const [sesion, setSesion] = useState<Sesion | null>(null);
   const [pantalla, setPantalla] = useState<Pantalla>('DASHBOARD');
   const [documentoAbierto, setDocumentoAbierto] = useState<string | null>(null);
+  const { documentos } = useDocumentos();
 
   if (!sesion) {
     return (
@@ -51,7 +65,8 @@ export function AppShell() {
     );
   }
 
-  const detalleAbierto = documentoAbierto ? DOCUMENTOS_DETALLE_MOCK[documentoAbierto] : undefined;
+  const pantallasVisibles = PANTALLAS.filter((p) => sesion.rol === 'ADMINISTRADOR' || !SOLO_ADMINISTRADOR.includes(p.id));
+  const detalleAbierto = documentoAbierto ? documentos.find((d) => d.id === documentoAbierto) : undefined;
 
   function abrirDocumento(id: string) {
     setPantalla('DOCUMENTOS');
@@ -62,7 +77,7 @@ export function AppShell() {
     <div className="app-shell">
       <nav className="app-shell__rail" aria-label="Selector de pantalla (solo para revisión del mockup)">
         <ul className="app-shell__nav">
-          {PANTALLAS.map((item) => (
+          {pantallasVisibles.map((item) => (
             <li key={item.id}>
               <button
                 type="button"
@@ -92,19 +107,26 @@ export function AppShell() {
       </nav>
 
       <div className="app-shell__stage">
-        {pantalla === 'DASHBOARD' ? <DashboardPage rol={sesion.rol} documentos={DOCUMENTOS_MOCK} onAbrirDocumento={abrirDocumento} /> : null}
-        {pantalla === 'PROGRAMACION' ? <ProgramacionPage /> : null}
-        {pantalla === 'CLIENTES' ? <ClientesModule puedeDarDeAlta={sesion.rol === 'ADMINISTRADOR'} /> : null}
+        {pantalla === 'DASHBOARD' ? <DashboardPage rol={sesion.rol} documentos={documentos} onAbrirDocumento={abrirDocumento} /> : null}
+        {pantalla === 'PROGRAMACION' ? <ProgramacionPage usuario={sesion.usuario} rol={sesion.rol} /> : null}
+        {pantalla === 'CLIENTES' ? <ClientesModule usuario={sesion.usuario} rol={sesion.rol} /> : null}
         {pantalla === 'DOCUMENTOS' ? (
           detalleAbierto ? (
-            <DocumentoDetailPage key={detalleAbierto.id} detalle={detalleAbierto} />
+            <DocumentoDetailPage
+              key={detalleAbierto.id}
+              detalle={detalleAbierto}
+              rol={sesion.rol}
+              usuario={sesion.usuario}
+              onVolver={() => setDocumentoAbierto(null)}
+            />
           ) : (
-            <BandejaAprobacionPage documentos={DOCUMENTOS_MOCK} onAbrirDocumento={setDocumentoAbierto} />
+            <BandejaAprobacionPage documentos={documentos} onAbrirDocumento={setDocumentoAbierto} />
           )
         ) : null}
         {pantalla === 'MAPA_MURINO' ? <MapaMurinoPage /> : null}
         {pantalla === 'MANTENIMIENTO' ? <MantenimientoPage rol={sesion.rol} /> : null}
-        {pantalla === 'INVENTARIO' ? <InventarioPage /> : null}
+        {pantalla === 'INVENTARIO' ? <InventarioPage rol={sesion.rol} /> : null}
+        {pantalla === 'AUDITORIA' && sesion.rol === 'ADMINISTRADOR' ? <AuditoriaPage /> : null}
       </div>
     </div>
   );

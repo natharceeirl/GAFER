@@ -1,12 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
+import { fechaLocal } from '../../../shared/lib/fecha';
 import { agregarVisita, type DatosVisita, type VisitaProgramada } from './programacion';
-
-export function fechaLocal(desplazamientoDias = 0): string {
-  const d = new Date();
-  d.setDate(d.getDate() + desplazamientoDias);
-  const dos = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
-}
 
 function visitasIniciales(): VisitaProgramada[] {
   const hoy = fechaLocal();

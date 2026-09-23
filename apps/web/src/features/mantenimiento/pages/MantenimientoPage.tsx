@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { TicketHeader } from '../../../shared/ui/molecules/TicketHeader';
+import { Bloque, Campo } from '../../../shared/ui/molecules/FormFields';
 import { Button } from '../../../shared/ui/atoms/Button';
 import type { Rol } from '../../auth/model/roles';
 import { INSUMOS_MOCK, EQUIPOS_MOCK, PERSONAL_MOCK, CATALOGOS_TEXTO_MOCK } from '../model/mantenimiento-mock';
+import { useConfiguracion } from '../model/configuracion-context';
 import type { CatalogoTexto, EstadoOperativo } from '../model/tipos';
 import './mantenimiento-page.css';
 
@@ -10,6 +12,7 @@ const SECCIONES = [
   { id: 'insumos', etiqueta: 'Insumos' },
   { id: 'equipos', etiqueta: 'Equipos' },
   { id: 'personal', etiqueta: 'Personal' },
+  { id: 'director', etiqueta: 'Director Técnico' },
   { id: 'catalogos', etiqueta: 'Catálogos de texto' },
 ] as const;
 
@@ -21,7 +24,7 @@ type SeccionId = (typeof SECCIONES)[number]['id'];
  * tabla de roles §12.
  */
 const SECCIONES_POR_ROL: Record<Rol, SeccionId[]> = {
-  ADMINISTRADOR: ['insumos', 'equipos', 'personal', 'catalogos'],
+  ADMINISTRADOR: ['insumos', 'equipos', 'personal', 'director', 'catalogos'],
   SUPERVISOR: ['catalogos'],
 };
 
@@ -42,6 +45,7 @@ function TablaInsumos() {
           <th>Conc.</th>
           <th>N° DIGESA</th>
           <th>Dosis referencial</th>
+          <th title="Se adjuntan solos al PDF cuando el insumo se consume (decisión C14)">Anexos del PDF</th>
           <th>Estado</th>
         </tr>
       </thead>
@@ -54,6 +58,7 @@ function TablaInsumos() {
             <td>{i.concentracion}</td>
             <td className="mant-tabla__mono">{i.registroDigesa}</td>
             <td>{i.dosisReferencial}</td>
+            <td className="mant-tabla__anexos">Ficha técnica · MSDS</td>
             <td>
               <span className={`mant-estado mant-estado--${i.estado === 'ACTIVO' ? 'ok' : 'off'}`}>{i.estado}</span>
             </td>
@@ -117,6 +122,73 @@ function TablaPersonal() {
         ))}
       </tbody>
     </table>
+  );
+}
+
+/**
+ * Director Técnico (decisión C7): se carga una sola vez y el sistema
+ * estampa su firma y CIP en cada PDF al aprobarse, sin un cuarto usuario.
+ */
+function DirectorTecnicoForm() {
+  const { director, setDirector } = useConfiguracion();
+  const [nombre, setNombre] = useState(director?.nombre ?? '');
+  const [cip, setCip] = useState(director?.cip ?? '');
+  const [firma, setFirma] = useState<string | null>(director?.firma ?? null);
+  const [aviso, setAviso] = useState<string | null>(null);
+  const incompleto = nombre.trim() === '' || !/^\d{4,7}$/.test(cip.trim());
+
+  function cargarFirma(e: ChangeEvent<HTMLInputElement>) {
+    const archivo = e.target.files?.[0];
+    if (!archivo) return;
+    const lector = new FileReader();
+    lector.onload = () => setFirma(typeof lector.result === 'string' ? lector.result : null);
+    lector.readAsDataURL(archivo);
+  }
+
+  function guardar(e: FormEvent) {
+    e.preventDefault();
+    if (incompleto) return;
+    setDirector({ nombre: nombre.trim(), cip: cip.trim(), firma });
+    setAviso('Director Técnico actualizado. Se estampará en los próximos documentos que se aprueben.');
+  }
+
+  return (
+    <form className="mant-director" onSubmit={guardar} noValidate>
+      {aviso ? (
+        <p className="mant-director__aviso" role="status">
+          {aviso}
+        </p>
+      ) : null}
+      <Bloque titulo="Firma estampada en los PDF">
+        <Campo id="dir-nombre" label="Nombre completo">
+          <input id="dir-nombre" type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ing. Carlos Medina Ruiz" />
+        </Campo>
+        <Campo id="dir-cip" label="N° de CIP" ayuda="Colegio de Ingenieros del Perú, solo números.">
+          <input
+            id="dir-cip"
+            type="text"
+            inputMode="numeric"
+            className="ff-campo__mono"
+            value={cip}
+            onChange={(e) => setCip(e.target.value.replace(/\D/g, ''))}
+            placeholder="84512"
+          />
+        </Campo>
+        <Campo id="dir-firma" label="Firma gráfica" ayuda="Imagen PNG o JPG con fondo claro." ancho="completo">
+          <input id="dir-firma" type="file" accept="image/png,image/jpeg" onChange={cargarFirma} />
+        </Campo>
+        {firma ? <img className="mant-director__firma ff-campo--completo" src={firma} alt="Firma cargada del Director Técnico" /> : null}
+      </Bloque>
+      <p className="mant-director__nota">
+        Anexos del PDF: la ficha técnica y la MSDS de cada insumo se adjuntan solas cuando el insumo se consume, junto con la
+        Resolución de licencia sanitaria de GAFER.
+      </p>
+      <div className="mant-director__acciones">
+        <Button type="submit" variant="primary" disabled={incompleto}>
+          Guardar Director Técnico
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -198,6 +270,7 @@ export function MantenimientoPage({ rol }: MantenimientoPageProps) {
           {seccion === 'insumos' && <TablaInsumos />}
           {seccion === 'equipos' && <TablaEquipos />}
           {seccion === 'personal' && <TablaPersonal />}
+          {seccion === 'director' && <DirectorTecnicoForm />}
           {seccion === 'catalogos' && (
             <div className="mant-catalogos-grid">
               {CATALOGOS_TEXTO_MOCK.filter((c) => rol === 'ADMINISTRADOR' || !c.soloAdministrador).map((c) => (

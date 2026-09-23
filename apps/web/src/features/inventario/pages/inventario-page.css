@@ -74,3 +74,28 @@
 .inv-estado--reponer {
   color: var(--gf-rojo);
 }
+
+.inv-alerta,
+.inv-aviso {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: var(--gf-radius);
+  font-weight: 700;
+  font-size: 14px;
+}
+.inv-alerta {
+  background: var(--gf-amarillo);
+  color: var(--gf-amarillo-ink);
+}
+.inv-aviso {
+  background: var(--gf-verde);
+  color: var(--gf-verde-ink);
+}
+.inv-entrada {
+  display: grid;
+  gap: 12px;
+}
+.inv-entrada__acciones {
+  display: flex;
+  justify-content: flex-end;
+}

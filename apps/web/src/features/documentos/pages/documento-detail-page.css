@@ -153,3 +153,166 @@
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+.documento-volver {
+  border: none;
+  background: none;
+  font-family: var(--gf-font-ui);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--gf-ink-soft);
+  cursor: pointer;
+  padding: 8px;
+}
+.documento-volver:hover {
+  color: var(--gf-ink);
+}
+
+.documento-nota,
+.documento-ayuda,
+.documento-acciones__nota {
+  margin: 0;
+  font-size: 13px;
+  color: var(--gf-ink-soft);
+}
+.documento-acciones__nota {
+  align-self: center;
+  margin-right: auto;
+}
+
+.documento-aviso,
+.documento-error,
+.documento-sync,
+.documento-comentario {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: var(--gf-radius);
+  font-size: 14px;
+  font-weight: 600;
+}
+.documento-aviso {
+  background: var(--gf-verde);
+  color: var(--gf-verde-ink);
+}
+.documento-error {
+  background: var(--gf-naranja);
+  color: var(--gf-naranja-ink);
+}
+.documento-sync {
+  background: var(--gf-amarillo);
+  color: var(--gf-amarillo-ink);
+}
+.documento-comentario {
+  position: relative;
+  z-index: 2;
+  background: var(--gf-panel-raised);
+  border: 1.5px solid var(--gf-naranja);
+  color: var(--gf-ink);
+  font-weight: 400;
+}
+
+.documento-contador {
+  margin-left: 8px;
+  font-family: var(--gf-font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--gf-ink-soft);
+}
+.documento-contador--error {
+  color: var(--gf-naranja);
+}
+.documento-error-inline {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gf-naranja);
+}
+
+.documento-foto-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--gf-font-mono);
+  font-size: 12px;
+  color: var(--gf-ink-faint);
+  padding: 0;
+}
+button.documento-foto-tile {
+  cursor: pointer;
+}
+.documento-foto-tile--elegida {
+  border-style: solid;
+  border-color: var(--gf-ink);
+  background: var(--gf-ink);
+  color: var(--gf-panel);
+}
+.documento-foto-tile--pendiente {
+  opacity: 0.5;
+  background: repeating-linear-gradient(45deg, var(--gf-panel), var(--gf-panel) 6px, var(--gf-panel-raised) 6px, var(--gf-panel-raised) 12px);
+}
+
+.documento-edicion {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1.5px solid var(--gf-ink);
+  border-radius: var(--gf-radius);
+  background: var(--gf-panel-raised);
+}
+.documento-edicion label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--gf-ink-soft);
+}
+.documento-edicion select,
+.documento-observacion input {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  background: var(--gf-panel);
+  color: var(--gf-ink);
+  font-family: var(--gf-font-ui);
+  font-size: 14px;
+}
+.documento-edicion span {
+  font-size: 12.5px;
+  color: var(--gf-ink-faint);
+}
+
+.documento-editable {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 10px;
+  border: 1.5px solid var(--gf-ink);
+  border-radius: var(--gf-radius);
+  background: var(--gf-panel-raised);
+  color: var(--gf-ink);
+  font-family: var(--gf-font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.documento-generacion {
+  padding: 14px 16px;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  background: var(--gf-panel);
+}
+.documento-generacion h3 {
+  margin: 12px 0 6px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--gf-ink-faint);
+}
+.documento-archivos {
+  font-family: var(--gf-font-mono);
+  font-size: 13px;
+}

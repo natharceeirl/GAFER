@@ -9,7 +9,10 @@ import { useCartera } from '../../cliente-expediente/model/cartera-context';
 import { proyectosDe, sedesActivas } from '../../cliente-expediente/model/cartera';
 import { PERSONAL_MOCK } from '../../mantenimiento/model/mantenimiento-mock';
 import { agendaDelDia, tecnicosDisponibles, validarVisita, type DatosVisita, type EstadoCampo } from '../model/programacion';
-import { fechaLocal, useProgramacion } from '../model/programacion-context';
+import { useProgramacion } from '../model/programacion-context';
+import { ahora, fechaLocal } from '../../../shared/lib/fecha';
+import { useAuditoria } from '../../auditoria/model/auditoria-context';
+import type { Rol } from '../../auth/model/roles';
 import './programacion-page.css';
 
 const ESTADO: Record<EstadoCampo, { etiqueta: string; color: ColorAura }> = {
@@ -32,9 +35,15 @@ const VACIO: Omit<DatosVisita, 'fecha'> = {
  * técnicos las ven y las atienden desde la app Android (decisiones C10 y
  * C11); el titular es opcional (C12).
  */
-export function ProgramacionPage() {
+interface ProgramacionPageProps {
+  usuario: string;
+  rol: Rol;
+}
+
+export function ProgramacionPage({ usuario, rol }: ProgramacionPageProps) {
   const { cartera } = useCartera();
   const { visitas, programar } = useProgramacion();
+  const { registrar } = useAuditoria();
   const hoy = fechaLocal();
   const [fechaAgenda, setFechaAgenda] = useState(hoy);
   const [datos, setDatos] = useState<DatosVisita>({ ...VACIO, fecha: hoy });
@@ -65,6 +74,16 @@ export function ProgramacionPage() {
     if (Object.keys(validarVisita(datos, hoy)).length > 0) return;
     programar(datos);
     const d = describir(datos.clienteId, datos.proyectoId, datos.servicioId);
+    const fechaHora = ahora();
+    registrar({
+      id: `${fechaHora}-visita-${datos.servicioId}-${datos.fecha}-${datos.hora}`,
+      fechaHora,
+      usuario,
+      rol,
+      accion: 'Programación de visita',
+      referencia: `${d.cliente} · ${d.sede}`,
+      detalle: `${d.servicio} · ${datos.fecha} ${datos.hora}`,
+    });
     setAviso(`Visita programada: ${d.cliente} · ${d.sede}, ${datos.fecha} a las ${datos.hora}.`);
     setFechaAgenda(datos.fecha);
     setDatos({ ...VACIO, fecha: datos.fecha });
