@@ -331,9 +331,8 @@ export function TerrenoCanvas({
 
     // modo estaciones — el terreno ya está cerrado
     if (cerrado) {
-      // ¿el clic cae sobre una estación ya colocada? la selecciona en
-      // vez de mover nada — spec §5.6: se re-inspecciona el mismo punto,
-      // no se reubica.
+      // Un clic sobre una estación ya colocada la selecciona para ver su
+      // historial (§5.6); las estaciones son fijas, no se reubican.
       const tocada = colocadas.find((e2) => Math.hypot(punto.x - e2.posicion.x, punto.y - e2.posicion.y) <= RADIO_AURA);
       if (tocada) {
         onSeleccionar(tocada.estacion.id);
@@ -398,12 +397,12 @@ export function TerrenoCanvas({
           onPointerLeave={() => setCursor(null)}
         />
         {puntos.length === 0 ? (
-          <p className="terreno-canvas__vacio">Tocá el lienzo para marcar el primer punto del terreno</p>
+          <p className="terreno-canvas__vacio">Haga clic en el lienzo para marcar el primer punto del terreno</p>
         ) : null}
         {cerrado && !todasColocadas ? (
           <div className="terreno-canvas__aviso" aria-hidden="true">
-            Estación N.° {siguienteEstacion?.estacion.numero} — tocá adentro del terreno para ubicarla, o tocá una estación ya puesta
-            para inspeccionarla de nuevo
+            Estación N.° {siguienteEstacion?.estacion.numero}: haga clic dentro del terreno para ubicarla, o en una estación ya
+            ubicada para ver su historial
           </div>
         ) : null}
         {todasColocadas && !seleccionadaId ? (
@@ -420,7 +419,7 @@ export function TerrenoCanvas({
       <div className="terreno-canvas__barra">
         <span className="terreno-canvas__conteo tabular">
           {puntos.length} {puntos.length === 1 ? 'punto' : 'puntos'}
-          {cerrado ? ` · cerrado · ${colocadas.length}/${estaciones.length} estaciones` : puntos.length >= 3 ? ' · tocá el primer punto para cerrar' : ''}
+          {cerrado ? ` · cerrado · ${colocadas.length}/${estaciones.length} estaciones` : puntos.length >= 3 ? ' · haga clic en el primer punto para cerrar' : ''}
         </span>
         <div className="terreno-canvas__botones">
           <Button type="button" variant="secondary" onClick={deshacer} disabled={puntos.length === 0 && colocadas.length === 0}>

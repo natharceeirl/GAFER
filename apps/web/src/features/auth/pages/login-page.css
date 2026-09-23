@@ -9,7 +9,7 @@
 
 .login-card {
   width: 100%;
-  max-width: 760px;
+  max-width: 640px;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -52,7 +52,7 @@
 
 .login-roles {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
 }
 

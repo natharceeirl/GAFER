@@ -1,4 +1,5 @@
 import type { Estacion } from '@gafer/contracts';
+import type { InspeccionRegistrada } from './aura';
 
 export interface PlanoMock {
   id: string;
@@ -43,6 +44,35 @@ export const ESTACIONES_POR_PLANO: Record<string, Estacion[]> = {
     { id: 'ba-3', numero: 3, tipoEstacion: 'TRAMPA_MECANICA', colorIcono: 'ROJO', colorAura: 'NARANJA' },
     { id: 'ba-4', numero: 4, tipoEstacion: 'CEBO_RATICIDA', colorIcono: 'VERDE', colorAura: 'SIN_COLOR' },
   ],
+};
+
+function inspeccion(fecha: string, porcentaje: 0 | 25 | 50 | 75 | 100, estadoFisico?: 'MALAS_CONDICIONES'): InspeccionRegistrada {
+  const huboConsumo = porcentaje > 0;
+  return {
+    fecha,
+    tipoCebo: 'Bloque parafinado',
+    cantidadGramos: 20,
+    lote: 'L-2451',
+    vencimiento: '2027-05-01',
+    huboConsumo,
+    porcentajeConsumo: huboConsumo ? porcentaje : undefined,
+    cantidadReposicion: huboConsumo ? (20 * porcentaje) / 100 : undefined,
+    estadoFisico: huboConsumo ? undefined : (estadoFisico ?? 'BUENAS_CONDICIONES'),
+    cantidadRepuesta: huboConsumo ? undefined : 0,
+  };
+}
+
+/**
+ * Historial registrado desde la app de campo. Es coherente con el ícono y
+ * el aura de cada estación: el aura sube o baja un nivel por visita (§5.3).
+ */
+export const HISTORIAL_POR_ESTACION: Record<string, InspeccionRegistrada[]> = {
+  'pb-3': [inspeccion('12 ago. 2026', 25), inspeccion('26 ago. 2026', 50), inspeccion('09 set. 2026', 0)],
+  'pb-4': [inspeccion('26 ago. 2026', 0), inspeccion('09 set. 2026', 25)],
+  'pb-6': [inspeccion('26 ago. 2026', 25), inspeccion('09 set. 2026', 50)],
+  'pb-8': [inspeccion('12 ago. 2026', 25), inspeccion('26 ago. 2026', 50), inspeccion('09 set. 2026', 75)],
+  'pp-1': [inspeccion('29 jul. 2026', 25), inspeccion('12 ago. 2026', 50), inspeccion('26 ago. 2026', 75), inspeccion('09 set. 2026', 100)],
+  'ba-4': [inspeccion('26 ago. 2026', 0, 'MALAS_CONDICIONES')],
 };
 
 export function resumenPorAura(estaciones: Estacion[]) {

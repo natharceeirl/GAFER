@@ -38,7 +38,7 @@ export function LoginPage({ onIngresar }: LoginPageProps) {
           GAFER
         </span>
         <h1 className="login-card__titulo">Saneamiento Ambiental</h1>
-        <p className="login-card__subtitulo">Elegí tu rol para ingresar — cada uno ve solo las funciones que le corresponden.</p>
+        <p className="login-card__subtitulo">Elija su rol para ingresar: cada uno ve solo las funciones que le corresponden.</p>
 
         <div className="login-roles" role="radiogroup" aria-label="Rol de acceso">
           {ROLES_MOCK.map((rol) => (
@@ -87,7 +87,10 @@ export function LoginPage({ onIngresar }: LoginPageProps) {
         <Button type="submit" variant="primary" disabled={!puedeIngresar}>
           Ingresar
         </Button>
-        <p className="login-card__nota">Mockup — cualquier clave no vacía es válida, el rol elegido es lo que define la vista.</p>
+        <p className="login-card__nota">
+          Los técnicos operadores trabajan desde la app Android. Mockup: cualquier clave no vacía es válida y el rol elegido define la
+          vista.
+        </p>
       </form>
     </div>
   );

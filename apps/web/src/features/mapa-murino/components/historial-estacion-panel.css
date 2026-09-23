@@ -1,0 +1,128 @@
+.historial-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 0 0 300px;
+  border: 1.5px solid var(--gf-ink);
+  border-radius: var(--gf-radius);
+  background: var(--gf-panel-raised);
+  padding: 16px;
+}
+
+@media (max-width: 720px) {
+  .historial-panel {
+    flex-basis: auto;
+  }
+}
+
+.historial-panel__cabecera {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.historial-panel__numero {
+  display: block;
+  font-family: var(--gf-font-mono);
+  font-size: 12px;
+  color: var(--gf-ink-faint);
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.historial-panel__estados {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.historial-panel__icono {
+  font-family: var(--gf-font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.historial-panel__icono--verde {
+  color: var(--gf-verde);
+}
+.historial-panel__icono--rojo {
+  color: var(--gf-rojo);
+}
+
+.historial-panel__cerrar {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  background: transparent;
+  color: var(--gf-ink-soft);
+  font-size: 13px;
+  cursor: pointer;
+}
+.historial-panel__cerrar:hover {
+  border-color: var(--gf-ink);
+  color: var(--gf-ink);
+}
+
+.historial-panel__lista h3 {
+  margin: 0 0 8px;
+  font-family: var(--gf-font-ui);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gf-ink-faint);
+}
+
+.historial-panel__vacio,
+.historial-panel__nota {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--gf-ink-faint);
+}
+
+.historial-panel__lista ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.historial-panel__lista li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 2px dashed var(--gf-rule);
+}
+.historial-panel__lista li:last-child {
+  border-bottom: none;
+}
+.historial-panel__fila {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--gf-ink-soft);
+}
+.historial-panel__detalle {
+  font-size: 12px;
+  color: var(--gf-ink-faint);
+}
+.historial-panel__consumo--si {
+  color: var(--gf-rojo);
+  font-weight: 700;
+}
+.historial-panel__consumo--no {
+  color: var(--gf-verde);
+  font-weight: 700;
+}
+
+.historial-panel__nota {
+  padding-top: 10px;
+  border-top: 2px dashed var(--gf-rule);
+}

@@ -18,7 +18,7 @@ function severidadClass(severidad: SeveridadAlerta) {
 
 interface DashboardPageProps {
   /** El dashboard es exclusivo de Administrador y Supervisor — spec §10.1. */
-  rol: Extract<Rol, 'ADMINISTRADOR' | 'SUPERVISOR'>;
+  rol: Rol;
   documentos: DocumentoResumen[];
   onAbrirDocumento: (id: string) => void;
 }

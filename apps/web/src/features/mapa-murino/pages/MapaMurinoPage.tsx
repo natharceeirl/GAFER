@@ -3,9 +3,9 @@ import { TicketHeader } from '../../../shared/ui/molecules/TicketHeader';
 import { StationTag } from '../../../shared/ui/molecules/StationTag';
 import { FoldPanel } from '../../../shared/ui/molecules/FoldPanel';
 import { TerrenoCanvas } from '../components/TerrenoCanvas';
-import { InspeccionEstacionPanel } from '../components/InspeccionEstacionPanel';
-import { PLANOS_MOCK, ESTACIONES_POR_PLANO, resumenPorAura } from '../model/estaciones-mock';
-import { calcularSiguienteAura, estacionInicial, type EstadoPlano, type InspeccionRegistrada, type Punto } from '../model/aura';
+import { HistorialEstacionPanel } from '../components/HistorialEstacionPanel';
+import { PLANOS_MOCK, ESTACIONES_POR_PLANO, HISTORIAL_POR_ESTACION, resumenPorAura } from '../model/estaciones-mock';
+import { estacionInicial, type EstadoPlano, type Punto } from '../model/aura';
 import './mapa-murino-page.css';
 
 function planosIniciales(): EstadoPlano[] {
@@ -14,7 +14,7 @@ function planosIniciales(): EstadoPlano[] {
     nombre: p.nombre,
     puntos: [],
     cerrado: false,
-    estaciones: ESTACIONES_POR_PLANO[p.id].map(estacionInicial),
+    estaciones: ESTACIONES_POR_PLANO[p.id].map((e) => estacionInicial(e, HISTORIAL_POR_ESTACION[e.id])),
   }));
 }
 
@@ -43,23 +43,6 @@ export function MapaMurinoPage() {
   function colocarEnPlano(id: string, punto: Punto | null) {
     actualizarPlanoActivo({
       estaciones: planoActivo.estaciones.map((e) => (e.estacion.id === id ? { ...e, posicion: punto } : e)),
-    });
-  }
-
-  function registrarInspeccion(id: string, inspeccion: InspeccionRegistrada) {
-    actualizarPlanoActivo({
-      estaciones: planoActivo.estaciones.map((e) => {
-        if (e.estacion.id !== id) return e;
-        return {
-          ...e,
-          estacion: {
-            ...e.estacion,
-            colorIcono: inspeccion.huboConsumo ? 'ROJO' : 'VERDE',
-            colorAura: calcularSiguienteAura(e.estacion.colorAura, inspeccion.huboConsumo),
-          },
-          historial: [...e.historial, inspeccion],
-        };
-      }),
     });
   }
 
@@ -118,9 +101,9 @@ export function MapaMurinoPage() {
 
         <FoldPanel label={`Trazar terreno — ${planoActivo.nombre}`} defaultOpen>
           <p className="mapa-terreno__ayuda">
-            Marcá el contorno del local punto por punto — cada toque agrega un vértice. Volvé a tocar el primer punto para cerrar el
-            terreno. Las estaciones se ubican sobre este plano una vez definido. Cada plano de la lista de arriba tiene su propio
-            terreno y sus propias estaciones.
+            Marque el contorno del local punto por punto: cada clic agrega un vértice. Vuelva a hacer clic en el primer punto para
+            cerrar el terreno y luego ubique las estaciones. Cada plano de la lista de arriba tiene su propio terreno y sus propias
+            estaciones. Las inspecciones de cada estación llegan desde la app Android de los técnicos.
           </p>
           <div className="mapa-page__lienzo-fila">
             <TerrenoCanvas
@@ -143,10 +126,9 @@ export function MapaMurinoPage() {
               onSeleccionar={setSeleccionadaId}
             />
             {seleccionada ? (
-              <InspeccionEstacionPanel
+              <HistorialEstacionPanel
                 estacion={seleccionada.estacion}
                 historial={seleccionada.historial}
-                onRegistrar={(inspeccion) => registrarInspeccion(seleccionada.estacion.id, inspeccion)}
                 onCerrar={() => setSeleccionadaId(null)}
               />
             ) : null}
@@ -155,7 +137,7 @@ export function MapaMurinoPage() {
 
         <section
           className="mapa-grid"
-          aria-label={`Estaciones de ${planoActivo.nombre} — tocá una para ver su historial y registrar una inspección`}
+          aria-label={`Estaciones de ${planoActivo.nombre} — seleccione una para ver su historial de inspecciones`}
         >
           {planoActivo.estaciones.map(({ estacion }) => (
             <button

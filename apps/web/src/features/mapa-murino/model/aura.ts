@@ -1,24 +1,4 @@
-import type { ColorAura, Estacion } from '@gafer/contracts';
-
-const ORDEN_AURA: ColorAura[] = ['SIN_COLOR', 'VERDE', 'AMARILLO', 'NARANJA', 'ROJO'];
-
-/**
- * Misma regla que apps/api/src/mapa-murino/domain/estacion.ts (dominio
- * puro, testeado ahí) — el mockup tiene que calcular exactamente igual
- * que el backend: sube o baja UN nivel por visita, nunca salta de ROJO
- * a VERDE ni de sin color a ROJO en una sola inspección (spec §5.3).
- */
-export function calcularSiguienteAura(actual: ColorAura, huboConsumo: boolean): ColorAura {
-  const indiceActual = ORDEN_AURA.indexOf(actual);
-  if (huboConsumo) {
-    const siguiente = Math.min(indiceActual + 1, ORDEN_AURA.length - 1);
-    return ORDEN_AURA[siguiente];
-  }
-  const anterior = Math.max(indiceActual - 1, 0);
-  return ORDEN_AURA[anterior];
-}
-
-export const TIPOS_CEBO_MOCK = ['Bloque parafinado', 'Pellet', 'Cebo en pasta', 'Trampa mecánica'] as const;
+import type { Estacion } from '@gafer/contracts';
 
 export type PorcentajeConsumo = 0 | 25 | 50 | 75 | 100;
 
@@ -57,8 +37,8 @@ export interface EstacionConEstado {
   posicion: Punto | null;
 }
 
-export function estacionInicial(estacion: Estacion): EstacionConEstado {
-  return { estacion, historial: [], posicion: null };
+export function estacionInicial(estacion: Estacion, historial: InspeccionRegistrada[] = []): EstacionConEstado {
+  return { estacion, historial, posicion: null };
 }
 
 /**

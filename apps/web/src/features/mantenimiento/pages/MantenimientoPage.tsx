@@ -18,10 +18,9 @@ type SeccionId = (typeof SECCIONES)[number]['id'];
 /**
  * Administrador tiene acceso completo a Mantenimiento; Supervisor solo
  * a catálogos de texto (observaciones, recomendaciones) — spec §7 y
- * tabla de roles §12. Técnico no llega a esta pantalla (fuera del riel
- * de navegación para ese rol).
+ * tabla de roles §12.
  */
-const SECCIONES_POR_ROL: Record<Extract<Rol, 'ADMINISTRADOR' | 'SUPERVISOR'>, SeccionId[]> = {
+const SECCIONES_POR_ROL: Record<Rol, SeccionId[]> = {
   ADMINISTRADOR: ['insumos', 'equipos', 'personal', 'catalogos'],
   SUPERVISOR: ['catalogos'],
 };
@@ -166,7 +165,7 @@ function ListaCatalogo({ catalogo }: { catalogo: CatalogoTexto }) {
 }
 
 interface MantenimientoPageProps {
-  rol: Extract<Rol, 'ADMINISTRADOR' | 'SUPERVISOR'>;
+  rol: Rol;
 }
 
 export function MantenimientoPage({ rol }: MantenimientoPageProps) {
