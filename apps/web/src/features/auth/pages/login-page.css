@@ -1,0 +1,156 @@
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background: var(--gf-bg);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 28px 28px 24px;
+  background: var(--gf-panel);
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  box-shadow: 0 3px 0 var(--gf-rule);
+}
+
+.login-card__sello {
+  align-self: flex-start;
+  padding: 4px 12px 5px;
+  border: 1.5px solid var(--gf-ink);
+  border-radius: var(--gf-radius);
+  transform: rotate(var(--gf-stamp-tilt));
+  font-family: var(--gf-font-stamp);
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: var(--gf-ink);
+}
+
+.login-card__titulo {
+  margin: 0;
+  font-family: var(--gf-font-ui);
+  font-weight: 800;
+  font-size: clamp(19px, 2.6vw, 25px);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--gf-ink);
+}
+
+.login-card__subtitulo {
+  margin: -10px 0 0;
+  font-size: 13.5px;
+  color: var(--gf-ink-soft);
+  line-height: 1.5;
+}
+
+.login-roles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .login-roles {
+    grid-template-columns: 1fr;
+  }
+}
+
+.login-rol {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  padding: 14px;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  background: var(--gf-panel-raised);
+  color: var(--gf-ink);
+  cursor: pointer;
+}
+.login-rol:hover {
+  border-color: var(--gf-ink);
+}
+.login-rol--activo {
+  border: 2px solid var(--gf-ink);
+  background: var(--gf-ink);
+  color: var(--gf-panel);
+}
+
+.login-rol__nombre {
+  font-family: var(--gf-font-ui);
+  font-weight: 800;
+  font-size: 14.5px;
+}
+
+.login-rol__resumen {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--gf-ink-soft);
+}
+.login-rol--activo .login-rol__resumen {
+  color: var(--gf-panel);
+  opacity: 0.85;
+}
+
+.login-rol__funciones {
+  margin: 2px 0 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--gf-ink-soft);
+}
+.login-rol--activo .login-rol__funciones {
+  color: var(--gf-panel);
+  opacity: 0.85;
+}
+
+.login-campos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 480px) {
+  .login-campos {
+    grid-template-columns: 1fr;
+  }
+}
+
+.login-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.login-campo span {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--gf-ink-faint);
+}
+.login-campo input {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  background: var(--gf-panel-raised);
+  color: var(--gf-ink);
+  font-family: var(--gf-font-ui);
+  font-size: 14px;
+}
+
+.login-card__nota {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--gf-ink-faint);
+}

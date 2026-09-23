@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { TicketHeader } from '../../../shared/ui/molecules/TicketHeader';
 import { PerforatedDivider } from '../../../shared/ui/molecules/PerforatedDivider';
 import { Badge } from '../../../shared/ui/atoms/Badge';
 import { Button } from '../../../shared/ui/atoms/Button';
 import { ServiciosPorSemanaChart } from '../components/ServiciosPorSemanaChart';
+import { NOMBRE_ROL, type Rol } from '../../auth/model/roles';
 import { ALERTAS_MOCK, SERVICIOS_HOY_MOCK, SERVICIOS_POR_SEMANA_MOCK, type SeveridadAlerta } from '../model/dashboard-mock';
 import './dashboard-page.css';
 
@@ -13,8 +14,12 @@ function severidadClass(severidad: SeveridadAlerta) {
   return `dashboard-alerta dashboard-alerta--${severidad}`;
 }
 
-export function DashboardPage() {
-  const [rolActivo] = useState<'Administrador' | 'Supervisor'>('Supervisor');
+interface DashboardPageProps {
+  /** El dashboard es exclusivo de Administrador y Supervisor — spec §10.1. */
+  rol: Extract<Rol, 'ADMINISTRADOR' | 'SUPERVISOR'>;
+}
+
+export function DashboardPage({ rol }: DashboardPageProps) {
   const completados = useMemo(() => SERVICIOS_HOY_MOCK.filter((s) => s.completado).length, []);
 
   return (
@@ -22,7 +27,7 @@ export function DashboardPage() {
       <TicketHeader
         code={HOY.toUpperCase()}
         title="Panel de control"
-        meta={`Turno actual · ${rolActivo}`}
+        meta={`Turno actual · ${NOMBRE_ROL[rol]}`}
         action={<Button variant="secondary">Exportar alertas</Button>}
       />
 

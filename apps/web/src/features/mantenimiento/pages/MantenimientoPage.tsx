@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { TicketHeader } from '../../../shared/ui/molecules/TicketHeader';
 import { Button } from '../../../shared/ui/atoms/Button';
+import type { Rol } from '../../auth/model/roles';
 import { INSUMOS_MOCK, EQUIPOS_MOCK, PERSONAL_MOCK, CATALOGOS_TEXTO_MOCK } from '../model/mantenimiento-mock';
 import type { CatalogoTexto, EstadoOperativo } from '../model/tipos';
 import './mantenimiento-page.css';
@@ -13,6 +14,17 @@ const SECCIONES = [
 ] as const;
 
 type SeccionId = (typeof SECCIONES)[number]['id'];
+
+/**
+ * Administrador tiene acceso completo a Mantenimiento; Supervisor solo
+ * a catálogos de texto (observaciones, recomendaciones) — spec §7 y
+ * tabla de roles §12. Técnico no llega a esta pantalla (fuera del riel
+ * de navegación para ese rol).
+ */
+const SECCIONES_POR_ROL: Record<Extract<Rol, 'ADMINISTRADOR' | 'SUPERVISOR'>, SeccionId[]> = {
+  ADMINISTRADOR: ['insumos', 'equipos', 'personal', 'catalogos'],
+  SUPERVISOR: ['catalogos'],
+};
 
 const ETIQUETA_OPERATIVO: Record<EstadoOperativo, string> = {
   OPERATIVO: 'Operativo',
@@ -153,20 +165,25 @@ function ListaCatalogo({ catalogo }: { catalogo: CatalogoTexto }) {
   );
 }
 
-export function MantenimientoPage() {
-  const [seccion, setSeccion] = useState<SeccionId>('insumos');
+interface MantenimientoPageProps {
+  rol: Extract<Rol, 'ADMINISTRADOR' | 'SUPERVISOR'>;
+}
+
+export function MantenimientoPage({ rol }: MantenimientoPageProps) {
+  const seccionesVisibles = SECCIONES.filter((s) => SECCIONES_POR_ROL[rol].includes(s.id));
+  const [seccion, setSeccion] = useState<SeccionId>(seccionesVisibles[0].id);
 
   return (
     <div className="mant-page">
       <TicketHeader
         code={`${INSUMOS_MOCK.length + EQUIPOS_MOCK.length + PERSONAL_MOCK.length} registros`}
         title="Mantenimiento"
-        meta="Catálogos editables — solo Administrador"
+        meta={rol === 'ADMINISTRADOR' ? 'Catálogos editables — acceso completo' : 'Catálogos de texto — acceso de Supervisor'}
       />
 
       <div className="mant-page__body">
         <nav className="mant-rail" aria-label="Secciones de mantenimiento">
-          {SECCIONES.map((s) => (
+          {seccionesVisibles.map((s) => (
             <button
               key={s.id}
               type="button"

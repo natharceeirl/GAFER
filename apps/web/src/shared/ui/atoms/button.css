@@ -16,6 +16,13 @@
 .btn:active {
   transform: translateY(1px);
 }
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn:disabled:active {
+  transform: none;
+}
 
 .btn--primary {
   border: 2px solid var(--gf-ink);
