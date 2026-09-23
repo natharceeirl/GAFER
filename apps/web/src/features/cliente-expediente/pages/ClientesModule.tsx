@@ -8,7 +8,9 @@ import { useCartera } from '../model/cartera-context';
 import { actualizarCliente, agregarCliente, agregarProyecto, agregarServicio, esClienteNuevo, proyectosDe } from '../model/cartera';
 import type { ClienteFila } from '../model/clientes-mock';
 import type { DatosCliente, DatosProyecto, DatosServicio } from '../model/validaciones';
-import { CATALOGOS_TEXTO_MOCK, EQUIPOS_MOCK, INSUMOS_MOCK } from '../../mantenimiento/model/mantenimiento-mock';
+import { CATALOGOS_TEXTO_MOCK, EQUIPOS_MOCK, INSUMOS_MOCK, PERSONAL_MOCK } from '../../mantenimiento/model/mantenimiento-mock';
+import { useProgramacion } from '../../programacion/model/programacion-context';
+import { vistaTecnico } from '../model/vista-tecnico';
 import { ESTACIONES_ROJO, generarHistorial, tiposContratadosDe } from '../../estadisticas/model/historial-mock';
 import { useAuditoria } from '../../auditoria/model/auditoria-context';
 import type { AccionAuditoria } from '../../auditoria/model/evento';
@@ -28,6 +30,9 @@ interface ClientesModuleProps {
   rol: Rol;
   onAbrirMapaMurino: () => void;
 }
+
+/** Técnico con el que se muestra la maqueta de la app. */
+const TECNICO_DEMO = PERSONAL_MOCK.find((p) => p.cargo === 'Técnico Operador' && p.estado === 'ACTIVO')?.nombre ?? 'Técnico operador';
 
 const GIROS = CATALOGOS_TEXTO_MOCK.find((c) => c.id === 'giros')?.items ?? [];
 
@@ -50,6 +55,7 @@ function datosDe(c: ClienteFila): DatosCliente {
 export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModuleProps) {
   const { cartera, setCartera } = useCartera();
   const { registrar } = useAuditoria();
+  const { visitas } = useProgramacion();
   const [vista, setVista] = useState<Vista>({ tipo: 'lista' });
   const hoy = fechaLocal();
   const historial = useMemo(() => generarHistorial(hoy), [hoy]);
@@ -165,6 +171,19 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
           programaRoedores={
             contrataDesratizacion ? { estacionesRojo: ESTACIONES_ROJO.filter((e) => e.cliente === cliente.codigoCorto) } : null
           }
+          vistaApp={{
+            tecnico: TECNICO_DEMO,
+            sedes: vistaTecnico({
+              cliente,
+              proyectos,
+              historial,
+              visitas,
+              hoy,
+              insumos: INSUMOS_MOCK,
+              equipos: EQUIPOS_MOCK,
+              estacionesRojo: ESTACIONES_ROJO,
+            }).sedes,
+          }}
           puedeDarDeAlta={puedeDarDeAlta}
           aviso={vista.tipo === 'expediente' ? vista.aviso : null}
           onVolver={() => setVista({ tipo: 'lista' })}

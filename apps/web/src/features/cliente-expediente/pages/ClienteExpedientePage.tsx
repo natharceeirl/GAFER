@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { TicketHeader } from '../../../shared/ui/molecules/TicketHeader';
 import { FoldPanel } from '../../../shared/ui/molecules/FoldPanel';
 import { PerforatedDivider } from '../../../shared/ui/molecules/PerforatedDivider';
@@ -7,6 +8,8 @@ import type { ClienteFila } from '../model/clientes-mock';
 import type { ProyectoExpediente } from '../model/expediente-mock';
 import { alertaVencimiento, carpetaDelCliente, correlativos, historialPorProyecto, type PdfCarpeta } from '../model/expediente';
 import type { EstacionCritica, ServicioRegistro } from '../../estadisticas/model/estadisticas';
+import type { SedeTecnico } from '../model/vista-tecnico';
+import { VistaTecnicoApp } from '../components/VistaTecnicoApp';
 import './cliente-expediente-page.css';
 
 interface Props {
@@ -17,6 +20,8 @@ interface Props {
   hoy: string;
   /** Solo se pasa si el cliente tiene Desratización contratada (§5). */
   programaRoedores: { estacionesRojo: EstacionCritica[] } | null;
+  /** Maqueta de lo que ve el técnico en la app Android (C10). */
+  vistaApp: { sedes: SedeTecnico[]; tecnico: string };
   puedeDarDeAlta: boolean;
   aviso: string | null;
   onVolver: () => void;
@@ -42,6 +47,7 @@ export function ClienteExpedientePage({
   historial,
   hoy,
   programaRoedores,
+  vistaApp,
   puedeDarDeAlta,
   aviso,
   onVolver,
@@ -58,6 +64,7 @@ export function ClienteExpedientePage({
   const porProyecto = historialPorProyecto(historial, cliente.id);
   const alerta = cliente.estado === 'ACTIVO' ? alertaVencimiento(cliente.proximoVencimiento, hoy, cliente.anticipacionAlertaDias) : null;
   const { contacto } = cliente;
+  const [verApp, setVerApp] = useState(false);
 
   return (
     <div className="expediente-page">
@@ -158,13 +165,16 @@ export function ClienteExpedientePage({
           </div>
         </section>
 
-        {puedeDarDeAlta ? (
-          <div className="expediente-acciones">
+        <div className="expediente-acciones">
+          <Button variant="secondary" onClick={() => setVerApp(true)}>
+            Vista del técnico (app)
+          </Button>
+          {puedeDarDeAlta ? (
             <Button variant="secondary" onClick={onNuevoProyecto}>
               Nueva sede
             </Button>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
 
         <FoldPanel label={`Proyectos activos (${proyectosActivos.length})`} defaultOpen>
           {proyectosActivos.length === 0 ? (
@@ -294,6 +304,8 @@ export function ClienteExpedientePage({
           )}
         </FoldPanel>
       </div>
+
+      {verApp ? <VistaTecnicoApp cliente={cliente} sedes={vistaApp.sedes} tecnico={vistaApp.tecnico} onCerrar={() => setVerApp(false)} /> : null}
     </div>
   );
 }
