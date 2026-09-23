@@ -27,4 +27,11 @@ export const CATALOGOS_TEXTO_MOCK: CatalogoTexto[] = [
   { id: 'acciones-correctivas', titulo: 'Acciones correctivas', items: ['Sellado de perforación', 'Reubicación de estación', 'Retiro de cebo vencido', 'Refuerzo de cebado'] },
   { id: 'observaciones', titulo: 'Observaciones técnicas', items: ['Acceso restringido a zona', 'Condiciones de humedad elevada', 'Presencia de residuos orgánicos'] },
   { id: 'recomendaciones', titulo: 'Recomendaciones al cliente', items: ['Retirar cartones acumulados', 'Reparar tuberías con fuga', 'Mantener orden en almacén'] },
+  { id: 'giros', titulo: 'Giros de negocio', items: ['Energía', 'Alimentos', 'Transporte', 'Construcción', 'Salud', 'Educación', 'Sector público'] },
+  {
+    id: 'motivos-modificacion',
+    titulo: 'Motivos de modificación',
+    items: ['Error de digitación en campo', 'Solicitud del cliente', 'Corrección de dato de insumo', 'Observación de auditoría'],
+    soloAdministrador: true,
+  },
 ];

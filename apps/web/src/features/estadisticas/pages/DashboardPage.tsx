@@ -5,6 +5,8 @@ import { Badge } from '../../../shared/ui/atoms/Badge';
 import { Button } from '../../../shared/ui/atoms/Button';
 import { ServiciosPorSemanaChart } from '../components/ServiciosPorSemanaChart';
 import { NOMBRE_ROL, type Rol } from '../../auth/model/roles';
+import { DOCUMENTOS_MOCK } from '../../documentos/model/documentos-mock';
+import { EstadoBadge } from '../../documentos/components/EstadoBadge';
 import { ALERTAS_MOCK, SERVICIOS_HOY_MOCK, SERVICIOS_POR_SEMANA_MOCK, type SeveridadAlerta } from '../model/dashboard-mock';
 import './dashboard-page.css';
 
@@ -17,9 +19,12 @@ function severidadClass(severidad: SeveridadAlerta) {
 interface DashboardPageProps {
   /** El dashboard es exclusivo de Administrador y Supervisor — spec §10.1. */
   rol: Extract<Rol, 'ADMINISTRADOR' | 'SUPERVISOR'>;
+  onAbrirDocumento: (id: string) => void;
 }
 
-export function DashboardPage({ rol }: DashboardPageProps) {
+const PENDIENTES_APROBACION = DOCUMENTOS_MOCK.filter((d) => d.estado === 'ENVIADO_A_REVISION');
+
+export function DashboardPage({ rol, onAbrirDocumento }: DashboardPageProps) {
   const completados = useMemo(() => SERVICIOS_HOY_MOCK.filter((s) => s.completado).length, []);
 
   return (
@@ -77,6 +82,33 @@ export function DashboardPage({ rol }: DashboardPageProps) {
               </li>
             ))}
           </ul>
+        </section>
+
+        <section className="dashboard-section" aria-labelledby="pendientes-heading">
+          <h2 id="pendientes-heading" className="dashboard-section__title">
+            Pendientes de aprobación <span className="tabular">({PENDIENTES_APROBACION.length})</span>
+          </h2>
+          {PENDIENTES_APROBACION.length === 0 ? (
+            <p className="dashboard-empty">Ningún documento esperando revisión.</p>
+          ) : (
+            <ul className="dashboard-servicios">
+              {PENDIENTES_APROBACION.map((d, i) => (
+                <li key={d.id}>
+                  <button type="button" className="dashboard-pendiente" onClick={() => onAbrirDocumento(d.id)}>
+                    <span className="dashboard-pendiente__codigo">{d.codigo}</span>
+                    <span className="dashboard-servicio__cliente">
+                      {d.cliente} <span className="dashboard-servicio__proyecto">· {d.proyecto}</span>
+                    </span>
+                    <span className="dashboard-pendiente__fecha tabular">{d.fecha}</span>
+                    <span className="dashboard-servicio__estado">
+                      <EstadoBadge estado={d.estado} />
+                    </span>
+                  </button>
+                  {i < PENDIENTES_APROBACION.length - 1 && <PerforatedDivider />}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         <section className="dashboard-section" aria-labelledby="grafico-heading">

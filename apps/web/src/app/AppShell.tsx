@@ -105,8 +105,16 @@ export function AppShell() {
       </nav>
 
       <div className="app-shell__stage">
-        {pantalla === 'DASHBOARD' && sesion.rol !== 'TECNICO_OPERARIO' ? <DashboardPage rol={sesion.rol} /> : null}
-        {pantalla === 'CLIENTES' ? <ClientesModule /> : null}
+        {pantalla === 'DASHBOARD' && sesion.rol !== 'TECNICO_OPERARIO' ? (
+          <DashboardPage
+            rol={sesion.rol}
+            onAbrirDocumento={(id) => {
+              setPantalla('DOCUMENTOS');
+              setDocumentoAbierto(id);
+            }}
+          />
+        ) : null}
+        {pantalla === 'CLIENTES' ? <ClientesModule puedeCrearCliente={sesion.rol === 'ADMINISTRADOR'} /> : null}
         {pantalla === 'DOCUMENTOS' ? (
           documentoAbierto ? (
             <DocumentoDetailPage documentoId={documentoAbierto} />

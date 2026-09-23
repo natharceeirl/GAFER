@@ -201,7 +201,7 @@ export function MantenimientoPage({ rol }: MantenimientoPageProps) {
           {seccion === 'personal' && <TablaPersonal />}
           {seccion === 'catalogos' && (
             <div className="mant-catalogos-grid">
-              {CATALOGOS_TEXTO_MOCK.map((c) => (
+              {CATALOGOS_TEXTO_MOCK.filter((c) => rol === 'ADMINISTRADOR' || !c.soloAdministrador).map((c) => (
                 <ListaCatalogo key={c.id} catalogo={c} />
               ))}
             </div>

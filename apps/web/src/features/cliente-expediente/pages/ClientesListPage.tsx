@@ -21,9 +21,11 @@ function formatearFecha(fecha: string | null): string {
 
 interface Props {
   onAbrirCliente: (cliente: ClienteFila) => void;
+  /** Spec §12: solo el Administrador crea clientes (§7.1 lo contradice; se sigue la tabla de roles). */
+  puedeCrearCliente: boolean;
 }
 
-export function ClientesListPage({ onAbrirCliente }: Props) {
+export function ClientesListPage({ onAbrirCliente, puedeCrearCliente }: Props) {
   const [busqueda, setBusqueda] = useState('');
   const [columna, setColumna] = useState<Columna>('razonSocial');
   const [direccion, setDireccion] = useState<Direccion>('asc');
@@ -65,7 +67,7 @@ export function ClientesListPage({ onAbrirCliente }: Props) {
         code={`${filas.length} DE ${CLIENTES_MOCK.length}`}
         title="Cartera de clientes"
         meta="Administrador · Supervisor"
-        action={<Button>Nuevo cliente</Button>}
+        action={puedeCrearCliente ? <Button>Nuevo cliente</Button> : undefined}
       />
 
       <div className="clientes-page__body">

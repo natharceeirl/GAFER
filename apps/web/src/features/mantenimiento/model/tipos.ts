@@ -32,7 +32,9 @@ export interface PersonalOperativo {
 }
 
 export interface CatalogoTexto {
-  id: 'hallazgos' | 'acciones-correctivas' | 'observaciones' | 'recomendaciones';
+  id: 'hallazgos' | 'acciones-correctivas' | 'observaciones' | 'recomendaciones' | 'giros' | 'motivos-modificacion';
   titulo: string;
   items: string[];
+  /** Spec §7.7: "Motivos de modificación" lo edita solo el Administrador. */
+  soloAdministrador?: boolean;
 }
