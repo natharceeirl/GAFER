@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { LoginPage } from '../features/auth/pages/LoginPage';
+import { LogoGafer } from '../shared/ui/atoms/LogoGafer';
 import { NOMBRE_ROL, type Rol } from '../features/auth/model/roles';
 import { DashboardPage } from '../features/estadisticas/pages/DashboardPage';
 import { ClientesModule } from '../features/cliente-expediente/pages/ClientesModule';
@@ -76,6 +77,7 @@ export function AppShell() {
   return (
     <div className="app-shell">
       <nav className="app-shell__rail" aria-label="Selector de pantalla (solo para revisión del mockup)">
+        <LogoGafer ancho={148} />
         <ul className="app-shell__nav">
           {pantallasVisibles.map((item) => (
             <li key={item.id}>

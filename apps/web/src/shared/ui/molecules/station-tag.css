@@ -17,6 +17,8 @@
   flex: 0 0 auto;
   border-radius: 999px;
   border: 2.5px solid currentColor;
+  /* placa clara: el ícono (última visita) se lee sobre cualquier color de aura, igual que en el plano */
+  background: var(--gf-panel-raised);
   font-family: var(--gf-font-mono);
   font-weight: 600;
   font-size: 13px;

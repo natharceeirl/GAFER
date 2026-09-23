@@ -9,7 +9,7 @@
   padding: 14px 20px 16px;
   background: var(--gf-panel-raised);
   border-bottom: 2px solid var(--gf-ink);
-  box-shadow: 0 3px 0 var(--gf-rule);
+  box-shadow: 0 3px 0 var(--gf-marca);
 }
 
 .ticket-header__code {

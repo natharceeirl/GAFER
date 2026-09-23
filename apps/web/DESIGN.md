@@ -2,16 +2,21 @@
 name: GAFER Saneamiento Ambiental
 description: Industrial checkpoint gate-pass system — every record is issued and stamped, never softly created
 colors:
-  kraft-ground: "#d7d7ca"
-  kraft-panel: "#ecede6"
-  kraft-panel-raised: "#f4f5ef"
-  rule-hairline: "#a8ab9b"
-  rule-strong: "#82866f"
-  carbon-ink: "#23241f"
-  carbon-ink-soft: "#56564b"
-  carbon-ink-faint: "#837e6c"
-  verified-verde: "#2f6b3e"
-  verified-verde-ink: "#eef3ea"
+  stone-ground: "#d3cec5"
+  stone-panel: "#e6e2db"
+  stone-panel-raised: "#f2efea"
+  rule-hairline: "#b9b2a8"
+  rule-strong: "#8e867d"
+  carbon-ink: "#0f1110"
+  carbon-ink-soft: "#3f3b37"
+  carbon-ink-faint: "#5e5751"
+  brand-forest: "#056138"
+  brand-forest-ink: "#eef5ef"
+  brand-leaf: "#8fb961"
+  info-blue: "#3d6da4"
+  info-blue-ink: "#eef3fa"
+  verified-verde: "#056138"
+  verified-verde-ink: "#e8f2ea"
   warning-amarillo: "#93701c"
   warning-amarillo-ink: "#fbf3e1"
   alert-naranja: "#b3501e"
@@ -49,7 +54,7 @@ spacing:
 components:
   button-primary:
     backgroundColor: "{colors.carbon-ink}"
-    textColor: "{colors.kraft-panel}"
+    textColor: "{colors.stone-panel}"
     typography: "{typography.ui}"
     rounded: "{rounded.sm}"
     padding: "10px 20px"
@@ -93,12 +98,12 @@ components:
 
 **Creative North Star: "Garita de control industrial" (the checkpoint gate-pass)**
 
-GAFER's UI treats every client, service, and inspection as a pass through a checkpoint, not a record softly "created" in a dashboard. Kraft-cardstock surfaces, carbon ink rules, ticket-stub headers, and rotated ink-stamp badges replace the generic SaaS vocabulary of pastel pills and floating cards. Nothing here is decorative texture: the ground is cool-grey industrial kraft (confirmed and retuned during the build to read as cardstock, never bakery cream), and the four safety-system colors — verified green, warning amber, alert orange, danger red — are load-bearing twice over: they are both the brand accent set and the literal VERDE/AMARILLO/NARANJA/ROJO Mapa Murino status vocabulary, required by product to read identically on the map, on badges, on lists, and on dashboards.
+GAFER's UI treats every client, service, and inspection as a pass through a checkpoint, not a record softly "created" in a dashboard. Warm stone cardstock surfaces, carbon ink rules, ticket-stub headers, and rotated ink-stamp badges replace the generic SaaS vocabulary of pastel pills and floating cards. Nothing here is decorative texture: the ground is the warm stone from GAFER's own palette, the logo's forest green carries the brand, and the four safety-system colors — verified green, warning amber, alert orange, danger red — are load-bearing twice over: the verified green is the brand green itself, and all four are the literal VERDE/AMARILLO/NARANJA/ROJO Mapa Murino status vocabulary, required by product to read identically on the map, on badges, on lists, and on dashboards.
 
 The system is deliberately flat and hairline-ruled rather than shadowed or gradiented — depth reads through boxed compartments and rule weight, not elevation. Two roles get two working modes on the same token set: dense, scan-and-decide tables and panels for desk use; large touch targets (44px minimum) and single-column stacking under 480px for gloved, sunlit field use. Motion is a small, literal vocabulary — an ink-stamp thud, a real paper fold, a solid color flood — never generic easing or a bouncy micro-interaction library.
 
 **Key Characteristics:**
-- Kraft/carbon industrial ground with hairline box-rules; no soft cards, no drop shadows as an ambient default.
+- Warm stone/carbon industrial ground with hairline box-rules; no soft cards, no drop shadows as an ambient default.
 - Status color doubles as brand color: the same four hues carry Mapa Murino state everywhere they appear.
 - State is a rotated ink-stamp, never a pill; cancellation is a diagonal overlay banding across the record, not a replaced badge.
 - Three-typeface role split: grotesk for running UI/headings, slab-display strictly for stamps/badges/counts, monospace for ticket codes.
@@ -106,31 +111,39 @@ The system is deliberately flat and hairline-ruled rather than shadowed or gradi
 
 ## Colors
 
-The palette is a cool industrial neutral scale plus one safety-color family that is simultaneously the brand accent and the Mapa Murino status vocabulary — there is no separate "brand blue" anywhere in the system.
+The palette comes from GAFER's own brand (gafer.pe and the logo): a warm stone neutral scale, the logo's forest green as the brand color, the site's leaf green as an accent, and the safety-color family that is the Mapa Murino status vocabulary. The brand forest green and the status VERDE are the same hue on purpose.
+
+### Brand
+- **Brand Forest** (`#056138` / ink `#eef5ef`): the logo's wordmark green — active navigation item, selected role card, the ticket header's bottom step, brand moments. Passes AA with light text (7.57).
+- **Brand Leaf** (`#8fb961`): gafer.pe's `--yellow-green`. Accent only: the inset marker on the active nav item and fills that carry dark text (8.38). Never text, never with white text (2.26). In dark mode it becomes the brand color, because the forest green does not read on dark grounds.
+- **Info Blue** (`#3d6da4` / ink `#eef3fa`): neutral information (photos still syncing from the field app) and the system-wide keyboard focus ring.
+- **Logo**: `shared/assets/gafer-logo.png` through the `LogoGafer` atom, on the login and at the top of the navigation rail. In dark mode it sits on a light plate.
 
 ### Primary
-- **Carbon Ink** (`#23241f`): the system's one true ink — headline text, primary button fill, structural rule borders (ticket header bottom border, active table sort state). Its hover-inverted pairing with Kraft Panel is the system's only "primary color" relationship.
+- **Carbon Ink** (`#0f1110`): the system's one true ink — headline text, primary button fill, structural rule borders (ticket header bottom border, active table sort state).
 
-### Secondary (status-as-brand — doing double duty as the Mapa Murino aura vocabulary)
-- **Verified Verde** (`#2f6b3e` / ink `#eef3ea`): APROBADO documents, "sin actividad" station state, "cerrado/completado" list rows.
+### Secondary (status — the Mapa Murino aura vocabulary)
+- **Verified Verde** (`#056138` / ink `#e8f2ea`): APROBADO documents, "sin actividad" station state, "cerrado/completado" list rows. Same hue as the brand.
 - **Warning Amarillo** (`#93701c` / ink `#fbf3e1`): ENVIADO_A_REVISION, "pendiente" rows, near-term expiration warnings.
-- **Alert Naranja** (`#b3501e` / ink `#fbeee1`): OBSERVADO state and its cancellation-band color, urgent expirations, focus ring color system-wide.
+- **Alert Naranja** (`#b3501e` / ink `#fbeee1`): OBSERVADO state and its cancellation-band color, urgent expirations, form validation errors.
 - **Danger Rojo** (`#9c2c21` / ink `#fbe9e6`): "actividad detectada" station state, escalated alerts.
 - **No-Trend Sin Color** (`#8c8670` / ink `#f1efe6`): the fifth Mapa Murino value — no accumulated trend yet; treated as a genuine neutral state, not an error.
 
 ### Neutral
-- **Kraft Ground** (`#d7d7ca`): page background — cool-grey cardstock, confirmed during finish review to read as industrial kraft, never bakery cream.
-- **Kraft Panel** (`#ecede6`): compartment/section background, one step lighter than ground.
-- **Kraft Panel Raised** (`#f4f5ef`): inputs, ticket header strip, the barra-acciones bar — the "raised sheet" surface.
-- **Rule Hairline** (`#a8ab9b`): dashed perforation lines, ambient dividers.
-- **Rule Strong** (`#82866f`): compartment borders, input borders, station-tag borders.
-- **Carbon Ink Soft** (`#56564b`): section titles, secondary body text.
-- **Carbon Ink Faint** (`#837e6c`): ticket codes, muted metadata.
+- **Stone Ground** (`#d3cec5`): page background — the warm stone from gafer.pe's palette.
+- **Stone Panel** (`#e6e2db`): compartment/section background, one step lighter than ground.
+- **Stone Panel Raised** (`#f2efea`): inputs, ticket header strip, the barra-acciones bar — the "raised sheet" surface.
+- **Rule Hairline** (`#b9b2a8`): dashed perforation lines, ambient dividers.
+- **Rule Strong** (`#8e867d`): compartment borders, input borders, station-tag borders.
+- **Carbon Ink Soft** (`#3f3b37`): section titles, secondary body text.
+- **Carbon Ink Faint** (`#5e5751`): ticket codes, muted metadata. gafer.pe's warm gray (`#78706a`) darkened until it passes AA on stone (4.53); the original only works for borders.
 
-A full dark-mode mirror exists via `prefers-color-scheme`, remapping every token (darker kraft grounds, brightened status hues for contrast) — the same role structure, not a separate palette.
+Not used: the palette's grey-blue (`#98aeb6`, taken from site photos, 2.32 with white) and the logo's lime gradient (stays in the logo; it would compete with Amarillo).
+
+A full dark-mode mirror exists via `prefers-color-scheme`, remapping every token (deep green-black grounds, brightened status hues, leaf green as brand) — the same role structure, not a separate palette.
 
 ### Named Rules
-**The Status-Is-Brand Rule.** VERDE/AMARILLO/NARANJA/ROJO are never "just an accent" — they are simultaneously the Mapa Murino trend vocabulary and the only saturated colors in the system. A new status-bearing surface reuses these four hues; it never introduces a fifth "brand" color.
+**The Status-Is-Brand Rule.** VERDE/AMARILLO/NARANJA/ROJO are the Mapa Murino trend vocabulary and, with the brand greens and the info blue, the only saturated colors in the system. The brand forest green is the status VERDE, so "GAFER" and "all clear" read as the same color. A new status-bearing surface reuses these hues; it never introduces another one.
 
 **The Solid Flood Rule.** Escalating state on a StationTag floods the entire card in the solid status color (background + border + ink-contrast text), not a tinted accent or a colored dot. This is confirmed build behavior (`station-tag--rojo` etc. set `background`, `border-color`, and `color` together), carrying over the "instant solid flood, no soft transition" raise from the direction contract.
 
@@ -156,7 +169,7 @@ A full dark-mode mirror exists via `prefers-color-scheme`, remapping every token
 
 ## Layout
 
-Every screen opens with a `TicketHeader`: a sticky, full-width strip (padding `14px 20px 16px`, 2px carbon-ink bottom border, `0 3px 0` rule-colored drop) carrying the ticket code (mono), title (headline), meta line (identity: cliente · proyecto · servicio · fecha), and an optional trailing action. Below it, body content is organized into `.compartimento` boxes — 1.5px rule-strong bordered panels with an uppercase title — rather than shadowed cards.
+Every screen opens with a `TicketHeader`: a sticky, full-width strip (padding `14px 20px 16px`, 2px carbon-ink bottom border, `0 3px 0` brand-forest drop, the brand accent that runs across every screen) carrying the ticket code (mono), title (headline), meta line (identity: cliente · proyecto · servicio · fecha), and an optional trailing action. Below it, body content is organized into `.compartimento` boxes — 1.5px rule-strong bordered panels with an uppercase title — rather than shadowed cards.
 
 List rows are separated by a dashed `PerforatedDivider` (2px dashed rule-hairline), never a solid line or gap-only spacing — the "tear-off ticket stub" motif recurring between every row of a list (dashboard alerts, servicios, client table rows).
 
@@ -177,7 +190,7 @@ Corners are almost square throughout: a single 2px radius token (`--gf-radius`) 
 
 ### Buttons (`Button`, `.btn`)
 - **Shape:** 2px radius, 44px min-height, 10px/20px padding.
-- **Primary:** solid carbon-ink fill, kraft-panel text, 2px carbon-ink border; hover inverts to transparent fill with carbon-ink text/border (a "stamp lifted off the page" hover, not a lighten/darken tint).
+- **Primary:** solid carbon-ink fill, stone-panel text, 2px carbon-ink border; hover inverts to transparent fill with carbon-ink text/border (a "stamp lifted off the page" hover, not a lighten/darken tint).
 - **Secondary:** transparent fill, carbon-ink text, rule-strong border; hover darkens border to carbon-ink.
 - **Active:** both variants translate 1px down on `:active` — a physical press, not a scale/opacity change.
 
@@ -210,19 +223,19 @@ Corners are almost square throughout: a single 2px radius token (`--gf-radius`) 
 
 ### StationTag (signature component)
 - **Style:** rounded-pill icon roundel (mono numeral, 2.5px `currentColor` border) plus an aura-flooded row background.
-- **Behavior:** the icon shows only the latest visit's raw state (verde/rojo ink on transparent); the surrounding row background floods solid with the 4-visit trend aura color (verde/amarillo/naranja/rojo/sin-color) — the two-layer Mapa Murino read (icon = last visit, aura = trend) rendered as two independently-colored zones of one component.
+- **Behavior:** the icon shows only the latest visit's raw state (verde/rojo ring and numeral on a light stone-panel-raised plate, so it reads on top of any aura flood — including verde on verde); the surrounding row background floods solid with the 4-visit trend aura color (verde/amarillo/naranja/rojo/sin-color) — the two-layer Mapa Murino read (icon = last visit, aura = trend) rendered as two independently-colored zones of one component.
 - **Use:** anywhere a rodent-control station needs to appear off the map itself (lists, summaries) — reuses the exact same five-color vocabulary as `Badge` and the map.
 
 ### Cards / Containers (`.compartimento`)
 - **Corner Style:** 2px radius.
-- **Background:** kraft-panel.
+- **Background:** stone-panel.
 - **Shadow Strategy:** none — flat, per Elevation & Depth.
 - **Border:** 1.5px rule-strong.
 - **Internal Padding:** `14px 16px 16px`.
 
 ### Inputs / Fields
-- **Style:** kraft-panel-raised background, 1.5px rule-strong border, 2px radius, 44px min-height, Archivo body text.
-- **Focus:** 2.5px solid alert-naranja outline, 1–2px offset — the same naranja used for OBSERVADO, reused system-wide as the one focus-ring color.
+- **Style:** stone-panel-raised background, 1.5px rule-strong border, 2px radius, 44px min-height, Archivo body text.
+- **Focus:** 2.5px solid info-blue outline, 1–2px offset — the one focus-ring color system-wide. It used to be naranja, which read as OBSERVADO.
 - **Disabled:** 0.55 opacity, not-allowed cursor.
 
 ## Do's and Don'ts

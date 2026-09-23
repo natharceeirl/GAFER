@@ -1,0 +1,12 @@
+.logo-gafer {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: var(--gf-logo-placa-padding);
+  background: var(--gf-logo-placa);
+  border-radius: var(--gf-radius);
+}
+.logo-gafer img {
+  display: block;
+  height: auto;
+  max-width: 100%;
+}

@@ -40,9 +40,14 @@
   color: var(--gf-ink);
 }
 .app-shell__nav-btn--activo {
-  background: var(--gf-ink);
-  color: var(--gf-panel);
+  background: var(--gf-marca);
+  color: var(--gf-marca-ink);
   font-weight: 800;
+  box-shadow: inset 4px 0 0 var(--gf-hoja);
+}
+.app-shell__nav-btn--activo:hover {
+  background: var(--gf-marca);
+  color: var(--gf-marca-ink);
 }
 
 .app-shell__stage {

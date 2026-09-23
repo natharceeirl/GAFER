@@ -199,8 +199,9 @@
   color: var(--gf-naranja-ink);
 }
 .documento-sync {
-  background: var(--gf-amarillo);
-  color: var(--gf-amarillo-ink);
+  background: var(--gf-info-ink);
+  color: var(--gf-info);
+  border: 1.5px solid var(--gf-info);
 }
 .documento-comentario {
   position: relative;

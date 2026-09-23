@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Button } from '../../../shared/ui/atoms/Button';
+import { LogoGafer } from '../../../shared/ui/atoms/LogoGafer';
 import { ROLES_MOCK, type Rol, type RolInfo } from '../model/roles';
 import './login-page.css';
 
@@ -34,10 +35,8 @@ export function LoginPage({ onIngresar }: LoginPageProps) {
   return (
     <div className="login-page">
       <form className="login-card" onSubmit={ingresar}>
-        <span className="login-card__sello" aria-hidden="true">
-          GAFER
-        </span>
-        <h1 className="login-card__titulo">Saneamiento Ambiental</h1>
+        <LogoGafer ancho={200} />
+        <h1 className="login-card__titulo">Ingreso al sistema</h1>
         <p className="login-card__subtitulo">Elija su rol para ingresar: cada uno ve solo las funciones que le corresponden.</p>
 
         <div className="login-roles" role="radiogroup" aria-label="Rol de acceso">

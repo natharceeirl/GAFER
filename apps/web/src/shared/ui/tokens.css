@@ -1,27 +1,39 @@
 /*
-  GAFER design tokens — dirección "Garita de control industrial".
-  Ver .impeccable/surfaces/src.md para el contrato completo.
-  Kraft/carbón industrial, nunca crema de panadería. Los colores de
-  estado (verde/amarillo/naranja/rojo) SON el semáforo del Mapa Murino
-  en todo el sistema, no una paleta de acento separada.
+  GAFER design tokens — dirección "Garita de control industrial", con la
+  paleta de marca de gafer.pe y del logo. Los colores de estado
+  (verde/amarillo/naranja/rojo) SON el semáforo del Mapa Murino en todo
+  el sistema; el verde del semáforo es el mismo verde del logo.
 */
 
 :root {
-  /* superficie: kraft industrial gris-frío, nunca crema de panadería */
-  --gf-bg: #d7d7ca;
-  --gf-panel: #ecede6;
-  --gf-panel-raised: #f4f5ef;
-  --gf-rule: #a8ab9b;
-  --gf-rule-strong: #82866f;
+  /* superficie: piedra cálida de la paleta de gafer.pe */
+  --gf-bg: #d3cec5;
+  --gf-panel: #e6e2db;
+  --gf-panel-raised: #f2efea;
+  --gf-rule: #b9b2a8;
+  --gf-rule-strong: #8e867d;
 
-  /* tinta */
-  --gf-ink: #23241f;
-  --gf-ink-soft: #56564b;
-  --gf-ink-faint: #837e6c;
+  /* tinta; el gris cálido de la paleta, oscurecido para pasar AA como texto */
+  --gf-ink: #0f1110;
+  --gf-ink-soft: #3f3b37;
+  --gf-ink-faint: #5e5751;
 
-  /* semáforo Mapa Murino = estado + acento de marca */
-  --gf-verde: #2f6b3e;
-  --gf-verde-ink: #eef3ea;
+  /* marca: verde del logo con texto claro; verde hoja solo como relleno con texto oscuro */
+  --gf-marca: #056138;
+  --gf-marca-ink: #eef5ef;
+  --gf-hoja: #8fb961;
+
+  /* información neutra y foco del teclado */
+  --gf-info: #3d6da4;
+  --gf-info-ink: #eef3fa;
+
+  /* el logo se apoya directo sobre el fondo claro */
+  --gf-logo-placa: transparent;
+  --gf-logo-placa-padding: 0;
+
+  /* semáforo Mapa Murino = estado; el verde es el de la marca */
+  --gf-verde: #056138;
+  --gf-verde-ink: #e8f2ea;
   --gf-amarillo: #93701c;
   --gf-amarillo-ink: #fbf3e1;
   --gf-naranja: #b3501e;
@@ -43,18 +55,29 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --gf-bg: #1b1b17;
-    --gf-panel: #232320;
-    --gf-panel-raised: #2b2b26;
-    --gf-rule: #46453a;
-    --gf-rule-strong: #5c5a4b;
+    --gf-bg: #121513;
+    --gf-panel: #1a1e1b;
+    --gf-panel-raised: #222723;
+    --gf-rule: #3a413c;
+    --gf-rule-strong: #566059;
 
-    --gf-ink: #ece7d8;
-    --gf-ink-soft: #bcb7a3;
-    --gf-ink-faint: #8b8672;
+    --gf-ink: #eceae4;
+    --gf-ink-soft: #c3c0b8;
+    --gf-ink-faint: #9c968e;
 
-    --gf-verde: #58a86c;
-    --gf-verde-ink: #12200f;
+    /* en oscuro el verde del logo no se lee: la marca pasa al verde hoja */
+    --gf-marca: #8fb961;
+    --gf-marca-ink: #0f1110;
+    --gf-hoja: #8fb961;
+
+    --gf-info: #7fa8da;
+    --gf-info-ink: #0e1622;
+
+    --gf-logo-placa: #f2efea;
+    --gf-logo-placa-padding: 6px 10px;
+
+    --gf-verde: #6db77f;
+    --gf-verde-ink: #0f1a12;
     --gf-amarillo: #d6ab48;
     --gf-amarillo-ink: #241d0c;
     --gf-naranja: #e0793f;
@@ -77,8 +100,9 @@ body {
   color: var(--gf-panel);
 }
 
+/* foco en azul de información: el naranja queda reservado para "Observado" y alertas */
 :focus-visible {
-  outline: 2.5px solid var(--gf-naranja);
+  outline: 2.5px solid var(--gf-info);
   outline-offset: 2px;
 }
 
