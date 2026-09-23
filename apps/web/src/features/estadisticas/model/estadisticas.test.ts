@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  agruparAlertas,
   alertasActivas,
   clientesSinServicio,
   consumoMensual,
@@ -162,12 +163,13 @@ describe('alertas activas (§11)', () => {
       ],
       estaciones: [{ cliente: 'KALLPA', proyecto: 'CSF_SUNNY', plano: 'Planta baja', estacion: 12, visitasConsecutivas: 4 }],
       pendientes: [
-        { codigo: 'INFORME-KALLPA-014-2026', cliente: 'KALLPA', proyecto: 'PLANTA', fecha: '2026-09-15' },
-        { codigo: 'INFORME-X-001-2026', cliente: 'X', proyecto: 'Y', fecha: '2026-09-23' },
+        { id: 'd1', codigo: 'INFORME-KALLPA-014-2026', cliente: 'KALLPA', proyecto: 'PLANTA', fecha: '2026-09-15' },
+        { id: 'd9', codigo: 'INFORME-X-001-2026', cliente: 'X', proyecto: 'Y', fecha: '2026-09-23' },
       ],
       sinServicio: [{ cliente: 'AGROSUR', ultimoServicio: '2026-05-10', dias: 136 }],
     });
     expect(alertas.map((a) => a.severidad)).toEqual(['rojo', 'rojo', 'amarillo', 'amarillo', 'ink']);
+    expect(alertas.map((a) => a.categoria)).toEqual(['vencido', 'estacion', 'por-vencer', 'pendiente', 'sin-servicio']);
     expect(alertas.map((a) => a.texto)).toEqual([
       'Certificado vencido hace 11 días',
       'Estación 12 en aura ROJO',
@@ -175,5 +177,24 @@ describe('alertas activas (§11)', () => {
       'Documento pendiente de aprobación hace 192 h',
       'Cliente sin servicio hace 136 días',
     ]);
+    expect(alertas[3].documentoId).toBe('d1');
+  });
+});
+
+describe('agruparAlertas', () => {
+  it('resume en cinco categorías fijas, en orden de gravedad, aunque alguna esté vacía', () => {
+    const grupos = agruparAlertas([
+      { id: 'a', categoria: 'estacion', severidad: 'rojo', texto: 'x', detalle: '' },
+      { id: 'b', categoria: 'estacion', severidad: 'rojo', texto: 'y', detalle: '' },
+      { id: 'c', categoria: 'sin-servicio', severidad: 'ink', texto: 'z', detalle: '' },
+    ]);
+    expect(grupos.map((g) => [g.categoria, g.alertas.length])).toEqual([
+      ['vencido', 0],
+      ['estacion', 2],
+      ['por-vencer', 0],
+      ['pendiente', 0],
+      ['sin-servicio', 1],
+    ]);
+    expect(grupos[1]).toMatchObject({ titulo: 'Estaciones en aura ROJO', severidad: 'rojo' });
   });
 });

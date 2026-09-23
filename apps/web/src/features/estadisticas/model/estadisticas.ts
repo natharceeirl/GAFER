@@ -34,11 +34,29 @@ export interface Serie {
 
 export type SeveridadAlerta = 'rojo' | 'amarillo' | 'ink';
 
+export type CategoriaAlerta = 'vencido' | 'estacion' | 'por-vencer' | 'pendiente' | 'sin-servicio';
+
 export interface Alerta {
   id: string;
+  categoria: CategoriaAlerta;
   severidad: SeveridadAlerta;
   texto: string;
   detalle: string;
+  /** Solo en alertas de documentos pendientes: permite abrir el documento. */
+  documentoId?: string;
+}
+
+const CATEGORIAS: Array<{ categoria: CategoriaAlerta; titulo: string; severidad: SeveridadAlerta }> = [
+  { categoria: 'vencido', titulo: 'Certificados vencidos', severidad: 'rojo' },
+  { categoria: 'estacion', titulo: 'Estaciones en aura ROJO', severidad: 'rojo' },
+  { categoria: 'por-vencer', titulo: 'Certificados por vencer (30 días)', severidad: 'amarillo' },
+  { categoria: 'pendiente', titulo: 'Documentos pendientes +48 h', severidad: 'amarillo' },
+  { categoria: 'sin-servicio', titulo: 'Clientes sin servicio 90+ días', severidad: 'ink' },
+];
+
+/** Resumen de alertas en cinco categorías fijas: ocupa lo mismo con 5 o con 500 alertas. */
+export function agruparAlertas(alertas: Alerta[]) {
+  return CATEGORIAS.map((c) => ({ ...c, alertas: alertas.filter((a) => a.categoria === c.categoria) }));
 }
 
 const DIA_MS = 86_400_000;
@@ -223,7 +241,7 @@ interface EntradaAlertas {
   hoy: string;
   vencimientos: VencimientoCertificado[];
   estaciones: EstacionCritica[];
-  pendientes: Array<{ codigo: string; cliente: string; proyecto: string; fecha: string }>;
+  pendientes: Array<{ id: string; codigo: string; cliente: string; proyecto: string; fecha: string }>;
   sinServicio: Array<{ cliente: string; ultimoServicio: string; dias: number }>;
 }
 
@@ -233,18 +251,21 @@ export function alertasActivas({ hoy, vencimientos, estaciones, pendientes, sinS
   return [
     ...v.vencidos.map((x) => ({
       id: `venc-${x.cliente}-${x.fecha}`,
+      categoria: 'vencido' as const,
       severidad: 'rojo' as const,
       texto: `Certificado vencido hace ${plural(-x.dias, 'día', 'días')}`,
       detalle: `${x.cliente} · ${x.tipo} · venció el ${x.fecha}`,
     })),
     ...estaciones.map((e) => ({
       id: `rojo-${e.cliente}-${e.plano}-${e.estacion}`,
+      categoria: 'estacion' as const,
       severidad: 'rojo' as const,
       texto: `Estación ${e.estacion} en aura ROJO`,
       detalle: `${e.cliente} · ${e.proyecto} · ${e.plano} · ${e.visitasConsecutivas} visitas consecutivas con consumo`,
     })),
     ...v.en30.map((x) => ({
       id: `porvencer-${x.cliente}-${x.fecha}`,
+      categoria: 'por-vencer' as const,
       severidad: 'amarillo' as const,
       texto: `Certificado vence en ${plural(x.dias, 'día', 'días')}`,
       detalle: `${x.cliente} · ${x.tipo} · vence el ${x.fecha}`,
@@ -254,12 +275,15 @@ export function alertasActivas({ hoy, vencimientos, estaciones, pendientes, sinS
       .filter((p) => p.horas > 48)
       .map((p) => ({
         id: `pend-${p.codigo}`,
+        categoria: 'pendiente' as const,
         severidad: 'amarillo' as const,
+        documentoId: p.id,
         texto: `Documento pendiente de aprobación hace ${p.horas} h`,
         detalle: `${p.cliente} · ${p.proyecto} · ${p.codigo}`,
       })),
     ...sinServicio.map((c) => ({
       id: `sin-${c.cliente}`,
+      categoria: 'sin-servicio' as const,
       severidad: 'ink' as const,
       texto: `Cliente sin servicio hace ${plural(c.dias, 'día', 'días')}`,
       detalle: `${c.cliente} · último servicio el ${c.ultimoServicio} · riesgo de pérdida`,

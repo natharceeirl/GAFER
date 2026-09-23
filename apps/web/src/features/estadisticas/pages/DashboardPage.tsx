@@ -18,6 +18,7 @@ import { ESTACIONES_ROJO, VENCIMIENTOS, generarHistorial } from '../model/histor
 import { EstadisticasPanel } from '../components/EstadisticasPanel';
 import { ResumenClientes } from '../components/ResumenClientes';
 import { ControlActividades } from '../components/ControlActividades';
+import { AlertasResumen } from '../components/AlertasResumen';
 import './dashboard-page.css';
 
 type Pestana = 'hoy' | 'estadisticas' | 'clientes' | 'actividades';
@@ -130,17 +131,7 @@ export function DashboardPage({ rol, documentos, onAbrirDocumento }: DashboardPa
                 {alertas.length === 0 ? (
                   <p className="dashboard-empty">Sin alertas activas: cartera al día.</p>
                 ) : (
-                  <ul className="dashboard-alertas">
-                    {alertas.map((a, i) => (
-                      <li key={a.id}>
-                        <div className={`dashboard-alerta dashboard-alerta--${a.severidad}`}>
-                          <span className="dashboard-alerta__texto">{a.texto}</span>
-                          <span className="dashboard-alerta__detalle">{a.detalle}</span>
-                        </div>
-                        {i < alertas.length - 1 && <PerforatedDivider />}
-                      </li>
-                    ))}
-                  </ul>
+                  <AlertasResumen alertas={alertas} onAbrirDocumento={onAbrirDocumento} />
                 )}
               </section>
 
