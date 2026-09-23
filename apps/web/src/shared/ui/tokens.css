@@ -6,6 +6,7 @@
 */
 
 :root {
+  color-scheme: light;
   /* superficie: piedra cálida de la paleta de gafer.pe */
   --gf-bg: #d3cec5;
   --gf-panel: #e6e2db;
@@ -53,8 +54,14 @@
   --gf-stamp-tilt: -4deg;
 }
 
+/*
+  Tema: sin atributo sigue al sistema operativo; data-theme="light" o
+  "dark" en <html> (botón del menú) fuerza uno. Los dos bloques oscuros
+  son idénticos a propósito: CSS no permite compartirlos.
+*/
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
     --gf-bg: #121513;
     --gf-panel: #1a1e1b;
     --gf-panel-raised: #222723;
@@ -65,7 +72,6 @@
     --gf-ink-soft: #c3c0b8;
     --gf-ink-faint: #9c968e;
 
-    /* en oscuro el verde del logo no se lee: la marca pasa al verde hoja */
     --gf-marca: #8fb961;
     --gf-marca-ink: #0f1110;
     --gf-hoja: #8fb961;
@@ -87,6 +93,41 @@
     --gf-sin-color: #8b8672;
     --gf-sin-color-ink: #1d1c17;
   }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --gf-bg: #121513;
+  --gf-panel: #1a1e1b;
+  --gf-panel-raised: #222723;
+  --gf-rule: #3a413c;
+  --gf-rule-strong: #566059;
+
+  --gf-ink: #eceae4;
+  --gf-ink-soft: #c3c0b8;
+  --gf-ink-faint: #9c968e;
+
+  /* en oscuro el verde del logo no se lee: la marca pasa al verde hoja */
+  --gf-marca: #8fb961;
+  --gf-marca-ink: #0f1110;
+  --gf-hoja: #8fb961;
+
+  --gf-info: #7fa8da;
+  --gf-info-ink: #0e1622;
+
+  --gf-logo-placa: #f2efea;
+  --gf-logo-placa-padding: 6px 10px;
+
+  --gf-verde: #6db77f;
+  --gf-verde-ink: #0f1a12;
+  --gf-amarillo: #d6ab48;
+  --gf-amarillo-ink: #241d0c;
+  --gf-naranja: #e0793f;
+  --gf-naranja-ink: #271307;
+  --gf-rojo: #dd6a58;
+  --gf-rojo-ink: #240e0a;
+  --gf-sin-color: #8b8672;
+  --gf-sin-color-ink: #1d1c17;
 }
 
 body {

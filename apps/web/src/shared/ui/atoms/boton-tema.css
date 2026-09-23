@@ -1,0 +1,22 @@
+.boton-tema {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  background: transparent;
+  color: var(--gf-ink-soft);
+  font-family: var(--gf-font-ui);
+  font-weight: 600;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.boton-tema:hover {
+  border-color: var(--gf-ink);
+  color: var(--gf-ink);
+}
+.boton-tema svg {
+  flex: 0 0 auto;
+}

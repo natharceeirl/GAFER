@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Button } from '../../../shared/ui/atoms/Button';
 import { LogoGafer } from '../../../shared/ui/atoms/LogoGafer';
+import { BotonTema } from '../../../shared/ui/atoms/BotonTema';
 import { ROLES_MOCK, type Rol, type RolInfo } from '../model/roles';
 import './login-page.css';
 
@@ -34,6 +35,9 @@ export function LoginPage({ onIngresar }: LoginPageProps) {
 
   return (
     <div className="login-page">
+      <div className="login-page__tema">
+        <BotonTema />
+      </div>
       <form className="login-card" onSubmit={ingresar}>
         <LogoGafer ancho={200} />
         <h1 className="login-card__titulo">Ingreso al sistema</h1>

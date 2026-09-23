@@ -315,9 +315,13 @@ export function TerrenoCanvas({
     window.addEventListener('resize', onCambio);
     const mediaOscuro = window.matchMedia('(prefers-color-scheme: dark)');
     mediaOscuro.addEventListener('change', onCambio);
+    // El botón de tema cambia data-theme en <html> sin tocar la preferencia del sistema.
+    const observador = new MutationObserver(onCambio);
+    observador.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     return () => {
       window.removeEventListener('resize', onCambio);
       mediaOscuro.removeEventListener('change', onCambio);
+      observador.disconnect();
     };
   }, [dibujar]);
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { LoginPage } from '../features/auth/pages/LoginPage';
 import { LogoGafer } from '../shared/ui/atoms/LogoGafer';
+import { BotonTema } from '../shared/ui/atoms/BotonTema';
 import { NOMBRE_ROL, type Rol } from '../features/auth/model/roles';
 import { DashboardPage } from '../features/estadisticas/pages/DashboardPage';
 import { ClientesModule } from '../features/cliente-expediente/pages/ClientesModule';
@@ -102,6 +103,7 @@ export function AppShell() {
             <span className="app-shell__sesion-nombre">{sesion.usuario}</span>
             <span className="app-shell__sesion-rol">{NOMBRE_ROL[sesion.rol]}</span>
           </div>
+          <BotonTema />
           <button type="button" className="app-shell__salir" onClick={() => setSesion(null)}>
             Cerrar sesión
           </button>
