@@ -1,0 +1,94 @@
+.terreno-canvas {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.terreno-canvas__stage {
+  position: relative;
+  border: 1.5px solid var(--gf-ink);
+  border-radius: var(--gf-radius);
+  background: var(--gf-panel-raised);
+  height: 420px;
+  overflow: hidden;
+}
+
+.terreno-canvas__lienzo {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.terreno-canvas__vacio {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0 24px;
+  text-align: center;
+  font-family: var(--gf-font-ui);
+  font-size: 13px;
+  color: var(--gf-ink-faint);
+  pointer-events: none;
+}
+
+.terreno-canvas__aviso {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 440px;
+  padding: 6px 14px;
+  border: 1.5px solid var(--gf-ink);
+  border-radius: 12px;
+  background: var(--gf-panel-raised);
+  font-family: var(--gf-font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--gf-ink);
+  text-align: center;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.12);
+}
+
+.terreno-canvas__sello {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  padding: 6px 14px;
+  border: 2px solid var(--gf-verde);
+  border-radius: 3px;
+  transform: rotate(-4deg);
+  font-family: var(--gf-font-stamp);
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  color: var(--gf-verde);
+  background: var(--gf-panel-raised);
+  pointer-events: none;
+}
+
+.terreno-canvas__barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.terreno-canvas__conteo {
+  font-family: var(--gf-font-mono);
+  font-size: 12.5px;
+  color: var(--gf-ink-soft);
+}
+
+.terreno-canvas__botones {
+  display: flex;
+  gap: 8px;
+}

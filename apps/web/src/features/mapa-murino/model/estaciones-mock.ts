@@ -1,25 +1,49 @@
 import type { Estacion } from '@gafer/contracts';
 
-export const ESTACIONES_PLANTA_KALLPA: Estacion[] = [
-  { id: 'e1', numero: 1, colorIcono: 'VERDE', colorAura: 'SIN_COLOR' },
-  { id: 'e2', numero: 2, colorIcono: 'VERDE', colorAura: 'SIN_COLOR' },
-  { id: 'e3', numero: 3, colorIcono: 'VERDE', colorAura: 'VERDE' },
-  { id: 'e4', numero: 4, colorIcono: 'ROJO', colorAura: 'VERDE' },
-  { id: 'e5', numero: 5, colorIcono: 'VERDE', colorAura: 'AMARILLO' },
-  { id: 'e6', numero: 6, colorIcono: 'ROJO', colorAura: 'AMARILLO' },
-  { id: 'e7', numero: 7, colorIcono: 'VERDE', colorAura: 'NARANJA' },
-  { id: 'e8', numero: 8, colorIcono: 'ROJO', colorAura: 'NARANJA' },
-  { id: 'e9', numero: 9, colorIcono: 'ROJO', colorAura: 'ROJO' },
-  { id: 'e10', numero: 10, colorIcono: 'ROJO', colorAura: 'ROJO' },
-  { id: 'e11', numero: 11, colorIcono: 'VERDE', colorAura: 'SIN_COLOR' },
-  { id: 'e12', numero: 12, colorIcono: 'VERDE', colorAura: 'SIN_COLOR' },
-  { id: 'e13', numero: 13, colorIcono: 'VERDE', colorAura: 'SIN_COLOR' },
-  { id: 'e14', numero: 14, colorIcono: 'ROJO', colorAura: 'VERDE' },
-  { id: 'e15', numero: 15, colorIcono: 'VERDE', colorAura: 'SIN_COLOR' },
-  { id: 'e16', numero: 16, colorIcono: 'VERDE', colorAura: 'AMARILLO' },
-  { id: 'e17', numero: 17, colorIcono: 'ROJO', colorAura: 'NARANJA' },
-  { id: 'e18', numero: 18, colorIcono: 'VERDE', colorAura: 'SIN_COLOR' },
+export interface PlanoMock {
+  id: string;
+  nombre: string;
+}
+
+export const PLANOS_MOCK: PlanoMock[] = [
+  { id: 'planta-baja', nombre: 'Planta baja' },
+  { id: 'primer-piso', nombre: 'Primer piso' },
+  { id: 'banos', nombre: 'Baños' },
 ];
+
+/**
+ * Cada plano numera sus estaciones desde 1 — spec §5.5: "el sistema
+ * soporta hasta 20 planos por proyecto", cada uno con sus propias
+ * estaciones (hasta 100). Un edificio con habitaciones/pisos se
+ * modela como planos separados, no como subdivisiones dentro de un
+ * mismo lienzo.
+ */
+export const ESTACIONES_POR_PLANO: Record<string, Estacion[]> = {
+  'planta-baja': [
+    { id: 'pb-1', numero: 1, colorIcono: 'VERDE', colorAura: 'SIN_COLOR' },
+    { id: 'pb-2', numero: 2, colorIcono: 'VERDE', colorAura: 'SIN_COLOR' },
+    { id: 'pb-3', numero: 3, colorIcono: 'VERDE', colorAura: 'VERDE' },
+    { id: 'pb-4', numero: 4, colorIcono: 'ROJO', colorAura: 'VERDE' },
+    { id: 'pb-5', numero: 5, colorIcono: 'VERDE', colorAura: 'AMARILLO' },
+    { id: 'pb-6', numero: 6, colorIcono: 'ROJO', colorAura: 'AMARILLO' },
+    { id: 'pb-7', numero: 7, colorIcono: 'VERDE', colorAura: 'NARANJA' },
+    { id: 'pb-8', numero: 8, colorIcono: 'ROJO', colorAura: 'NARANJA' },
+  ],
+  'primer-piso': [
+    { id: 'pp-1', numero: 1, colorIcono: 'ROJO', colorAura: 'ROJO' },
+    { id: 'pp-2', numero: 2, colorIcono: 'ROJO', colorAura: 'ROJO' },
+    { id: 'pp-3', numero: 3, colorIcono: 'VERDE', colorAura: 'SIN_COLOR' },
+    { id: 'pp-4', numero: 4, colorIcono: 'VERDE', colorAura: 'SIN_COLOR' },
+    { id: 'pp-5', numero: 5, colorIcono: 'VERDE', colorAura: 'SIN_COLOR' },
+    { id: 'pp-6', numero: 6, colorIcono: 'ROJO', colorAura: 'VERDE' },
+  ],
+  banos: [
+    { id: 'ba-1', numero: 1, colorIcono: 'VERDE', colorAura: 'SIN_COLOR' },
+    { id: 'ba-2', numero: 2, colorIcono: 'VERDE', colorAura: 'AMARILLO' },
+    { id: 'ba-3', numero: 3, colorIcono: 'ROJO', colorAura: 'NARANJA' },
+    { id: 'ba-4', numero: 4, colorIcono: 'VERDE', colorAura: 'SIN_COLOR' },
+  ],
+};
 
 export function resumenPorAura(estaciones: Estacion[]) {
   return estaciones.reduce(
