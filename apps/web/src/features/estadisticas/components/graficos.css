@@ -1,0 +1,180 @@
+.graf-tarjeta {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 16px;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  background: var(--gf-panel);
+  min-width: 0;
+}
+.graf-tarjeta--completo {
+  grid-column: 1 / -1;
+}
+.graf-tarjeta__cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+.graf-tarjeta__cabecera h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.graf-tarjeta__cabecera p {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--gf-ink-faint);
+}
+
+.graf-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.graf-filtro {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.graf-filtro span {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gf-ink-faint);
+}
+.graf-filtro select,
+.graf-filtro input {
+  min-height: 34px;
+  max-width: 190px;
+  padding: 4px 8px;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  background: var(--gf-panel-raised);
+  color: var(--gf-ink);
+  font-family: var(--gf-font-ui);
+  font-size: 13px;
+}
+
+.graf {
+  margin: 0;
+}
+.graf svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.graf-grilla {
+  stroke: var(--gf-rule);
+  stroke-width: 1;
+}
+.graf-eje {
+  stroke: var(--gf-ink-faint);
+  stroke-width: 1.25;
+}
+.graf-tick {
+  font-family: var(--gf-font-mono);
+  font-size: 11px;
+  fill: var(--gf-ink-faint);
+}
+.graf-valor {
+  font-family: var(--gf-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--gf-ink);
+}
+.graf-barra--marca {
+  fill: var(--gf-marca);
+}
+.graf-barra--hueca {
+  fill: none;
+  stroke: var(--gf-ink-faint);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 2;
+}
+
+.graf-leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--gf-ink-soft);
+}
+.graf-leyenda span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.graf-leyenda__unidad {
+  margin-left: auto;
+  color: var(--gf-ink-faint);
+}
+.graf-muestra {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 1px;
+}
+.graf-muestra--marca {
+  background: var(--gf-marca);
+}
+.graf-muestra--hueca {
+  border: 1.5px dashed var(--gf-ink-faint);
+}
+
+.graf-hbarras {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.graf-hbarras li {
+  display: grid;
+  grid-template-columns: minmax(96px, 40%) minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.graf-hbarras__etiqueta {
+  display: flex;
+  flex-direction: column;
+  font-weight: 700;
+  min-width: 0;
+}
+.graf-hbarras__etiqueta small {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--gf-ink-faint);
+}
+.graf-hbarras__pista {
+  height: 14px;
+  background: var(--gf-panel-raised);
+  border: 1px solid var(--gf-rule);
+  border-radius: var(--gf-radius);
+  overflow: hidden;
+}
+.graf-hbarras__barra {
+  display: block;
+  height: 100%;
+  background: var(--gf-marca);
+  box-shadow: inset -3px 0 0 var(--gf-hoja);
+}
+.graf-hbarras__valor {
+  font-family: var(--gf-font-mono);
+  font-weight: 600;
+  text-align: right;
+}
+
+.graf-vacio {
+  margin: 0;
+  font-size: 13px;
+  color: var(--gf-ink-soft);
+}
