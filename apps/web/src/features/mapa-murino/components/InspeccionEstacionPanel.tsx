@@ -24,22 +24,38 @@ interface InspeccionEstacionPanelProps {
  */
 export function InspeccionEstacionPanel({ estacion, historial, onRegistrar, onCerrar }: InspeccionEstacionPanelProps) {
   const [tipoCebo, setTipoCebo] = useState<string>(TIPOS_CEBO_MOCK[0]);
+  const [cantidadGramos, setCantidadGramos] = useState('');
+  const [lote, setLote] = useState('');
+  const [vencimiento, setVencimiento] = useState('');
   const [huboConsumo, setHuboConsumo] = useState<boolean | null>(null);
   const [porcentaje, setPorcentaje] = useState<PorcentajeConsumo>(25);
+  const [cantidadReposicion, setCantidadReposicion] = useState('');
   const [estadoFisico, setEstadoFisico] = useState<'BUENAS_CONDICIONES' | 'MALAS_CONDICIONES'>('BUENAS_CONDICIONES');
+  const [cantidadRepuesta, setCantidadRepuesta] = useState('');
 
   const ultimasTres = historial.slice(-3).reverse();
+  const datosBaseCompletos = cantidadGramos !== '' && lote.trim() !== '' && vencimiento !== '';
 
   function registrar() {
-    if (huboConsumo === null) return;
+    if (huboConsumo === null || !datosBaseCompletos) return;
     onRegistrar({
       fecha: new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }),
+      tipoCebo,
+      cantidadGramos: Number(cantidadGramos),
+      lote,
+      vencimiento,
       huboConsumo,
       porcentajeConsumo: huboConsumo ? porcentaje : undefined,
-      tipoCebo,
+      cantidadReposicion: huboConsumo && cantidadReposicion !== '' ? Number(cantidadReposicion) : undefined,
       estadoFisico: huboConsumo ? undefined : estadoFisico,
+      cantidadRepuesta: !huboConsumo && cantidadRepuesta !== '' ? Number(cantidadRepuesta) : undefined,
     });
     setHuboConsumo(null);
+    setCantidadGramos('');
+    setLote('');
+    setVencimiento('');
+    setCantidadReposicion('');
+    setCantidadRepuesta('');
   }
 
   return (
@@ -70,9 +86,15 @@ export function InspeccionEstacionPanel({ estacion, historial, onRegistrar, onCe
             {ultimasTres.map((insp, i) => (
               <li key={i}>
                 <span className="tabular">{insp.fecha}</span>
-                <span>{insp.tipoCebo}</span>
+                <span>
+                  {insp.tipoCebo} · {insp.cantidadGramos} g
+                </span>
                 <span className={insp.huboConsumo ? 'inspeccion-panel__consumo--si' : 'inspeccion-panel__consumo--no'}>
-                  {insp.huboConsumo ? `consumo ${insp.porcentajeConsumo}%` : 'sin consumo'}
+                  {insp.huboConsumo
+                    ? `consumo ${insp.porcentajeConsumo}%`
+                    : insp.estadoFisico === 'BUENAS_CONDICIONES'
+                      ? 'sin consumo · buenas condiciones'
+                      : 'sin consumo · malas condiciones'}
                 </span>
               </li>
             ))}
@@ -96,6 +118,28 @@ export function InspeccionEstacionPanel({ estacion, historial, onRegistrar, onCe
           </select>
         </label>
 
+        <div className="inspeccion-panel__fila">
+          <label className="inspeccion-panel__campo">
+            <span>Cantidad (g)</span>
+            <input
+              type="number"
+              min={0}
+              value={cantidadGramos}
+              onChange={(e) => setCantidadGramos(e.target.value)}
+              placeholder="0"
+            />
+          </label>
+          <label className="inspeccion-panel__campo">
+            <span>Lote</span>
+            <input type="text" value={lote} onChange={(e) => setLote(e.target.value)} placeholder="L-2026-01" />
+          </label>
+        </div>
+
+        <label className="inspeccion-panel__campo">
+          <span>Vencimiento</span>
+          <input type="date" value={vencimiento} onChange={(e) => setVencimiento(e.target.value)} />
+        </label>
+
         <fieldset className="inspeccion-panel__campo">
           <legend>¿Hubo consumo?</legend>
           <div className="inspeccion-panel__toggle">
@@ -117,29 +161,53 @@ export function InspeccionEstacionPanel({ estacion, historial, onRegistrar, onCe
         </fieldset>
 
         {huboConsumo === true ? (
-          <label className="inspeccion-panel__campo">
-            <span>Porcentaje consumido</span>
-            <select value={porcentaje} onChange={(e) => setPorcentaje(Number(e.target.value) as PorcentajeConsumo)}>
-              {PORCENTAJES.map((p) => (
-                <option key={p} value={p}>
-                  {p}%
-                </option>
-              ))}
-            </select>
-          </label>
+          <>
+            <label className="inspeccion-panel__campo">
+              <span>Porcentaje consumido</span>
+              <select value={porcentaje} onChange={(e) => setPorcentaje(Number(e.target.value) as PorcentajeConsumo)}>
+                {PORCENTAJES.map((p) => (
+                  <option key={p} value={p}>
+                    {p}%
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="inspeccion-panel__campo">
+              <span>Cantidad de reposición (g)</span>
+              <input
+                type="number"
+                min={0}
+                value={cantidadReposicion}
+                onChange={(e) => setCantidadReposicion(e.target.value)}
+                placeholder="0"
+              />
+            </label>
+          </>
         ) : null}
 
         {huboConsumo === false ? (
-          <label className="inspeccion-panel__campo">
-            <span>Estado de la estación</span>
-            <select value={estadoFisico} onChange={(e) => setEstadoFisico(e.target.value as typeof estadoFisico)}>
-              <option value="BUENAS_CONDICIONES">En buenas condiciones</option>
-              <option value="MALAS_CONDICIONES">En malas condiciones (agua, polvo, calor)</option>
-            </select>
-          </label>
+          <>
+            <label className="inspeccion-panel__campo">
+              <span>Estado de la estación</span>
+              <select value={estadoFisico} onChange={(e) => setEstadoFisico(e.target.value as typeof estadoFisico)}>
+                <option value="BUENAS_CONDICIONES">En buenas condiciones</option>
+                <option value="MALAS_CONDICIONES">En malas condiciones (agua, polvo, calor)</option>
+              </select>
+            </label>
+            <label className="inspeccion-panel__campo">
+              <span>Cantidad repuesta (g)</span>
+              <input
+                type="number"
+                min={0}
+                value={cantidadRepuesta}
+                onChange={(e) => setCantidadRepuesta(e.target.value)}
+                placeholder="0"
+              />
+            </label>
+          </>
         ) : null}
 
-        <Button type="button" variant="primary" onClick={registrar} disabled={huboConsumo === null}>
+        <Button type="button" variant="primary" onClick={registrar} disabled={huboConsumo === null || !datosBaseCompletos}>
           Registrar inspección
         </Button>
       </section>

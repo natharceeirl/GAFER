@@ -133,7 +133,8 @@
   color: var(--gf-ink-faint);
   padding: 0;
 }
-.inspeccion-panel__campo select {
+.inspeccion-panel__campo select,
+.inspeccion-panel__campo input {
   padding: 8px 10px;
   border: 1.5px solid var(--gf-rule-strong);
   border-radius: var(--gf-radius);
@@ -141,6 +142,15 @@
   color: var(--gf-ink);
   font-family: var(--gf-font-ui);
   font-size: 13.5px;
+}
+
+.inspeccion-panel__fila {
+  display: flex;
+  gap: 10px;
+}
+.inspeccion-panel__fila .inspeccion-panel__campo {
+  flex: 1;
+  min-width: 0;
 }
 
 .inspeccion-panel__toggle {
