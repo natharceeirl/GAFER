@@ -34,6 +34,16 @@ function colorIcono(paleta: ReturnType<typeof leerPaleta>, color: Estacion['colo
   return color === 'VERDE' ? paleta.verde : paleta.rojo;
 }
 
+/** Dibuja el contorno del ícono en la forma que marca el tipo de estación — spec §5.2. */
+function trazarFormaEstacion(ctx: CanvasRenderingContext2D, x: number, y: number, radio: number, tipo: Estacion['tipoEstacion']) {
+  ctx.beginPath();
+  if (tipo === 'CEBO_RATICIDA') {
+    ctx.arc(x, y, radio, 0, Math.PI * 2);
+  } else {
+    ctx.rect(x - radio, y - radio, radio * 2, radio * 2);
+  }
+}
+
 function colorAura(paleta: ReturnType<typeof leerPaleta>, color: Estacion['colorAura']): string | null {
   switch (color) {
     case 'VERDE':
@@ -260,8 +270,7 @@ export function TerrenoCanvas({
         ctx.shadowBlur = 0;
       }
 
-      ctx.beginPath();
-      ctx.arc(x, y, RADIO_ESTACION, 0, Math.PI * 2);
+      trazarFormaEstacion(ctx, x, y, RADIO_ESTACION, estacion.tipoEstacion);
       ctx.fillStyle = paleta.panelRaised;
       ctx.fill();
       ctx.lineWidth = 2.5;
@@ -286,9 +295,8 @@ export function TerrenoCanvas({
     });
 
     // fantasma de la próxima estación a colocar, siguiendo el cursor
-    if (cerrado && !todasColocadas && cursor && dentroDelPoligono(cursor, puntos)) {
-      ctx.beginPath();
-      ctx.arc(cursor.x, cursor.y, RADIO_ESTACION, 0, Math.PI * 2);
+    if (cerrado && !todasColocadas && siguienteEstacion && cursor && dentroDelPoligono(cursor, puntos)) {
+      trazarFormaEstacion(ctx, cursor.x, cursor.y, RADIO_ESTACION, siguienteEstacion.estacion.tipoEstacion);
       ctx.fillStyle = paleta.ink;
       ctx.globalAlpha = 0.08;
       ctx.fill();
@@ -299,7 +307,7 @@ export function TerrenoCanvas({
       ctx.stroke();
       ctx.setLineDash([]);
     }
-  }, [puntos, cerrado, cursor, colocadas, todasColocadas, seleccionadaId]);
+  }, [puntos, cerrado, cursor, colocadas, todasColocadas, siguienteEstacion, seleccionadaId]);
 
   useEffect(() => {
     dibujar();

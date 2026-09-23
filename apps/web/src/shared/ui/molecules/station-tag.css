@@ -29,6 +29,11 @@
   color: var(--gf-rojo);
 }
 
+/* forma del ícono según tipo de estación — spec §5.2: círculo para cebo raticida, cuadrado para otro tipo de trampa */
+.station-tag__icono--cuadrado {
+  border-radius: 6px;
+}
+
 .station-tag__label {
   font-size: 12px;
   font-weight: 700;

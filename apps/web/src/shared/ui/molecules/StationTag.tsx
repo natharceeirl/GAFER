@@ -20,9 +20,11 @@ interface StationTagProps {
  * nunca un acento tenue — para que una escalada se note sin leer texto.
  */
 export function StationTag({ estacion }: StationTagProps) {
+  const formaClase = estacion.tipoEstacion === 'CEBO_RATICIDA' ? '' : ' station-tag__icono--cuadrado';
+
   return (
     <div className={`station-tag ${AURA_A_CLASE[estacion.colorAura]}`}>
-      <span className={`station-tag__icono station-tag__icono--${estacion.colorIcono.toLowerCase()}`}>
+      <span className={`station-tag__icono station-tag__icono--${estacion.colorIcono.toLowerCase()}${formaClase}`}>
         {estacion.numero}
       </span>
       <span className="station-tag__label">
