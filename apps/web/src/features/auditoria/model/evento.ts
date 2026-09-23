@@ -8,6 +8,7 @@ export type AccionAuditoria =
   | 'Envío al cliente'
   | 'Programación de visita'
   | 'Alta de cliente'
+  | 'Edición de ficha de cliente'
   | 'Cierre de inspección';
 
 /** Evento del log de auditoría (§8.4): nadie lo modifica ni lo elimina. */

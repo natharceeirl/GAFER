@@ -1,20 +1,24 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ClientesListPage } from './ClientesListPage';
 import { ClienteExpedientePage } from './ClienteExpedientePage';
 import { NuevoClientePage } from './NuevoClientePage';
 import { NuevoProyectoPage } from './NuevoProyectoPage';
 import { NuevoServicioPage } from './NuevoServicioPage';
 import { useCartera } from '../model/cartera-context';
-import { agregarCliente, agregarProyecto, agregarServicio, esClienteNuevo, proyectosDe } from '../model/cartera';
+import { actualizarCliente, agregarCliente, agregarProyecto, agregarServicio, esClienteNuevo, proyectosDe } from '../model/cartera';
+import type { ClienteFila } from '../model/clientes-mock';
 import type { DatosCliente, DatosProyecto, DatosServicio } from '../model/validaciones';
 import { CATALOGOS_TEXTO_MOCK, EQUIPOS_MOCK, INSUMOS_MOCK } from '../../mantenimiento/model/mantenimiento-mock';
+import { ESTACIONES_ROJO, generarHistorial, tiposContratadosDe } from '../../estadisticas/model/historial-mock';
 import { useAuditoria } from '../../auditoria/model/auditoria-context';
+import type { AccionAuditoria } from '../../auditoria/model/evento';
 import type { Rol } from '../../auth/model/roles';
-import { ahora } from '../../../shared/lib/fecha';
+import { ahora, fechaLocal } from '../../../shared/lib/fecha';
 
 type Vista =
   | { tipo: 'lista' }
   | { tipo: 'nuevo-cliente' }
+  | { tipo: 'editar-cliente'; clienteId: string }
   | { tipo: 'expediente'; clienteId: string; aviso: string | null }
   | { tipo: 'nuevo-proyecto'; clienteId: string }
   | { tipo: 'nuevo-servicio'; clienteId: string; proyectoId: string };
@@ -22,32 +26,52 @@ type Vista =
 interface ClientesModuleProps {
   usuario: string;
   rol: Rol;
+  onAbrirMapaMurino: () => void;
 }
 
 const GIROS = CATALOGOS_TEXTO_MOCK.find((c) => c.id === 'giros')?.items ?? [];
 
+function datosDe(c: ClienteFila): DatosCliente {
+  return {
+    razonSocial: c.razonSocial,
+    ruc: c.ruc,
+    codigoCorto: c.codigoCorto,
+    direccionFiscal: c.direccionFiscal,
+    giro: c.giro,
+    contactoNombre: c.contacto.nombre,
+    contactoCargo: c.contacto.cargo,
+    contactoTelefono: c.contacto.telefono,
+    contactoCorreo: c.contacto.correo,
+    estado: c.estado,
+  };
+}
+
 /** Jerarquía CLIENTE → PROYECTO (sede) → SERVICIO (§7), sobre la cartera compartida de la app. */
-export function ClientesModule({ usuario, rol }: ClientesModuleProps) {
+export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModuleProps) {
   const { cartera, setCartera } = useCartera();
   const { registrar } = useAuditoria();
   const [vista, setVista] = useState<Vista>({ tipo: 'lista' });
+  const hoy = fechaLocal();
+  const historial = useMemo(() => generarHistorial(hoy), [hoy]);
   /** Solo el Administrador da de alta clientes, sedes y servicios (§12, decisión C1). */
   const puedeDarDeAlta = rol === 'ADMINISTRADOR';
 
-  function registrarCliente(d: DatosCliente) {
-    const { estado, clienteId } = agregarCliente(cartera, d);
-    setCartera(() => estado);
+  function auditar(accion: AccionAuditoria, referencia: string, detalle: string) {
     const fechaHora = ahora();
-    registrar({
-      id: `${fechaHora}-alta-${d.codigoCorto}`,
-      fechaHora,
-      usuario,
-      rol,
-      accion: 'Alta de cliente',
-      referencia: d.codigoCorto,
-      detalle: `${d.razonSocial.trim()} · RUC ${d.ruc}`,
-    });
+    registrar({ id: `${fechaHora}-${accion}-${referencia}`, fechaHora, usuario, rol, accion, referencia, detalle });
+  }
+
+  function registrarCliente(d: DatosCliente, anticipacion: number) {
+    const { estado, clienteId } = agregarCliente(cartera, d, anticipacion);
+    setCartera(() => estado);
+    auditar('Alta de cliente', d.codigoCorto, `${d.razonSocial.trim()} · RUC ${d.ruc}`);
     setVista({ tipo: 'expediente', clienteId, aviso: `Cliente ${d.codigoCorto} registrado. El siguiente paso es registrar su primera sede.` });
+  }
+
+  function guardarFicha(cliente: ClienteFila, d: DatosCliente, anticipacion: number) {
+    setCartera(() => actualizarCliente(cartera, cliente.id, d, anticipacion));
+    auditar('Edición de ficha de cliente', cliente.codigoCorto, d.razonSocial.trim());
+    setVista({ tipo: 'expediente', clienteId: cliente.id, aviso: 'Ficha del cliente actualizada.' });
   }
 
   function registrarProyecto(clienteId: string, d: DatosProyecto) {
@@ -73,6 +97,24 @@ export function ClientesModule({ usuario, rol }: ClientesModuleProps) {
         onCancelar={() => setVista({ tipo: 'lista' })}
       />
     );
+  }
+
+  if (vista.tipo === 'editar-cliente' && puedeDarDeAlta) {
+    const cliente = clienteDe(vista.clienteId);
+    if (cliente) {
+      const otros = cartera.clientes.filter((c) => c.id !== cliente.id);
+      return (
+        <NuevoClientePage
+          giros={GIROS}
+          codigosExistentes={otros.map((c) => c.codigoCorto)}
+          rucsExistentes={otros.map((c) => c.ruc)}
+          inicial={datosDe(cliente)}
+          anticipacionInicial={cliente.anticipacionAlertaDias}
+          onRegistrar={(d, anticipacion) => guardarFicha(cliente, d, anticipacion)}
+          onCancelar={() => setVista({ tipo: 'expediente', clienteId: cliente.id, aviso: null })}
+        />
+      );
+    }
   }
 
   if (vista.tipo === 'nuevo-proyecto' && puedeDarDeAlta) {
@@ -109,16 +151,27 @@ export function ClientesModule({ usuario, rol }: ClientesModuleProps) {
   if (vista.tipo !== 'lista' && vista.tipo !== 'nuevo-cliente') {
     const cliente = clienteDe(vista.clienteId);
     if (cliente) {
+      const proyectos = proyectosDe(cartera, cliente.id);
+      /** Los clientes de ejemplo comparten sedes de muestra: su contrato real sale del historial. */
+      const contrataDesratizacion = esClienteNuevo(cartera, cliente.id)
+        ? proyectos.some((p) => p.servicios.some((s) => s.tipoId === 'DRT'))
+        : tiposContratadosDe(cliente.codigoCorto).includes('DRT');
       return (
         <ClienteExpedientePage
           cliente={cliente}
-          proyectos={proyectosDe(cartera, cliente.id)}
-          sinHistorial={esClienteNuevo(cartera, cliente.id)}
+          proyectos={proyectos}
+          historial={historial}
+          hoy={hoy}
+          programaRoedores={
+            contrataDesratizacion ? { estacionesRojo: ESTACIONES_ROJO.filter((e) => e.cliente === cliente.codigoCorto) } : null
+          }
           puedeDarDeAlta={puedeDarDeAlta}
           aviso={vista.tipo === 'expediente' ? vista.aviso : null}
           onVolver={() => setVista({ tipo: 'lista' })}
+          onEditarFicha={() => setVista({ tipo: 'editar-cliente', clienteId: cliente.id })}
           onNuevoProyecto={() => setVista({ tipo: 'nuevo-proyecto', clienteId: cliente.id })}
           onNuevoServicio={(proyectoId) => setVista({ tipo: 'nuevo-servicio', clienteId: cliente.id, proyectoId })}
+          onAbrirMapaMurino={onAbrirMapaMurino}
         />
       );
     }

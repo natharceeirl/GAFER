@@ -2,37 +2,62 @@ import { TicketHeader } from '../../../shared/ui/molecules/TicketHeader';
 import { FoldPanel } from '../../../shared/ui/molecules/FoldPanel';
 import { PerforatedDivider } from '../../../shared/ui/molecules/PerforatedDivider';
 import { Button } from '../../../shared/ui/atoms/Button';
+import { Badge } from '../../../shared/ui/atoms/Badge';
 import type { ClienteFila } from '../model/clientes-mock';
-import { ALERTAS_VENCIMIENTO_MOCK, HISTORIAL_MOCK, PDFS_MOCK, type ProyectoExpediente } from '../model/expediente-mock';
+import type { ProyectoExpediente } from '../model/expediente-mock';
+import { alertaVencimiento, carpetaDelCliente, correlativos, historialPorProyecto, type PdfCarpeta } from '../model/expediente';
+import type { EstacionCritica, ServicioRegistro } from '../../estadisticas/model/estadisticas';
 import './cliente-expediente-page.css';
 
 interface Props {
   cliente: ClienteFila;
   proyectos: ProyectoExpediente[];
-  /** Cliente recién dado de alta: todavía no tiene historial, PDF ni alertas. */
-  sinHistorial: boolean;
+  /** Historial de servicios de la cartera; la página filtra el del cliente. */
+  historial: ServicioRegistro[];
+  hoy: string;
+  /** Solo se pasa si el cliente tiene Desratización contratada (§5). */
+  programaRoedores: { estacionesRojo: EstacionCritica[] } | null;
   puedeDarDeAlta: boolean;
   aviso: string | null;
   onVolver: () => void;
+  onEditarFicha: () => void;
   onNuevoProyecto: () => void;
   onNuevoServicio: (proyectoId: string) => void;
+  onAbrirMapaMurino: () => void;
 }
 
+const fechaLarga = (f: string) => new Date(`${f}T00:00:00`).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' });
+const fechaCorta = (f: string) => new Date(`${f}T00:00:00`).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
+
+function agruparPorRuta(pdfs: PdfCarpeta[]) {
+  const grupos = new Map<string, PdfCarpeta[]>();
+  for (const pdf of pdfs) grupos.set(pdf.ruta, [...(grupos.get(pdf.ruta) ?? []), pdf]);
+  return [...grupos.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
+
+/** Expediente digital del cliente — spec §2 y §3: ficha, sedes, historial, numeración y carpeta de PDF. */
 export function ClienteExpedientePage({
   cliente,
   proyectos,
-  sinHistorial,
+  historial,
+  hoy,
+  programaRoedores,
   puedeDarDeAlta,
   aviso,
   onVolver,
+  onEditarFicha,
   onNuevoProyecto,
   onNuevoServicio,
+  onAbrirMapaMurino,
 }: Props) {
   const proyectosActivos = proyectos.filter((p) => p.estado === 'ACTIVO');
   const proyectosInactivos = proyectos.filter((p) => p.estado === 'INACTIVO');
-  const historial = sinHistorial ? [] : HISTORIAL_MOCK;
-  const pdfs = sinHistorial ? [] : PDFS_MOCK;
-  const alertas = sinHistorial ? [] : ALERTAS_VENCIMIENTO_MOCK;
+  const carpeta = carpetaDelCliente(historial, cliente.id, cliente.codigoCorto);
+  const ultimos = correlativos(carpeta);
+  const codigoDe = new Map(carpeta.map((d) => [d.servicioId, d.codigo]));
+  const porProyecto = historialPorProyecto(historial, cliente.id);
+  const alerta = cliente.estado === 'ACTIVO' ? alertaVencimiento(cliente.proximoVencimiento, hoy, cliente.anticipacionAlertaDias) : null;
+  const { contacto } = cliente;
 
   return (
     <div className="expediente-page">
@@ -54,16 +79,84 @@ export function ClienteExpedientePage({
           </p>
         ) : null}
 
-        {alertas.length > 0 && (
-          <div className="expediente-alerta">
-            {alertas.map((a) => (
-              <p key={a.documento}>
-                <strong>{a.proyecto}</strong> — {a.documento} vence el{' '}
-                {new Date(a.vence).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}
-              </p>
-            ))}
+        {alerta && cliente.proximoVencimiento ? (
+          <p className={`expediente-alerta${alerta.vencido ? ' expediente-alerta--vencido' : ''}`} role="alert">
+            {alerta.vencido
+              ? `El certificado venció el ${fechaLarga(cliente.proximoVencimiento)}.`
+              : `El certificado vence el ${fechaLarga(cliente.proximoVencimiento)} (en ${alerta.dias} ${alerta.dias === 1 ? 'día' : 'días'}).`}
+          </p>
+        ) : null}
+
+        <section className="expediente-ficha" aria-labelledby="ficha-titulo">
+          <header className="expediente-ficha__cabecera">
+            <h2 id="ficha-titulo" className="expediente-ficha__titulo">
+              Ficha del cliente
+            </h2>
+            <Badge color={cliente.estado === 'ACTIVO' ? 'VERDE' : 'SIN_COLOR'}>{cliente.estado === 'ACTIVO' ? 'Activo' : 'Inactivo'}</Badge>
+            {puedeDarDeAlta ? (
+              <button type="button" className="expediente-proyecto__agregar" onClick={onEditarFicha}>
+                Editar ficha
+              </button>
+            ) : null}
+          </header>
+          <dl className="expediente-ficha__datos">
+            <div className="expediente-ficha__dato expediente-ficha__dato--completo">
+              <dt>Razón social</dt>
+              <dd>{cliente.razonSocial}</dd>
+            </div>
+            <div className="expediente-ficha__dato">
+              <dt>RUC</dt>
+              <dd className="expediente-ficha__mono">{cliente.ruc}</dd>
+            </div>
+            <div className="expediente-ficha__dato">
+              <dt>Código corto</dt>
+              <dd className="expediente-ficha__mono">{cliente.codigoCorto}</dd>
+            </div>
+            <div className="expediente-ficha__dato">
+              <dt>Giro del negocio</dt>
+              <dd>{cliente.giro}</dd>
+            </div>
+            <div className="expediente-ficha__dato">
+              <dt>Aviso de vencimiento</dt>
+              <dd>{cliente.anticipacionAlertaDias} días antes</dd>
+            </div>
+            <div className="expediente-ficha__dato expediente-ficha__dato--completo">
+              <dt>Dirección fiscal</dt>
+              <dd>{cliente.direccionFiscal || '—'}</dd>
+            </div>
+            <div className="expediente-ficha__dato expediente-ficha__dato--completo">
+              <dt>Contacto principal</dt>
+              <dd>
+                {contacto.nombre ? (
+                  <>
+                    <strong>{contacto.nombre}</strong>
+                    {contacto.cargo ? ` · ${contacto.cargo}` : ''}
+                    <span className="expediente-ficha__contacto">
+                      {contacto.telefono ? <a href={`tel:${contacto.telefono.replace(/\s/g, '')}`}>{contacto.telefono}</a> : null}
+                      {contacto.correo ? <a href={`mailto:${contacto.correo}`}>{contacto.correo}</a> : null}
+                    </span>
+                  </>
+                ) : (
+                  '—'
+                )}
+              </dd>
+            </div>
+          </dl>
+          <div className="expediente-ficha__numeracion" aria-label="Numeración correlativa">
+            <div>
+              <span className="expediente-ficha__etiqueta">Último informe</span>
+              <span className="expediente-ficha__mono">{ultimos.INFORME ?? 'Sin emitir'}</span>
+            </div>
+            <div>
+              <span className="expediente-ficha__etiqueta">Último reporte</span>
+              <span className="expediente-ficha__mono">{ultimos.REPORTE ?? 'Sin emitir'}</span>
+            </div>
+            <div>
+              <span className="expediente-ficha__etiqueta">Último servicio</span>
+              <span className="expediente-ficha__mono">{cliente.ultimoServicio ? fechaCorta(cliente.ultimoServicio) : '—'}</span>
+            </div>
           </div>
-        )}
+        </section>
 
         {puedeDarDeAlta ? (
           <div className="expediente-acciones">
@@ -129,41 +222,75 @@ export function ClienteExpedientePage({
           </FoldPanel>
         )}
 
-        <FoldPanel label="Historial cronológico de servicios">
-          {historial.length === 0 ? (
+        {programaRoedores ? (
+          <FoldPanel label="Programa de control de roedores" defaultOpen={programaRoedores.estacionesRojo.length > 0}>
+            <div className="expediente-roedores">
+              {programaRoedores.estacionesRojo.length === 0 ? (
+                <p className="expediente-vacio">Sin estaciones en rojo. El mapa y el historial por estación están en el Mapa Murino.</p>
+              ) : (
+                <ul className="expediente-roedores__lista">
+                  {programaRoedores.estacionesRojo.map((e) => (
+                    <li key={`${e.proyecto}-${e.plano}-${e.estacion}`}>
+                      <Badge color="ROJO">Rojo</Badge>
+                      <span className="expediente-ficha__mono">
+                        {e.proyecto} · {e.plano} · E-{String(e.estacion).padStart(2, '0')}
+                      </span>
+                      <span className="expediente-proyecto__frecuencia">{e.visitasConsecutivas} visitas seguidas con consumo</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Button variant="secondary" onClick={onAbrirMapaMurino}>
+                Abrir Mapa Murino
+              </Button>
+            </div>
+          </FoldPanel>
+        ) : null}
+
+        <FoldPanel label="Historial de servicios por proyecto">
+          {porProyecto.length === 0 ? (
             <p className="expediente-vacio">Sin servicios ejecutados todavía.</p>
           ) : (
-            <ul className="expediente-historial">
-              {historial.map((h, i) => (
-                <li key={h.documento}>
-                  <div className="expediente-historial__fila">
-                    <span className="expediente-historial__fecha tabular">
-                      {new Date(h.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}
-                    </span>
-                    <span className="expediente-historial__proyecto">{h.proyecto}</span>
-                    <span className="expediente-historial__tipo">{h.tipo}</span>
-                    <span className="expediente-historial__tecnico">{h.tecnico}</span>
-                    <span className="expediente-historial__doc">{h.documento}</span>
-                  </div>
-                  {i < historial.length - 1 && <PerforatedDivider />}
-                </li>
-              ))}
-            </ul>
+            porProyecto.map(({ proyecto, servicios }) => (
+              <div key={proyecto} className="expediente-historial__grupo">
+                <h3 className="expediente-historial__titulo">
+                  {proyecto} <span className="expediente-proyecto__frecuencia">· {servicios.length} servicios</span>
+                </h3>
+                <ul className="expediente-historial">
+                  {servicios.map((h, i) => (
+                    <li key={h.id}>
+                      <div className="expediente-historial__fila">
+                        <span className="expediente-historial__fecha tabular">{fechaCorta(h.fecha)}</span>
+                        <span className="expediente-historial__tipo">{h.tipo}</span>
+                        <span className="expediente-historial__tecnico">{h.tecnico ?? '—'}</span>
+                        <span className="expediente-historial__doc">{codigoDe.get(h.id) ?? ''}</span>
+                      </div>
+                      {i < servicios.length - 1 && <PerforatedDivider />}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
           )}
         </FoldPanel>
 
-        <FoldPanel label={`Carpeta de PDF (${pdfs.length})`}>
-          {pdfs.length === 0 ? (
+        <FoldPanel label={`Carpeta de PDF (${carpeta.length})`}>
+          {carpeta.length === 0 ? (
             <p className="expediente-vacio">Todavía no hay documentos aprobados para este cliente.</p>
           ) : (
-            <ul className="expediente-pdfs">
-              {pdfs.map((f) => (
-                <li key={f.nombre} className="expediente-pdf">
-                  <span className="expediente-pdf__nombre">{f.nombre}</span>
-                  <span className="expediente-pdf__ruta">{f.ruta}</span>
-                </li>
-              ))}
-            </ul>
+            agruparPorRuta(carpeta).map(([ruta, pdfs]) => (
+              <div key={ruta} className="expediente-carpeta">
+                <h3 className="expediente-carpeta__ruta">{ruta}</h3>
+                <ul className="expediente-pdfs">
+                  {pdfs.map((f) => (
+                    <li key={f.nombre} className="expediente-pdf">
+                      <span className="expediente-pdf__nombre">{f.nombre}</span>
+                      <span className="expediente-pdf__ruta">{fechaCorta(f.fecha)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
           )}
         </FoldPanel>
       </div>

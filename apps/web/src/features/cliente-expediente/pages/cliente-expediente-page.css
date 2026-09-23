@@ -115,7 +115,7 @@
 }
 .expediente-historial__fila {
   display: grid;
-  grid-template-columns: 90px 100px 50px 110px 1fr;
+  grid-template-columns: 100px 50px 130px 1fr;
   gap: 10px;
   padding: 8px 0;
   font-size: 13px;
@@ -168,5 +168,128 @@
   }
   .expediente-historial__doc {
     text-align: left;
+  }
+}
+
+.expediente-alerta--vencido {
+  background: var(--gf-rojo);
+  color: var(--gf-rojo-ink);
+  font-weight: 700;
+}
+
+.expediente-ficha {
+  display: grid;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--gf-panel-raised);
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+}
+.expediente-ficha__cabecera {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.expediente-ficha__titulo {
+  margin: 0;
+  font-family: var(--gf-font-ui);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.expediente-ficha__datos {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 18px;
+  margin: 0;
+}
+.expediente-ficha__dato {
+  min-width: 0;
+}
+.expediente-ficha__dato--completo {
+  grid-column: 1 / -1;
+}
+.expediente-ficha__dato dt,
+.expediente-ficha__etiqueta {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--gf-ink-faint);
+}
+.expediente-ficha__dato dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.expediente-ficha__mono {
+  font-family: var(--gf-font-mono);
+  font-weight: 600;
+}
+.expediente-ficha__contacto {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 2px;
+  font-size: 13px;
+}
+.expediente-ficha__contacto a {
+  color: var(--gf-info);
+}
+.expediente-ficha__numeracion {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--gf-rule);
+  font-size: 13px;
+}
+.expediente-ficha__numeracion > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.expediente-roedores {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+.expediente-roedores__lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+.expediente-roedores__lista li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.expediente-historial__grupo + .expediente-historial__grupo,
+.expediente-carpeta + .expediente-carpeta {
+  margin-top: 14px;
+}
+.expediente-historial__titulo,
+.expediente-carpeta__ruta {
+  margin: 0 0 4px;
+  font-family: var(--gf-font-mono);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+@media (max-width: 560px) {
+  .expediente-ficha__datos {
+    grid-template-columns: 1fr 1fr;
+  }
+  .expediente-ficha__numeracion {
+    grid-template-columns: 1fr;
   }
 }

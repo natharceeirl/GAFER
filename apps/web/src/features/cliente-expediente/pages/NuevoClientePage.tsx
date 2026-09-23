@@ -7,9 +7,14 @@ interface Props {
   giros: string[];
   codigosExistentes: string[];
   rucsExistentes: string[];
-  onRegistrar: (datos: DatosCliente) => void;
+  /** Con `inicial` el formulario edita la ficha: código corto y RUC quedan fijos (§2). */
+  inicial?: DatosCliente;
+  anticipacionInicial?: number;
+  onRegistrar: (datos: DatosCliente, anticipacionAlertaDias: number) => void;
   onCancelar: () => void;
 }
+
+const ANTICIPACIONES = [15, 30, 45, 60, 90];
 
 const INICIAL: DatosCliente = {
   razonSocial: '',
@@ -24,9 +29,19 @@ const INICIAL: DatosCliente = {
   estado: 'ACTIVO',
 };
 
-/** Alta de cliente — spec §7.1. Solo el Administrador llega acá (§12). */
-export function NuevoClientePage({ giros, codigosExistentes, rucsExistentes, onRegistrar, onCancelar }: Props) {
-  const [datos, setDatos] = useState<DatosCliente>(INICIAL);
+/** Alta y edición de la ficha del cliente — spec §3 y §7.1. Solo el Administrador llega acá (§12). */
+export function NuevoClientePage({
+  giros,
+  codigosExistentes,
+  rucsExistentes,
+  inicial,
+  anticipacionInicial = 30,
+  onRegistrar,
+  onCancelar,
+}: Props) {
+  const edicion = inicial !== undefined;
+  const [datos, setDatos] = useState<DatosCliente>(inicial ?? INICIAL);
+  const [anticipacion, setAnticipacion] = useState(anticipacionInicial);
   const [intentado, setIntentado] = useState(false);
 
   const errores = validarCliente(datos, { codigos: codigosExistentes, rucs: rucsExistentes });
@@ -39,20 +54,27 @@ export function NuevoClientePage({ giros, codigosExistentes, rucsExistentes, onR
   function registrar() {
     setIntentado(true);
     if (Object.keys(errores).length > 0) return;
-    onRegistrar({
-      ...datos,
-      razonSocial: datos.razonSocial.trim(),
-      direccionFiscal: datos.direccionFiscal.trim(),
-      contactoCorreo: datos.contactoCorreo.trim(),
-    });
+    onRegistrar(
+      {
+        ...datos,
+        razonSocial: datos.razonSocial.trim(),
+        direccionFiscal: datos.direccionFiscal.trim(),
+        contactoCorreo: datos.contactoCorreo.trim(),
+      },
+      anticipacion,
+    );
   }
 
   return (
     <AltaFormLayout
-      code="ALTA DE CLIENTE · §7.1"
-      title="Nuevo cliente"
-      meta="Mantenimiento · solo Administrador · el cliente queda listo para crearle sedes y servicios"
-      textoConfirmar="Registrar cliente"
+      code={edicion ? `FICHA DE CLIENTE · ${datos.codigoCorto} · §3` : 'ALTA DE CLIENTE · §7.1'}
+      title={edicion ? 'Editar ficha del cliente' : 'Nuevo cliente'}
+      meta={
+        edicion
+          ? 'Mantenimiento · solo Administrador · los documentos ya emitidos no cambian'
+          : 'Mantenimiento · solo Administrador · el cliente queda listo para crearle sedes y servicios'
+      }
+      textoConfirmar={edicion ? 'Guardar ficha' : 'Registrar cliente'}
       cantidadErrores={Object.keys(errores).length}
       mostrarErrores={intentado}
       onSubmit={registrar}
@@ -73,7 +95,9 @@ export function NuevoClientePage({ giros, codigosExistentes, rucsExistentes, onR
           id="cli-ruc"
           label="RUC"
           error={visibles.ruc}
-          ayuda="11 dígitos. Las personas naturales se registran como sede del cliente VARIOS."
+          ayuda={
+            edicion ? 'No se puede cambiar una vez registrado.' : '11 dígitos. Las personas naturales se registran como sede del cliente VARIOS.'
+          }
         >
           <input
             {...ariaError('cli-ruc', visibles.ruc)}
@@ -81,6 +105,7 @@ export function NuevoClientePage({ giros, codigosExistentes, rucsExistentes, onR
             type="text"
             inputMode="numeric"
             maxLength={11}
+            disabled={edicion}
             value={datos.ruc}
             onChange={(e) => set('ruc', e.target.value.replace(/\D/g, ''))}
             placeholder="20611122233"
@@ -90,13 +115,18 @@ export function NuevoClientePage({ giros, codigosExistentes, rucsExistentes, onR
           id="cli-codigo"
           label="Código corto"
           error={visibles.codigoCorto}
-          ayuda="4 a 10 caracteres en mayúsculas. Se usa en la numeración: INFORME-CÓDIGO-N°-AÑO."
+          ayuda={
+            edicion
+              ? 'No se puede cambiar: arma la numeración de todos sus documentos.'
+              : '4 a 10 caracteres en mayúsculas. Se usa en la numeración: INFORME-CÓDIGO-N°-AÑO.'
+          }
         >
           <input
             {...ariaError('cli-codigo', visibles.codigoCorto)}
             className="ff-campo__mono"
             type="text"
             maxLength={10}
+            disabled={edicion}
             value={datos.codigoCorto}
             onChange={(e) => set('codigoCorto', normalizarCodigo(e.target.value))}
             placeholder="MOLISUR"
@@ -168,6 +198,22 @@ export function NuevoClientePage({ giros, codigosExistentes, rucsExistentes, onR
             onChange={(e) => set('contactoCorreo', e.target.value)}
             placeholder="cpinto@molisur.pe"
           />
+        </Campo>
+      </Bloque>
+
+      <Bloque titulo="Alertas de vencimiento">
+        <Campo
+          id="cli-anticipacion"
+          label="Avisar el vencimiento del certificado con"
+          ayuda="La alerta aparece en el expediente y en el Panel de control con esta anticipación."
+        >
+          <select id="cli-anticipacion" value={anticipacion} onChange={(e) => setAnticipacion(Number(e.target.value))}>
+            {ANTICIPACIONES.map((d) => (
+              <option key={d} value={d}>
+                {d} días de anticipación
+              </option>
+            ))}
+          </select>
         </Campo>
       </Bloque>
     </AltaFormLayout>

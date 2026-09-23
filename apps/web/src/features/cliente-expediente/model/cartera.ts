@@ -25,7 +25,43 @@ export function proyectosDe(estado: CarteraEstado, clienteId: string): ProyectoE
   return estado.proyectosPorCliente[clienteId] ?? (esClienteNuevo(estado, clienteId) ? [] : PROYECTOS_MOCK);
 }
 
-export function agregarCliente(estado: CarteraEstado, d: DatosCliente): { estado: CarteraEstado; clienteId: string } {
+function contactoDe(d: DatosCliente) {
+  return {
+    nombre: d.contactoNombre.trim(),
+    cargo: d.contactoCargo.trim(),
+    telefono: d.contactoTelefono.trim(),
+    correo: d.contactoCorreo.trim(),
+  };
+}
+
+/**
+ * Edita la ficha. Código corto y RUC no cambian: el código corto arma la
+ * numeración de todos los documentos del cliente (§2).
+ */
+export function actualizarCliente(estado: CarteraEstado, clienteId: string, d: DatosCliente, anticipacionAlertaDias: number): CarteraEstado {
+  return {
+    ...estado,
+    clientes: estado.clientes.map((c) =>
+      c.id === clienteId
+        ? {
+            ...c,
+            razonSocial: d.razonSocial.trim(),
+            giro: d.giro,
+            direccionFiscal: d.direccionFiscal.trim(),
+            contacto: contactoDe(d),
+            estado: d.estado,
+            anticipacionAlertaDias,
+          }
+        : c,
+    ),
+  };
+}
+
+export function agregarCliente(
+  estado: CarteraEstado,
+  d: DatosCliente,
+  anticipacionAlertaDias = 30,
+): { estado: CarteraEstado; clienteId: string } {
   const clienteId = `nuevo-${d.codigoCorto}`;
   const cliente: ClienteFila = {
     id: clienteId,
@@ -33,8 +69,11 @@ export function agregarCliente(estado: CarteraEstado, d: DatosCliente): { estado
     razonSocial: d.razonSocial.trim(),
     ruc: d.ruc,
     giro: d.giro,
+    direccionFiscal: d.direccionFiscal.trim(),
+    contacto: contactoDe(d),
     ultimoServicio: null,
     proximoVencimiento: null,
+    anticipacionAlertaDias,
     estado: d.estado,
   };
   return {

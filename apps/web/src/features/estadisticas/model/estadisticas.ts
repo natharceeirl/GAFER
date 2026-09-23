@@ -25,6 +25,8 @@ export interface VencimientoCertificado {
   cliente: string;
   fecha: string;
   tipo: TipoServicio;
+  /** Anticipación configurada en la ficha del cliente (§3); sin dato, 30 días. */
+  anticipacionDias?: number;
 }
 
 export interface Serie {
@@ -49,7 +51,7 @@ export interface Alerta {
 const CATEGORIAS: Array<{ categoria: CategoriaAlerta; titulo: string; severidad: SeveridadAlerta }> = [
   { categoria: 'vencido', titulo: 'Certificados vencidos', severidad: 'rojo' },
   { categoria: 'estacion', titulo: 'Estaciones en aura ROJO', severidad: 'rojo' },
-  { categoria: 'por-vencer', titulo: 'Certificados por vencer (30 días)', severidad: 'amarillo' },
+  { categoria: 'por-vencer', titulo: 'Certificados por vencer', severidad: 'amarillo' },
   { categoria: 'pendiente', titulo: 'Documentos pendientes +48 h', severidad: 'amarillo' },
   { categoria: 'sin-servicio', titulo: 'Clientes sin servicio 90+ días', severidad: 'ink' },
 ];
@@ -263,13 +265,15 @@ export function alertasActivas({ hoy, vencimientos, estaciones, pendientes, sinS
       texto: `Estación ${e.estacion} en aura ROJO`,
       detalle: `${e.cliente} · ${e.proyecto} · ${e.plano} · ${e.visitasConsecutivas} visitas consecutivas con consumo`,
     })),
-    ...v.en30.map((x) => ({
-      id: `porvencer-${x.cliente}-${x.fecha}`,
-      categoria: 'por-vencer' as const,
-      severidad: 'amarillo' as const,
-      texto: `Certificado vence en ${plural(x.dias, 'día', 'días')}`,
-      detalle: `${x.cliente} · ${x.tipo} · vence el ${x.fecha}`,
-    })),
+    ...[...v.en30, ...v.en60, ...v.en90]
+      .filter((x) => x.dias <= (x.anticipacionDias ?? 30))
+      .map((x) => ({
+        id: `porvencer-${x.cliente}-${x.fecha}`,
+        categoria: 'por-vencer' as const,
+        severidad: 'amarillo' as const,
+        texto: `Certificado vence en ${plural(x.dias, 'día', 'días')}`,
+        detalle: `${x.cliente} · ${x.tipo} · vence el ${x.fecha}`,
+      })),
     ...pendientes
       .map((p) => ({ ...p, horas: diasEntre(p.fecha, hoy) * 24 }))
       .filter((p) => p.horas > 48)

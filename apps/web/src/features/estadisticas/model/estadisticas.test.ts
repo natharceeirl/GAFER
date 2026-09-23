@@ -181,6 +181,23 @@ describe('alertas activas (§11)', () => {
   });
 });
 
+describe('alertas de certificados por vencer con anticipación por cliente (§3)', () => {
+  it('usa la anticipación configurada de cada cliente; sin configurar, 30 días', () => {
+    const alertas = alertasActivas({
+      hoy: '2026-09-23',
+      vencimientos: [
+        { cliente: 'KALLPA', fecha: '2026-11-02', tipo: 'DRT', anticipacionDias: 45 },
+        { cliente: 'SAMAY', fecha: '2026-10-14', tipo: 'DSF', anticipacionDias: 15 },
+        { cliente: 'MINACORP', fecha: '2026-10-14', tipo: 'DSS' },
+      ],
+      estaciones: [],
+      pendientes: [],
+      sinServicio: [],
+    });
+    expect(alertas.filter((a) => a.categoria === 'por-vencer').map((a) => a.detalle.split(' · ')[0])).toEqual(['MINACORP', 'KALLPA']);
+  });
+});
+
 describe('agruparAlertas', () => {
   it('resume en cinco categorías fijas, en orden de gravedad, aunque alguna esté vacía', () => {
     const grupos = agruparAlertas([

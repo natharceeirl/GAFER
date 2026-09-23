@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  actualizarCliente,
   agregarCliente,
   agregarProyecto,
   agregarServicio,
@@ -58,6 +59,32 @@ describe('cartera compartida (§7)', () => {
     const { estado, clienteId } = agregarCliente(inicial, cliente);
     expect(estado.clientes.at(-1)?.codigoCorto).toBe('MOLISUR');
     expect(proyectosDe(estado, clienteId)).toEqual([]);
+  });
+
+  it('guarda la ficha completa del alta, para mostrarla en el expediente (§3)', () => {
+    const { estado } = agregarCliente(estadoInicialCartera(), cliente);
+    expect(estado.clientes.at(-1)).toMatchObject({
+      direccionFiscal: 'Av. Ejército 101',
+      contacto: { nombre: 'Carla Pinto', cargo: 'Jefa de Calidad', telefono: '959123456', correo: 'cpinto@molisur.pe' },
+      anticipacionAlertaDias: 30,
+    });
+  });
+
+  it('guarda la anticipación de alerta elegida en el alta', () => {
+    const { estado } = agregarCliente(estadoInicialCartera(), cliente, 45);
+    expect(estado.clientes.at(-1)?.anticipacionAlertaDias).toBe(45);
+  });
+
+  it('actualiza la ficha sin cambiar código corto ni RUC, que sostienen la numeración (§2)', () => {
+    const { estado, clienteId } = agregarCliente(estadoInicialCartera(), cliente);
+    const editado = actualizarCliente(estado, clienteId, { ...cliente, codigoCorto: 'OTRO', ruc: '20999999999', giro: 'Salud', contactoTelefono: '054 111222' }, 60);
+    expect(editado.clientes.at(-1)).toMatchObject({
+      codigoCorto: 'MOLISUR',
+      ruc: '20611122233',
+      giro: 'Salud',
+      anticipacionAlertaDias: 60,
+      contacto: expect.objectContaining({ telefono: '054 111222' }),
+    });
   });
 
   it('agrega una sede y un servicio con lo que el técnico necesita precargado', () => {

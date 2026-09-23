@@ -1,5 +1,5 @@
 import type { TipoServicio } from '@gafer/contracts';
-import { CLIENTES_MOCK } from '../../cliente-expediente/model/clientes-mock';
+import { CLIENTES_MOCK, type ClienteFila } from '../../cliente-expediente/model/clientes-mock';
 import type { EstacionCritica, ServicioRegistro, VencimientoCertificado } from './estadisticas';
 
 interface Contrato {
@@ -122,12 +122,30 @@ export function generarHistorial(hoy: string): ServicioRegistro[] {
   return servicios;
 }
 
-/** Certificados vigentes: el vencimiento de la cartera, asociado al servicio principal de cada cliente. */
-export const VENCIMIENTOS: VencimientoCertificado[] = CLIENTES_MOCK.flatMap((c) =>
-  c.proximoVencimiento && c.estado === 'ACTIVO' && CONTRATOS[c.codigoCorto]
-    ? [{ cliente: c.codigoCorto, fecha: c.proximoVencimiento, tipo: CONTRATOS[c.codigoCorto][0].tipo }]
-    : [],
-);
+/**
+ * Certificados vigentes: el vencimiento de la cartera, asociado al servicio
+ * principal de cada cliente, con la anticipación de alerta de su ficha (§3).
+ */
+export function vencimientosDe(clientes: ClienteFila[]): VencimientoCertificado[] {
+  return clientes.flatMap((c) =>
+    c.proximoVencimiento && c.estado === 'ACTIVO' && CONTRATOS[c.codigoCorto]
+      ? [
+          {
+            cliente: c.codigoCorto,
+            fecha: c.proximoVencimiento,
+            tipo: CONTRATOS[c.codigoCorto][0].tipo,
+            anticipacionDias: c.anticipacionAlertaDias,
+          },
+        ]
+      : [],
+  );
+}
+
+export const VENCIMIENTOS: VencimientoCertificado[] = vencimientosDe(CLIENTES_MOCK);
+
+export function tiposContratadosDe(codigoCorto: string): TipoServicio[] {
+  return (CONTRATOS[codigoCorto] ?? []).map((c) => c.tipo);
+}
 
 export const TIPOS_CONTRATADOS: TipoServicio[] = [...new Set(Object.values(CONTRATOS).flatMap((cs) => cs.map((c) => c.tipo)))].sort();
 

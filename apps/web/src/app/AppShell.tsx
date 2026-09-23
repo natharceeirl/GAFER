@@ -113,7 +113,7 @@ export function AppShell() {
       <div className="app-shell__stage">
         {pantalla === 'DASHBOARD' ? <DashboardPage rol={sesion.rol} documentos={documentos} onAbrirDocumento={abrirDocumento} /> : null}
         {pantalla === 'PROGRAMACION' ? <ProgramacionPage usuario={sesion.usuario} rol={sesion.rol} /> : null}
-        {pantalla === 'CLIENTES' ? <ClientesModule usuario={sesion.usuario} rol={sesion.rol} /> : null}
+        {pantalla === 'CLIENTES' ? <ClientesModule usuario={sesion.usuario} rol={sesion.rol} onAbrirMapaMurino={() => setPantalla('MAPA_MURINO')} /> : null}
         {pantalla === 'DOCUMENTOS' ? (
           detalleAbierto ? (
             <DocumentoDetailPage
