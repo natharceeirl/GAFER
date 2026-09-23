@@ -31,7 +31,7 @@
   - DoD: Pruebas de integración verificando que actualizar un insumo en el catálogo no modifica el `snapshot_catalogos` de una inspección cerrada.
 
 ## Role: Andre (QA / Testing)
-- [ ] **T3.1: Suite de Pruebas de Integración de Inmutabilidad (Sección 13)** <!-- id: 3.1 -->
+- [x] **T3.1: Suite de Pruebas de Integración de Inmutabilidad (Sección 13)** <!-- id: 3.1 -->
   - Crear tests E2E / Integración con Supertest validando que cambios en catálogos no mutan inspecciones históricas.
   - DoD: Pipeline de test pasando con reporte de cobertura.
 - [ ] **T3.2: Pruebas de Concurrencia y Sincronización de Campo** <!-- id: 3.2 -->
