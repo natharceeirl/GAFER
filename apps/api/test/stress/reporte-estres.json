@@ -1,0 +1,33 @@
+{
+  "fecha": "2026-09-23T22:42:53.283Z",
+  "pruebas": [
+    {
+      "nombre": "Carga alta sin colisiones (100 peticiones concurrentes, estaciones distintas)",
+      "resultado": "OK",
+      "detalle": "100/100 respondieron 201, 100/100 quedaron guardadas en la auditoría",
+      "metricas": {
+        "peticiones": 100,
+        "duracionMs": 554,
+        "porSegundo": 181
+      }
+    },
+    {
+      "nombre": "Idempotencia bajo carga (mismo operationId, 20 repeticiones concurrentes)",
+      "resultado": "FALLO",
+      "detalle": "19/20 repeticiones duplicaron el registro en la auditoría (ver BUG-08 en Issues_QA_Fase1.md).",
+      "metricas": {
+        "repeticiones": 20,
+        "duracionMs": 192
+      }
+    },
+    {
+      "nombre": "Colisión bajo carga real (misma estación, 20 repeticiones concurrentes)",
+      "resultado": "FALLO",
+      "detalle": "1/20 colisiones no se detectaron cuando las dos peticiones llegaron realmente al mismo tiempo (ver BUG-08 en Issues_QA_Fase1.md).",
+      "metricas": {
+        "repeticiones": 20,
+        "duracionMs": 225
+      }
+    }
+  ]
+}

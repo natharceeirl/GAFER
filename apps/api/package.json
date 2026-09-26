@@ -11,6 +11,7 @@
     "test": "jest",
     "test:e2e": "jest --config test/jest-e2e.config.js --runInBand",
     "test:e2e:cov": "jest --config test/jest-e2e.config.js --runInBand --coverage",
+    "test:stress": "jest --config test/jest-stress.config.js --runInBand",
     "db:migrate": "ts-node -r tsconfig-paths/register src/database/migrator.ts up",
     "db:rollback": "ts-node -r tsconfig-paths/register src/database/migrator.ts down"
   },

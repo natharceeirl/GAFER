@@ -11,10 +11,9 @@
  *   D. Errores de validación (datos mal enviados, registros que no existen).
  *   E. Casos pendientes hasta que el equipo decida o exista la función.
  *
- * Las pruebas marcadas [BUG-xx] dependen de un error conocido (ver support/known-bugs.ts).
- *
  * Historial de versiones
  *   v1.0  2026-09-20  ahilacondo  Creación de la suite (25 casos).
+ *   v1.1  2026-09-23  ahilacondo  Se quitan las marcas de error: BUG-01 y BUG-03 ya fueron corregidos.
  */
 import { randomUUID } from 'crypto';
 import { createTestApp, TestApp } from '../support/app';
@@ -27,7 +26,6 @@ import {
   sembrarInspeccionCerrada,
 } from '../support/db';
 import { Api, api, crearEscenario, Escenario } from '../support/fixtures';
-import { itBug } from '../support/known-bugs';
 
 // Datos nuevos que se usan para simular que un insumo fue editado
 const CAMBIOS_REFORMULACION = {
@@ -199,7 +197,7 @@ describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
   // B. Recorrido completo por la API
   describe('B. Recorrido completo: crear, cerrar y cambiar el catálogo', () => {
     // Se crea y se cierra una inspección. Debe quedar CERRADA con la copia de los datos del insumo.
-    itBug('BUG-01', 'al cerrar, la inspección guarda una copia de los datos del insumo', async () => {
+    it('al cerrar, la inspección guarda una copia de los datos del insumo', async () => {
       const esc = await crearEscenario(http);
       const creada = await http.post('/operaciones/inspecciones', { servicioId: esc.servicioId });
       expect(creada.status).toBe(201);
@@ -224,7 +222,7 @@ describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
     });
 
     // Se cierra la inspección y luego se edita el insumo. La copia guardada no debe cambiar en nada.
-    itBug('BUG-01', 'editar el catálogo después de cerrar deja la copia guardada exactamente igual', async () => {
+    it('editar el catálogo después de cerrar deja la copia guardada exactamente igual', async () => {
       const esc = await crearEscenario(http);
       const id = await crearInspeccion(esc);
       const cierre = await http.post(`/operaciones/inspecciones/${id}/cerrar`, { consumos: [consumoDe(esc)] });
@@ -244,7 +242,7 @@ describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
     });
 
     // Se cierra la inspección y luego se da de baja y se borra el insumo. La copia no debe cambiar.
-    itBug('BUG-01', 'desactivar o eliminar el insumo después de cerrar no cambia la copia', async () => {
+    it('desactivar o eliminar el insumo después de cerrar no cambia la copia', async () => {
       const esc = await crearEscenario(http);
       const id = await crearInspeccion(esc);
       await http.post(`/operaciones/inspecciones/${id}/cerrar`, { consumos: [consumoDe(esc)] });
@@ -258,7 +256,7 @@ describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
     });
 
     // Se cierra una inspección, se cambia el insumo y se cierra otra. La primera conserva los datos viejos y la segunda los nuevos.
-    itBug('BUG-01', 'cada inspección conserva los datos del momento en que se cerró', async () => {
+    it('cada inspección conserva los datos del momento en que se cerró', async () => {
       const esc = await crearEscenario(http);
 
       const idAntigua = await crearInspeccion(esc);
@@ -279,7 +277,7 @@ describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
     });
 
     // Se crea el borrador, se cambia el insumo y recién se cierra. La copia debe tener el dato nuevo.
-    itBug('BUG-01', 'la copia toma los datos del momento del cierre, no de cuando se creó el borrador', async () => {
+    it('la copia toma los datos del momento del cierre, no de cuando se creó el borrador', async () => {
       const esc = await crearEscenario(http);
       const id = await crearInspeccion(esc); // borrador con el insumo original
       await editarInsumoEnCatalogo(t.db, esc.insumoId, CAMBIOS_REFORMULACION); // cambia ANTES de cerrar
@@ -291,7 +289,7 @@ describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
     });
 
     // Un segundo cierre debe responder 409 y no cambiar nada de lo guardado.
-    itBug('BUG-01', 'una inspección cerrada no se puede volver a cerrar', async () => {
+    it('una inspección cerrada no se puede volver a cerrar', async () => {
       const esc = await crearEscenario(http);
       const id = await crearInspeccion(esc);
       const primero = await http.post(`/operaciones/inspecciones/${id}/cerrar`, { consumos: [consumoDe(esc)] });
@@ -308,7 +306,7 @@ describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
     });
 
     // La fecha debe verse como 2026-09-20 y no como texto largo en inglés.
-    itBug('BUG-01', 'la fecha de ejecución se muestra con formato AAAA-MM-DD', async () => {
+    it('la fecha de ejecución se muestra con formato AAAA-MM-DD', async () => {
       const esc = await crearEscenario(http);
       const id = await crearInspeccion(esc);
 
@@ -359,7 +357,7 @@ describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
   // C. Protección desde la base de datos
   describe('C. La base de datos protege la inspección cerrada', () => {
     // Se intenta cambiar la copia directamente en la base. Debe rechazarlo.
-    itBug('BUG-03', 'la base de datos no deja modificar la copia de una inspección cerrada', async () => {
+    it('la base de datos no deja modificar la copia de una inspección cerrada', async () => {
       const esc = await crearEscenario(http);
       const { id } = await sembrarCerrada(esc);
 
