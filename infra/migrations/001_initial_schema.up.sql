@@ -191,3 +191,7 @@ CREATE TABLE IF NOT EXISTS inspecciones_auditoria (
 
 CREATE INDEX IF NOT EXISTS idx_auditoria_inspeccion_id ON inspecciones_auditoria(inspeccion_id);
 CREATE INDEX IF NOT EXISTS idx_auditoria_server_received_at ON inspecciones_auditoria(server_received_at);
+-- BUG-08: Índice único para garantizar idempotencia concurrente sobre operationId
+CREATE UNIQUE INDEX IF NOT EXISTS idx_auditoria_inspeccion_operation_id
+ON inspecciones_auditoria(inspeccion_id, (payload_nuevo->>'operationId'))
+WHERE (payload_nuevo->>'operationId') IS NOT NULL;
