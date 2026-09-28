@@ -16,6 +16,7 @@ export * from './cliente';
 export * from './proyecto';
 export * from './servicio';
 export * from './catalogos';
+export * from './almacenamiento';
 export * from './estacion';
 export * from './visita';
 export * from './inspeccion';

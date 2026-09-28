@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CerrarInspeccionSchema,
   ConsumoInsumoSchema,
+  CrearInspeccionSchema,
   EstadoInspeccionSchema,
   InspeccionRegistradaSchema,
   InspeccionSchema,
@@ -85,4 +86,12 @@ describe('CerrarInspeccionSchema (Spec §13)', () => {
     esperarFallaEn(ConsumoInsumoSchema, { ...consumo, lote: '' }, 'lote');
   });
   it('rechaza ids de equipo no UUID', () => esperarFallaEn(CerrarInspeccionSchema, { equiposIds: ['e1'] }, 'equiposIds.0'));
+});
+
+describe('CrearInspeccionSchema', () => {
+  it('acepta el id de un servicio contratado', () => expect(CrearInspeccionSchema.safeParse({ servicioId: id }).success).toBe(true));
+  it('rechaza un servicio ausente o sin formato UUID', () => {
+    esperarFallaEn(CrearInspeccionSchema, {}, 'servicioId');
+    esperarFallaEn(CrearInspeccionSchema, { servicioId: 's1' }, 'servicioId');
+  });
 });

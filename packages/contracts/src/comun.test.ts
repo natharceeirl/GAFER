@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DniSchema, FechaSchema, HoraSchema, RucSchema, TelefonoSchema } from './comun';
+import { DniSchema, FechaSchema, HoraSchema, PaginacionQuerySchema, RucSchema, TelefonoSchema } from './comun';
 
 describe('RucSchema', () => {
   it('acepta 11 dígitos', () => expect(RucSchema.safeParse('20508565434').success).toBe(true));
@@ -41,4 +41,20 @@ describe('TelefonoSchema', () => {
   it('los rechazos se conservan aunque el dato traiga espacios extremos vacíos', () => {
     expect(TelefonoSchema.safeParse('   ').success).toBe(false);
   });
+});
+
+describe('PaginacionQuerySchema', () => {
+  it('aplica 20 registros desde el inicio cuando la consulta no indica nada', () => {
+    expect(PaginacionQuerySchema.parse({})).toEqual({ limit: 20, offset: 0 });
+  });
+  it('convierte los números que llegan como texto en la URL', () => {
+    expect(PaginacionQuerySchema.parse({ limit: '50', offset: '100', busqueda: 'KALLPA' })).toEqual({
+      limit: 50,
+      offset: 100,
+      busqueda: 'KALLPA',
+    });
+  });
+  it.each([{ limit: '0' }, { limit: '101' }, { limit: '1.5' }, { limit: 'abc' }, { offset: '-1' }])('rechaza %j', (consulta) =>
+    expect(PaginacionQuerySchema.safeParse(consulta).success).toBe(false),
+  );
 });

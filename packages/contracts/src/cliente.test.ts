@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ClienteDetalleSchema, ClienteRegistroSchema } from './cliente';
+import { ClienteActualizacionSchema, ClienteDetalleSchema, ClienteRegistroSchema } from './cliente';
 import { esperarFallaEn } from './pruebas';
 
 const registro = {
@@ -60,5 +60,24 @@ describe('ClienteDetalleSchema', () => {
   it('ignora campos que una versión futura del servidor agregue (compatibilidad hacia atrás)', () => {
     const res = ClienteDetalleSchema.safeParse({ ...detalle, campoNuevo: 1 });
     expect(res.success).toBe(true);
+  });
+});
+
+describe('ClienteActualizacionSchema', () => {
+  it('acepta cualquier subconjunto de los datos editables, incluso vacío', () => {
+    expect(ClienteActualizacionSchema.safeParse({}).success).toBe(true);
+    expect(ClienteActualizacionSchema.safeParse({ razonSocial: 'Kallpa S.A.C.', contactoCorreo: 'nuevo@kallpa.pe' }).success).toBe(true);
+    expect(ClienteActualizacionSchema.safeParse({ camposExtra: { sector: 'energía' } }).success).toBe(true);
+  });
+
+  it('descarta el RUC y el código corto, que no se editan después del alta', () => {
+    const res = ClienteActualizacionSchema.parse({ razonSocial: 'Kallpa S.A.C.', ruc: '20508565434', codigoCorto: 'OTRO' });
+    expect(res).toEqual({ razonSocial: 'Kallpa S.A.C.' });
+  });
+
+  it('mantiene las reglas del alta en los campos que llegan', () => {
+    esperarFallaEn(ClienteActualizacionSchema, { razonSocial: '' }, 'razonSocial');
+    esperarFallaEn(ClienteActualizacionSchema, { contactoCorreo: 'sin-arroba' }, 'contactoCorreo');
+    esperarFallaEn(ClienteActualizacionSchema, { contactoTelefono: '12345' }, 'contactoTelefono');
   });
 });

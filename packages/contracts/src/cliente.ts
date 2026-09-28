@@ -19,18 +19,25 @@ export type Cliente = z.infer<typeof ClienteSchema>;
 
 /** Spec §7.1 — datos que se aceptan al registrar un cliente: código de 4 a 10 letras o números en mayúsculas. */
 export const ClienteRegistroSchema = z.object({
-  razonSocial: z.string().min(1),
-  ruc: RucSchema,
-  codigoCorto: z.string().regex(/^[A-Z0-9]{4,10}$/, 'De 4 a 10 letras o números en mayúsculas, sin espacios ni símbolos'),
-  direccionFiscal: z.string().min(1),
-  giroNegocio: z.string().min(1),
-  contactoNombre: z.string().min(1),
-  contactoCargo: z.string().min(1),
-  contactoTelefono: TelefonoSchema,
-  contactoCorreo: z.string().email(),
-  camposExtra: z.record(z.unknown()).optional(),
+  razonSocial: z.string().min(1).describe('Razón social legal'),
+  ruc: RucSchema.describe('RUC exacto de 11 dígitos'),
+  codigoCorto: z
+    .string()
+    .regex(/^[A-Z0-9]{4,10}$/, 'De 4 a 10 letras o números en mayúsculas, sin espacios ni símbolos')
+    .describe('Código corto alfanumérico en mayúsculas (4 a 10 caracteres)'),
+  direccionFiscal: z.string().min(1).describe('Dirección fiscal'),
+  giroNegocio: z.string().min(1).describe('Giro de negocio'),
+  contactoNombre: z.string().min(1).describe('Persona de contacto'),
+  contactoCargo: z.string().min(1).describe('Cargo del contacto'),
+  contactoTelefono: TelefonoSchema.describe('Teléfono o celular'),
+  contactoCorreo: z.string().email().describe('Correo electrónico válido'),
+  camposExtra: z.record(z.unknown()).optional().describe('Campos personalizados extra'),
 });
 export type ClienteRegistro = z.infer<typeof ClienteRegistroSchema>;
+
+/** Datos que se pueden corregir de un cliente ya registrado: todos opcionales, salvo el RUC y el código corto, que no cambian. */
+export const ClienteActualizacionSchema = ClienteRegistroSchema.omit({ ruc: true, codigoCorto: true }).partial();
+export type ClienteActualizacion = z.infer<typeof ClienteActualizacionSchema>;
 
 /**
  * Cliente tal como lo devuelve el servidor. La base de datos admite códigos más

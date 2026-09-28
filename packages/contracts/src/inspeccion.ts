@@ -53,16 +53,22 @@ export type Inspeccion = z.infer<typeof InspeccionSchema>;
 
 /** Insumo aplicado, tal como se declara al cerrar la inspección. */
 export const ConsumoInsumoSchema = z.object({
-  insumoId: z.string().uuid(),
-  dosisAplicada: z.string().min(1),
-  lote: z.string().min(1),
-  cantidadUtilizada: z.number().min(0.01),
+  insumoId: z.string().uuid().describe('ID del insumo químico en catálogo'),
+  dosisAplicada: z.string().min(1).describe('Dosis real aplicada en campo'),
+  lote: z.string().min(1).describe('Número de lote del fabricante'),
+  cantidadUtilizada: z.number().min(0.01).describe('Cantidad consumida'),
 });
 export type ConsumoInsumo = z.infer<typeof ConsumoInsumoSchema>;
 
 export const CerrarInspeccionSchema = z.object({
-  consumos: z.array(ConsumoInsumoSchema).optional(),
-  equiposIds: z.array(z.string().uuid()).optional(),
-  personalIds: z.array(z.string().uuid()).optional(),
+  consumos: z.array(ConsumoInsumoSchema).optional().describe('Insumos químicos aplicados durante la inspección'),
+  equiposIds: z.array(z.string().uuid()).optional().describe('IDs de equipos utilizados en campo'),
+  personalIds: z.array(z.string().uuid()).optional().describe('IDs del personal técnico participante'),
 });
 export type CerrarInspeccion = z.infer<typeof CerrarInspeccionSchema>;
+
+/** Apertura de una inspección en borrador para un servicio contratado. */
+export const CrearInspeccionSchema = z.object({
+  servicioId: z.string().uuid().describe('ID del servicio contratado'),
+});
+export type CrearInspeccion = z.infer<typeof CrearInspeccionSchema>;

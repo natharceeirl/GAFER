@@ -21,3 +21,11 @@ export const TelefonoSchema = z
   .string()
   .regex(/^[0-9 +()-]+$/, 'El teléfono solo admite dígitos y + ( ) -')
   .refine((valor) => valor.replace(/\D/g, '').length >= 6, 'El teléfono debe tener al menos 6 dígitos');
+
+/** Consulta paginada de los listados: 20 registros por defecto, hasta 100; los números llegan como texto en la URL. */
+export const PaginacionQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20).describe('Número de registros a retornar (1 a 100)'),
+  offset: z.coerce.number().int().min(0).default(0).describe('Desplazamiento / offset'),
+  busqueda: z.string().optional().describe('Búsqueda por término'),
+});
+export type PaginacionQuery = z.infer<typeof PaginacionQuerySchema>;

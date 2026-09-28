@@ -19,18 +19,18 @@ export const PayloadEstacionSyncSchema = z.object({
 export type PayloadEstacionSync = z.infer<typeof PayloadEstacionSyncSchema>;
 
 export const OperacionSyncSchema = z.object({
-  operationId: z.string().uuid(),
-  tipo: TipoOperacionSyncSchema,
-  agregadoId: z.string().uuid(), // ID de la inspección
-  actorId: z.string().uuid(), // ID de personal técnico
-  clienteTimestamp: z.string().datetime(),
-  payload: z.record(z.unknown()),
+  operationId: z.string().uuid().describe('ID único de la operación, generado en el dispositivo (idempotencia)'),
+  tipo: TipoOperacionSyncSchema.describe('Tipo de operación de campo'),
+  agregadoId: z.string().uuid().describe('ID de la inspección a la que pertenece la operación'),
+  actorId: z.string().uuid().describe('ID del personal técnico que la realizó'),
+  clienteTimestamp: z.string().datetime().describe('Marca de tiempo ISO del dispositivo al registrar la operación'),
+  payload: z.record(z.unknown()).describe('Datos de la operación; su forma depende del tipo'),
 });
 export type OperacionSync = z.infer<typeof OperacionSyncSchema>;
 
 export const LoteSyncRequestSchema = z.object({
-  inspeccionId: z.string().uuid(),
-  operaciones: z.array(OperacionSyncSchema).min(1),
+  inspeccionId: z.string().uuid().describe('ID de la inspección que se sincroniza'),
+  operaciones: z.array(OperacionSyncSchema).min(1).describe('Operaciones pendientes, en el orden en que se registraron'),
 });
 export type LoteSyncRequest = z.infer<typeof LoteSyncRequestSchema>;
 

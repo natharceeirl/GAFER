@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CambioEstadoEquipoSchema,
   CatalogoTextoSchema,
   EquipoRegistroSchema,
   EquipoSchema,
+  InsumoActualizacionSchema,
   InsumoRegistroSchema,
   InsumoSchema,
   PersonalRegistroSchema,
@@ -78,6 +80,11 @@ describe('EquipoSchema', () => {
     const { id: _i, ...nuevo } = equipo;
     expect(EquipoRegistroSchema.safeParse(nuevo).success).toBe(true);
   });
+  it('el registro no exige el estado operativo: un equipo nuevo parte como OPERATIVO', () => {
+    const { id: _i, estadoOperativo: _e, ...nuevo } = equipo;
+    expect(EquipoRegistroSchema.safeParse(nuevo).success).toBe(true);
+    esperarFallaEn(EquipoRegistroSchema, { ...nuevo, estadoOperativo: 'ROTO' }, 'estadoOperativo');
+  });
 });
 
 const personal = { id, dni: '45678912', nombres: 'Luis', apellidos: 'Quispe Mamani', cargo: 'TECNICO_OPERADOR', telefono: '958123456', estado: 'ACTIVO' };
@@ -113,5 +120,31 @@ describe('CatalogoTextoSchema (Spec §7.7)', () => {
   it('rechaza un catálogo desconocido o ítems vacíos', () => {
     esperarFallaEn(CatalogoTextoSchema, { ...catalogo, id: 'chistes' }, 'id');
     esperarFallaEn(CatalogoTextoSchema, { ...catalogo, items: ['ok', ''] }, 'items.1');
+  });
+});
+
+describe('InsumoActualizacionSchema', () => {
+  it('acepta cualquier subconjunto de los datos del insumo, incluso vacío', () => {
+    expect(InsumoActualizacionSchema.safeParse({}).success).toBe(true);
+    expect(InsumoActualizacionSchema.safeParse({ concentracion: '50% p/v', presentacion: 'LIQUIDO' }).success).toBe(true);
+  });
+
+  it('descarta el id y el estado, que no se editan por esta vía', () => {
+    expect(InsumoActualizacionSchema.parse({ proveedor: 'Bayer S.A.', id, estado: 'INACTIVO' })).toEqual({ proveedor: 'Bayer S.A.' });
+  });
+
+  it('mantiene las reglas del alta en los campos que llegan', () => {
+    esperarFallaEn(InsumoActualizacionSchema, { nombreComercial: '' }, 'nombreComercial');
+    esperarFallaEn(InsumoActualizacionSchema, { unidadMedida: 'LITRO' }, 'unidadMedida');
+  });
+});
+
+describe('CambioEstadoEquipoSchema', () => {
+  it.each(['OPERATIVO', 'MANTENIMIENTO', 'FUERA_SERVICIO'])('acepta %j', (estado) =>
+    expect(CambioEstadoEquipoSchema.safeParse({ estadoOperativo: estado }).success).toBe(true),
+  );
+  it('rechaza un estado desconocido o ausente', () => {
+    esperarFallaEn(CambioEstadoEquipoSchema, { estadoOperativo: 'ROTO' }, 'estadoOperativo');
+    esperarFallaEn(CambioEstadoEquipoSchema, {}, 'estadoOperativo');
   });
 });

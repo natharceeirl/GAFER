@@ -27,17 +27,17 @@ export const FrecuenciaServicioSchema = z.enum([
 export type FrecuenciaServicio = z.infer<typeof FrecuenciaServicioSchema>;
 
 const ServicioContratadoBaseSchema = z.object({
-  proyectoId: z.string().uuid(),
-  tipoServicio: TipoServicioSchema,
-  frecuencia: FrecuenciaServicioSchema,
-  areaTotalM2: z.number().positive(),
-  areaTratarM2: z.number().positive(),
-  insumosAutorizados: z.array(z.string().uuid()).optional(),
-  equiposAutorizados: z.array(z.string().uuid()).optional(),
+  proyectoId: z.string().uuid().describe('ID de la sede/proyecto'),
+  tipoServicio: TipoServicioSchema.describe('Tipo de servicio (DSF, DSS, DRT, LRA, LTG, LTS, LAM)'),
+  frecuencia: FrecuenciaServicioSchema.describe('Frecuencia con la que se repite el servicio'),
+  areaTotalM2: z.number().positive().describe('Superficie total en m²'),
+  areaTratarM2: z.number().positive().describe('Superficie efectiva a tratar en m²'),
+  insumosAutorizados: z.array(z.string().uuid()).optional().describe('IDs de los insumos autorizados para el servicio'),
+  equiposAutorizados: z.array(z.string().uuid()).optional().describe('IDs de los equipos autorizados para el servicio'),
   /** Dosis referencial por insumo, indexada por id de insumo. */
-  dosisReferencial: z.record(z.string()).optional(),
-  requiereCertificado: z.boolean().optional(),
-  vigenciaDias: z.number().int().positive().nullish(),
+  dosisReferencial: z.record(z.string()).optional().describe('Dosis referencial por insumo, indexada por id de insumo'),
+  requiereCertificado: z.boolean().optional().describe('Si emite certificado de saneamiento'),
+  vigenciaDias: z.number().int().positive().nullish().describe('Vigencia del certificado en días (obligatoria si requiere certificado)'),
 });
 
 interface ReglasServicio {
