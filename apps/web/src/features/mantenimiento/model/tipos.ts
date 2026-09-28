@@ -31,10 +31,4 @@ export interface PersonalOperativo {
   estado: EstadoActivoInactivo;
 }
 
-export interface CatalogoTexto {
-  id: 'hallazgos' | 'acciones-correctivas' | 'observaciones' | 'recomendaciones' | 'giros' | 'motivos-modificacion';
-  titulo: string;
-  items: string[];
-  /** Spec §7.7: "Motivos de modificación" lo edita solo el Administrador. */
-  soloAdministrador?: boolean;
-}
+export type { CatalogoTexto } from '@gafer/contracts';

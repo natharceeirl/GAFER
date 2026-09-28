@@ -6,6 +6,7 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
+import type { CerrarInspeccion, ConsumoInsumo } from '@gafer/contracts';
 import { Inspeccion } from '../domain/inspeccion';
 import {
   INSPECCION_REPOSITORY,
@@ -24,19 +25,9 @@ import {
   PersonalRepository,
 } from '../../mantenimiento/domain/ports/personal.repository';
 
-export interface ConsumoInsumoCommand {
-  insumoId: string;
-  dosisAplicada: string;
-  lote: string;
-  cantidadUtilizada: number;
-}
+export type ConsumoInsumoCommand = ConsumoInsumo;
 
-export interface CerrarInspeccionCommand {
-  inspeccionId: string;
-  consumos?: ConsumoInsumoCommand[];
-  equiposIds?: string[];
-  personalIds?: string[];
-}
+export type CerrarInspeccionCommand = CerrarInspeccion & { inspeccionId: string };
 
 @Injectable()
 export class CerrarInspeccionUseCase {

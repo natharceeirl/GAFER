@@ -1,8 +1,9 @@
 import { randomUUID } from 'crypto';
 
-export type EstadoGeneral = 'ACTIVO' | 'INACTIVO';
-export type PresentacionInsumo = 'LIQUIDO' | 'POLVO' | 'BLOQUE' | 'SOBRE' | 'GEL' | 'OTRO';
-export type UnidadMedidaInsumo = 'ML' | 'L' | 'G' | 'KG' | 'SOBRE' | 'BLOQUE' | 'UNIDAD';
+import type { EstadoActivoInactivo, PresentacionInsumo, UnidadMedidaInsumo } from '@gafer/contracts';
+
+export type { PresentacionInsumo, UnidadMedidaInsumo };
+export type EstadoGeneral = EstadoActivoInactivo;
 
 export interface InsumoProps {
   id?: string;

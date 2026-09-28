@@ -1,7 +1,9 @@
 import { randomUUID } from 'crypto';
 import { EstadoGeneral } from './cliente';
 
-export type CargoPersonal = 'SUPERVISOR' | 'TECNICO_OPERADOR';
+import type { CargoPersonal } from '@gafer/contracts';
+
+export type { CargoPersonal };
 
 export interface PersonalProps {
   id?: string;
@@ -37,9 +39,9 @@ export class Personal {
       throw new Error('Los apellidos son obligatorios');
     }
 
-    const cargosValidos: CargoPersonal[] = ['SUPERVISOR', 'TECNICO_OPERADOR'];
+    const cargosValidos: CargoPersonal[] = ['ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR'];
     if (!cargosValidos.includes(props.cargo)) {
-      throw new Error(`Cargo no válido: ${props.cargo}. Debe ser SUPERVISOR o TECNICO_OPERADOR`);
+      throw new Error(`Cargo no válido: ${props.cargo}. Debe ser ADMINISTRADOR, SUPERVISOR o TECNICO_OPERADOR`);
     }
 
     this.id = props.id ?? randomUUID();

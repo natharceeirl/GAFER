@@ -1,39 +1,28 @@
 import { Generated, ColumnType } from 'kysely';
 
-export type EstadoGeneral = 'ACTIVO' | 'INACTIVO';
-export type TipoServicio = 'DSF' | 'DSS' | 'DRT' | 'LRA' | 'LTG' | 'LTS' | 'LAM';
-export type FrecuenciaServicio =
-  | 'DIARIA'
-  | 'SEMANAL'
-  | 'QUINCENAL'
-  | 'MENSUAL'
-  | 'BIMESTRAL'
-  | 'TRIMESTRAL'
-  | 'SEMESTRAL'
-  | 'ANUAL'
-  | 'PUNTUAL';
+import type {
+  CargoPersonal,
+  EstadoActivoInactivo,
+  EstadoInspeccion,
+  EstadoOperativoEquipo,
+  FrecuenciaServicio,
+  PresentacionInsumo,
+  TipoEquipo,
+  TipoServicio,
+  UnidadMedidaInsumo,
+} from '@gafer/contracts';
 
-export type PresentacionInsumo = 'LIQUIDO' | 'POLVO' | 'BLOQUE' | 'SOBRE' | 'GEL' | 'OTRO';
-export type UnidadMedidaInsumo = 'ML' | 'L' | 'G' | 'KG' | 'SOBRE' | 'BLOQUE' | 'UNIDAD';
-
-export type TipoEquipo =
-  | 'FUMIGACION'
-  | 'NEBULIZACION'
-  | 'ASPERSION'
-  | 'LIMPIEZA'
-  | 'MEDICION'
-  | 'PROTECCION'
-  | 'OTRO';
-
-export type EstadoOperativoEquipo = 'OPERATIVO' | 'MANTENIMIENTO' | 'FUERA_SERVICIO';
-export type CargoPersonal = 'SUPERVISOR' | 'TECNICO_OPERADOR';
-
-export type EstadoInspeccion =
-  | 'BORRADOR'
-  | 'CERRADO'
-  | 'ENVIADO_A_REVISION'
-  | 'OBSERVADO'
-  | 'APROBADO';
+export type {
+  CargoPersonal,
+  EstadoInspeccion,
+  EstadoOperativoEquipo,
+  FrecuenciaServicio,
+  PresentacionInsumo,
+  TipoEquipo,
+  TipoServicio,
+  UnidadMedidaInsumo,
+};
+export type EstadoGeneral = EstadoActivoInactivo;
 
 export interface ClientesTable {
   id: Generated<string>;

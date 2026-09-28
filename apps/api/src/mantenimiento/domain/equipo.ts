@@ -1,15 +1,8 @@
 import { randomUUID } from 'crypto';
 
-export type TipoEquipo =
-  | 'FUMIGACION'
-  | 'NEBULIZACION'
-  | 'ASPERSION'
-  | 'LIMPIEZA'
-  | 'MEDICION'
-  | 'PROTECCION'
-  | 'OTRO';
+import type { EstadoOperativoEquipo, TipoEquipo } from '@gafer/contracts';
 
-export type EstadoOperativoEquipo = 'OPERATIVO' | 'MANTENIMIENTO' | 'FUERA_SERVICIO';
+export type { EstadoOperativoEquipo, TipoEquipo };
 
 export interface EquipoProps {
   id?: string;

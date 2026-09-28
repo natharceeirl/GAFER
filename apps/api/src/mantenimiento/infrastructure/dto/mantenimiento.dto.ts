@@ -382,11 +382,11 @@ export class CrearPersonalDto {
   @IsNotEmpty({ message: 'Los apellidos son obligatorios' })
   apellidos!: string;
 
-  @ApiProperty({ example: 'TECNICO_OPERADOR', enum: ['SUPERVISOR', 'TECNICO_OPERADOR'] })
-  @IsIn(['SUPERVISOR', 'TECNICO_OPERADOR'], {
-    message: 'El cargo debe ser SUPERVISOR o TECNICO_OPERADOR',
+  @ApiProperty({ example: 'TECNICO_OPERADOR', enum: ['ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR'] })
+  @IsIn(['ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR'], {
+    message: 'El cargo debe ser ADMINISTRADOR, SUPERVISOR o TECNICO_OPERADOR',
   })
-  cargo!: 'SUPERVISOR' | 'TECNICO_OPERADOR';
+  cargo!: 'ADMINISTRADOR' | 'SUPERVISOR' | 'TECNICO_OPERADOR';
 
   @ApiProperty({ example: '958123456', description: 'Teléfono celular' })
   @IsString()

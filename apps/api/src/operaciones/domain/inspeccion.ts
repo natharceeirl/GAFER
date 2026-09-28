@@ -1,9 +1,6 @@
-export type EstadoInspeccion =
-  | 'BORRADOR'
-  | 'CERRADO'
-  | 'ENVIADO_A_REVISION'
-  | 'OBSERVADO'
-  | 'APROBADO';
+import type { EstadoInspeccion } from '@gafer/contracts';
+
+export type { EstadoInspeccion };
 
 export interface InsumoSnapshotItem {
   insumoId: string;

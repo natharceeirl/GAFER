@@ -1,25 +1,6 @@
-import type { Estacion } from '@gafer/contracts';
+import type { Estacion, InspeccionRegistrada } from '@gafer/contracts';
 
-export type PorcentajeConsumo = 0 | 25 | 50 | 75 | 100;
-
-/**
- * Datos de entrada por inspección — spec §5.1. Se registran siempre:
- * tipo de cebo, cantidad en gramos, lote y vencimiento del producto
- * instalado. Según haya consumo o no, se suma cantidad de reposición
- * (si "Sí") o cantidad repuesta junto al estado físico (si "No").
- */
-export interface InspeccionRegistrada {
-  fecha: string;
-  tipoCebo: string;
-  cantidadGramos: number;
-  lote: string;
-  vencimiento: string;
-  huboConsumo: boolean;
-  porcentajeConsumo?: PorcentajeConsumo;
-  cantidadReposicion?: number;
-  estadoFisico?: 'BUENAS_CONDICIONES' | 'MALAS_CONDICIONES';
-  cantidadRepuesta?: number;
-}
+export type { InspeccionRegistrada, PorcentajeConsumo } from '@gafer/contracts';
 
 export interface Punto {
   x: number;

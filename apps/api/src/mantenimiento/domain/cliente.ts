@@ -1,6 +1,8 @@
 import { randomUUID } from 'crypto';
 
-export type EstadoGeneral = 'ACTIVO' | 'INACTIVO';
+import type { EstadoActivoInactivo } from '@gafer/contracts';
+
+export type EstadoGeneral = EstadoActivoInactivo;
 
 export interface ClienteProps {
   id?: string;

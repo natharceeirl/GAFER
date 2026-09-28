@@ -1,17 +1,9 @@
 import { randomUUID } from 'crypto';
 import { EstadoGeneral } from './cliente';
 
-export type TipoServicio = 'DSF' | 'DSS' | 'DRT' | 'LRA' | 'LTG' | 'LTS' | 'LAM';
-export type FrecuenciaServicio =
-  | 'DIARIA'
-  | 'SEMANAL'
-  | 'QUINCENAL'
-  | 'MENSUAL'
-  | 'BIMESTRAL'
-  | 'TRIMESTRAL'
-  | 'SEMESTRAL'
-  | 'ANUAL'
-  | 'PUNTUAL';
+import type { FrecuenciaServicio, TipoServicio } from '@gafer/contracts';
+
+export type { FrecuenciaServicio, TipoServicio };
 
 export interface ServicioContratadoProps {
   id?: string;

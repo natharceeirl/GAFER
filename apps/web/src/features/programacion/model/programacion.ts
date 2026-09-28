@@ -1,24 +1,7 @@
 import type { PersonalOperativo } from '../../mantenimiento/model/tipos';
+import type { VisitaProgramada } from '@gafer/contracts';
 
-/** Estado de la visita según lo que va llegando desde la app Android de los técnicos. */
-export type EstadoCampo = 'PENDIENTE' | 'EN_CURSO' | 'EN_REVISION';
-
-/**
- * Visita programada (§8.1). Modelo híbrido (decisión C12): el técnico
- * titular es opcional y solo ordena su agenda; cualquier técnico activo
- * puede atenderla desde la app (§8.2).
- */
-export interface VisitaProgramada {
-  id: string;
-  fecha: string;
-  hora: string;
-  clienteId: string;
-  proyectoId: string;
-  servicioId: string;
-  tecnicoTitularId: string | null;
-  observaciones: string;
-  estadoCampo: EstadoCampo;
-}
+export type { EstadoCampo, VisitaProgramada } from '@gafer/contracts';
 
 export interface DatosVisita {
   clienteId: string;
