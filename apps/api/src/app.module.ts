@@ -9,6 +9,7 @@ import { ClienteExpedienteModule } from './cliente-expediente/cliente-expediente
 import { MantenimientoModule } from './mantenimiento/mantenimiento.module';
 import { EstadisticasModule } from './estadisticas/estadisticas.module';
 import { InventarioModule } from './inventario/inventario.module';
+import { PROVEEDOR_VALIDACION_ZOD } from './shared/infrastructure/pipes/validacion-zod.pipe';
 
 @Module({
   imports: [
@@ -28,5 +29,6 @@ import { InventarioModule } from './inventario/inventario.module';
     // Fase 5
     InventarioModule,
   ],
+  providers: [PROVEEDOR_VALIDACION_ZOD],
 })
 export class AppModule {}

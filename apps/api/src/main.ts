@@ -4,9 +4,9 @@ import { config } from 'dotenv';
 config();
 
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
+import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { AppModule } from './app.module';
 import { DomainExceptionFilter } from './shared/infrastructure/filters/domain-exception.filter';
 
@@ -24,14 +24,7 @@ async function bootstrap() {
   // Filtro Global de Excepciones de Dominio (mapea invariantes de negocio a HTTP 400/404/409)
   app.useGlobalFilters(new DomainExceptionFilter());
 
-  // Validación estricta y transformación de payloads en la capa de transporte
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      forbidNonWhitelisted: false,
-    }),
-  );
+  // La validación de payloads (esquemas zod de @gafer/contracts) se registra como APP_PIPE en AppModule
 
   // Especificación OpenAPI 3.0 con Swagger
   const swaggerConfig = new DocumentBuilder()
@@ -78,7 +71,8 @@ Este backend implementa la **Fase 1: Mantenimiento y Operaciones** conforme a la
     )
     .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  // cleanupOpenApiDoc completa el documento con los esquemas que salen de los DTO de zod
+  const document = cleanupOpenApiDoc(SwaggerModule.createDocument(app, swaggerConfig));
 
   // Endpoint para exponer el OpenAPI en formato JSON crudo
   app.getHttpAdapter().get('/docs-json', (_req, res) => {

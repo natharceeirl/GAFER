@@ -218,8 +218,8 @@ export class PersonalResponseDto {
   @ApiProperty({ example: 'Perez Gomez' })
   apellidos!: string;
 
-  @ApiProperty({ example: 'TECNICO_OPERADOR', enum: ['SUPERVISOR', 'TECNICO_OPERADOR'] })
-  cargo!: 'SUPERVISOR' | 'TECNICO_OPERADOR';
+  @ApiProperty({ example: 'TECNICO_OPERADOR', enum: ['ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR'] })
+  cargo!: 'ADMINISTRADOR' | 'SUPERVISOR' | 'TECNICO_OPERADOR';
 
   @ApiProperty({ example: '958123456' })
   telefono!: string;

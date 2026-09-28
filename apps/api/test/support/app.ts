@@ -7,7 +7,7 @@
  *   v1.1  2026-09-20  ahilacondo  Cierra bien las conexiones al terminar.
  */
 import 'reflect-metadata';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Kysely } from 'kysely';
 import { Pool } from 'pg';
@@ -32,7 +32,6 @@ export async function createTestApp(): Promise<TestApp> {
 
   app.setGlobalPrefix('api', { exclude: ['docs', 'docs-json'] });
   app.useGlobalFilters(new DomainExceptionFilter());
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: false }));
 
   await app.listen(0, '127.0.0.1');
   const baseUrl = await app.getUrl();

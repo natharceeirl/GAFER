@@ -13,8 +13,8 @@ export interface ActualizarInsumoCommand {
   dosisEstandar?: string;
   fichaTecnicaKey?: string;
   hojaMsdsKey?: string;
-  resolucionKey?: string;
-  proveedor?: string;
+  resolucionKey?: string | null;
+  proveedor?: string | null;
 }
 
 @Injectable()
