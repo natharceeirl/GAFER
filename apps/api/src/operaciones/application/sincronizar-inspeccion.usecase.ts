@@ -24,8 +24,40 @@ import {
   ConflictoSync,
 } from '@gafer/contracts';
 
+/**
+ * Mutex asíncrono por clave para serializar sincronizaciones sobre la misma inspección.
+ * Resuelve BUG-08 (condición de carrera en idempotencia y colisiones) sin agotar
+ * el pool de conexiones de PostgreSQL.
+ */
+class KeyedMutex {
+  private chains = new Map<string, Promise<void>>();
+
+  async runExclusive<T>(key: string, task: () => Promise<T>): Promise<T> {
+    const current = this.chains.get(key) ?? Promise.resolve();
+
+    let release!: () => void;
+    const next = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    this.chains.set(key, current.then(() => next, () => next));
+
+    try {
+      await current;
+      return await task();
+    } finally {
+      release();
+      if (this.chains.get(key) === next) {
+        this.chains.delete(key);
+      }
+    }
+  }
+}
+
 @Injectable()
 export class SincronizarInspeccionUseCase {
+  private readonly mutex = new KeyedMutex();
+
   constructor(
     @Inject(INSPECCION_REPOSITORY)
     private readonly inspeccionRepo: InspeccionRepository,
@@ -40,6 +72,16 @@ export class SincronizarInspeccionUseCase {
   ) {}
 
   async ejecutar(inspeccionId: string, operaciones: OperacionSync[]): Promise<LoteSyncResponse> {
+    return this.mutex.runExclusive(inspeccionId, () =>
+      this.procesarSincronizacion(inspeccionId, operaciones),
+    );
+  }
+
+  private async procesarSincronizacion(
+    inspeccionId: string,
+    operaciones: OperacionSync[],
+  ): Promise<LoteSyncResponse> {
+
     const inspeccion = await this.inspeccionRepo.buscarPorId(inspeccionId);
     if (!inspeccion) {
       throw new NotFoundException(`Inspección ${inspeccionId} no encontrada`);
@@ -129,22 +171,40 @@ export class SincronizarInspeccionUseCase {
       }
 
       // 4. Persistir en auditoría con su operationId
-      if (this.auditoriaService) {
-        await this.auditoriaService.persistirInspeccionAuditoria({
-          inspeccionId,
-          actorId: op.actorId,
-          accion: op.tipo,
-          payloadAnterior,
-          payloadNuevo: {
-            ...op.payload,
-            operationId: op.operationId,
-            clienteTimestamp: op.clienteTimestamp,
-          },
-        });
-      }
+      const payloadNuevo = {
+        ...op.payload,
+        operationId: op.operationId,
+        clienteTimestamp: op.clienteTimestamp,
+      };
 
-      operacionesVistas.add(op.operationId);
-      procesadas.push(op.operationId);
+      if (this.auditoriaService) {
+        try {
+          await this.auditoriaService.persistirInspeccionAuditoria({
+            inspeccionId,
+            actorId: op.actorId,
+            accion: op.tipo,
+            payloadAnterior,
+            payloadNuevo,
+          });
+          operacionesVistas.add(op.operationId);
+          procesadas.push(op.operationId);
+        } catch (error: any) {
+          // BUG-08: Captura de violación de unicidad por índice único
+          if (
+            error?.code === '23505' ||
+            error?.message?.includes('duplicate key') ||
+            error?.message?.includes('unique constraint') ||
+            error?.message?.includes('idx_auditoria_inspeccion_operation_id')
+          ) {
+            omitidasIdempotentes.push(op.operationId);
+            continue;
+          }
+          throw error;
+        }
+      } else {
+        operacionesVistas.add(op.operationId);
+        procesadas.push(op.operationId);
+      }
     }
 
     return {
