@@ -36,3 +36,21 @@ export const ProyectoDetalleSchema = ProyectoRegistroSchema.extend({
   estado: EstadoActivoInactivoSchema,
 });
 export type ProyectoDetalle = z.infer<typeof ProyectoDetalleSchema>;
+
+/** Actualización parcial de una sede física */
+export const ProyectoActualizacionSchema = z.object({
+  nombre: z
+    .string()
+    .regex(/^[A-Z0-9_]{3,50}$/, 'De 3 a 50 caracteres en mayúsculas, sin espacios (ej. PLANTA, CSF_SUNNY)')
+    .optional()
+    .describe('Nombre de la sede en mayúsculas y sin espacios (3 a 50 caracteres)'),
+  direccionSede: z.string().min(1).optional().describe('Dirección física de la sede'),
+  distrito: z.string().min(1).optional().describe('Distrito'),
+  provincia: z.string().min(1).optional().describe('Provincia'),
+  departamento: z.string().min(1).optional().describe('Departamento'),
+  contactoNombre: z.string().min(1).optional().describe('Nombre del responsable en sede'),
+  contactoCargo: z.string().min(1).optional().describe('Cargo del responsable en sede'),
+  contactoTelefono: TelefonoSchema.optional().describe('Teléfono de la sede'),
+  observaciones: z.string().nullish().describe('Observaciones de acceso o seguridad de la sede'),
+});
+export type ProyectoActualizacion = z.infer<typeof ProyectoActualizacionSchema>;

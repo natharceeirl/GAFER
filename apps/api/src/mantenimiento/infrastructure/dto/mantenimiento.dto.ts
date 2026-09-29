@@ -8,7 +8,9 @@ import {
   InsumoActualizacionSchema,
   InsumoRegistroSchema,
   PersonalRegistroSchema,
+  ProyectoActualizacionSchema,
   ProyectoRegistroSchema,
+  ServicioContratadoActualizacionSchema,
   ServicioContratadoRegistroSchema,
 } from '@gafer/contracts';
 import { createZodDtoDocumentado } from '../../../shared/infrastructure/dto/zod-dto-documentado';
@@ -50,6 +52,18 @@ export class CrearProyectoDto extends createZodDtoDocumentado(ProyectoRegistroSc
   observaciones: 'Requerido pase médico y EPP',
 }) {}
 
+export class ActualizarProyectoDto extends createZodDtoDocumentado(ProyectoActualizacionSchema, {
+  nombre: 'PLANTA_SUR_MOD',
+  direccionSede: 'Carretera Costanera Km 14',
+  distrito: 'Mollendo',
+  provincia: 'Islay',
+  departamento: 'Arequipa',
+  contactoNombre: 'Mario Vargas Peña',
+  contactoCargo: 'Jefe de Planta',
+  contactoTelefono: '954999888',
+  observaciones: 'Acceso por garita 2',
+}) {}
+
 export class CrearServicioContratadoDto extends createZodDtoDocumentado(ServicioContratadoRegistroSchema, {
   proyectoId: 'a1111111-1111-4111-8111-111111111111',
   tipoServicio: 'DSF',
@@ -61,6 +75,17 @@ export class CrearServicioContratadoDto extends createZodDtoDocumentado(Servicio
   dosisReferencial: { 'i1111111-1111-4111-8111-111111111111': '5 ml / Litro de agua' },
   requiereCertificado: true,
   vigenciaDias: 30,
+}) {}
+
+export class ActualizarServicioContratadoDto extends createZodDtoDocumentado(ServicioContratadoActualizacionSchema, {
+  frecuencia: 'BIMESTRAL',
+  areaTotalM2: 6000,
+  areaTratarM2: 4000,
+  insumosAutorizados: ['i1111111-1111-4111-8111-111111111111'],
+  equiposAutorizados: ['e1111111-1111-4111-8111-111111111111'],
+  dosisReferencial: { 'i1111111-1111-4111-8111-111111111111': '10 ml / Litro de agua' },
+  requiereCertificado: true,
+  vigenciaDias: 60,
 }) {}
 
 export class CrearInsumoDto extends createZodDtoDocumentado(InsumoRegistroSchema, {

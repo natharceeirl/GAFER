@@ -9,3 +9,4 @@ coverage/
 apps/web/dev-dist/
 .expo/
 coverage-e2e/
+.codegraph/

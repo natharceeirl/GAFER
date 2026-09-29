@@ -14,6 +14,12 @@ import { RegistrarPersonalUseCase } from './application/registrar-personal.useca
 import { ActualizarClienteUseCase } from './application/actualizar-cliente.usecase';
 import { DesactivarClienteUseCase } from './application/desactivar-cliente.usecase';
 import { ActivarClienteUseCase } from './application/activar-cliente.usecase';
+import { ActualizarProyectoUseCase } from './application/actualizar-proyecto.usecase';
+import { ActivarProyectoUseCase } from './application/activar-proyecto.usecase';
+import { DesactivarProyectoUseCase } from './application/desactivar-proyecto.usecase';
+import { ActualizarServicioContratadoUseCase } from './application/actualizar-servicio-contratado.usecase';
+import { ActivarServicioContratadoUseCase } from './application/activar-servicio-contratado.usecase';
+import { DesactivarServicioContratadoUseCase } from './application/desactivar-servicio-contratado.usecase';
 import { ActualizarInsumoUseCase } from './application/actualizar-insumo.usecase';
 import { DesactivarInsumoUseCase } from './application/desactivar-insumo.usecase';
 import { ActualizarEstadoEquipoUseCase } from './application/actualizar-estado-equipo.usecase';
@@ -45,7 +51,13 @@ import { KyselyPersonalRepository } from './infrastructure/adapters/kysely-perso
     DesactivarClienteUseCase,
     ActivarClienteUseCase,
     RegistrarProyectoUseCase,
+    ActualizarProyectoUseCase,
+    ActivarProyectoUseCase,
+    DesactivarProyectoUseCase,
     RegistrarServicioContratadoUseCase,
+    ActualizarServicioContratadoUseCase,
+    ActivarServicioContratadoUseCase,
+    DesactivarServicioContratadoUseCase,
     RegistrarInsumoUseCase,
     ActualizarInsumoUseCase,
     DesactivarInsumoUseCase,
@@ -71,7 +83,13 @@ import { KyselyPersonalRepository } from './infrastructure/adapters/kysely-perso
     DesactivarClienteUseCase,
     ActivarClienteUseCase,
     RegistrarProyectoUseCase,
+    ActualizarProyectoUseCase,
+    ActivarProyectoUseCase,
+    DesactivarProyectoUseCase,
     RegistrarServicioContratadoUseCase,
+    ActualizarServicioContratadoUseCase,
+    ActivarServicioContratadoUseCase,
+    DesactivarServicioContratadoUseCase,
     RegistrarInsumoUseCase,
     ActualizarInsumoUseCase,
     DesactivarInsumoUseCase,
