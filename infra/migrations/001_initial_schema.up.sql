@@ -131,10 +131,33 @@ CREATE INDEX IF NOT EXISTS idx_personal_dni ON personal(dni);
 CREATE INDEX IF NOT EXISTS idx_personal_cargo ON personal(cargo);
 CREATE INDEX IF NOT EXISTS idx_personal_estado ON personal(estado);
 
--- 7. Registro de Inspecciones de Campo (Sección 13: Inmutabilidad)
+-- 7. Programación de Visitas de Campo (Spec §8.1 / Decisión C12)
+CREATE TABLE IF NOT EXISTS visitas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE RESTRICT,
+    proyecto_id UUID NOT NULL REFERENCES proyectos(id) ON DELETE RESTRICT,
+    servicio_id UUID NOT NULL REFERENCES servicios_contratados(id) ON DELETE RESTRICT,
+    tecnico_titular_id UUID REFERENCES personal(id) ON DELETE SET NULL,
+    fecha DATE NOT NULL,
+    hora TIME NOT NULL,
+    estado_campo VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado_campo IN ('PENDIENTE', 'EN_CURSO', 'EN_REVISION')),
+    observaciones TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_visitas_cliente_id ON visitas(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_visitas_proyecto_id ON visitas(proyecto_id);
+CREATE INDEX IF NOT EXISTS idx_visitas_servicio_id ON visitas(servicio_id);
+CREATE INDEX IF NOT EXISTS idx_visitas_tecnico_titular_id ON visitas(tecnico_titular_id);
+CREATE INDEX IF NOT EXISTS idx_visitas_fecha ON visitas(fecha);
+CREATE INDEX IF NOT EXISTS idx_visitas_estado_campo ON visitas(estado_campo);
+
+-- 8. Registro de Inspecciones de Campo (Sección 13: Inmutabilidad)
 CREATE TABLE IF NOT EXISTS inspecciones (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     servicio_id UUID NOT NULL REFERENCES servicios_contratados(id) ON DELETE RESTRICT,
+    visita_id UUID REFERENCES visitas(id) ON DELETE SET NULL,
     codigo_inspeccion VARCHAR(50) NOT NULL UNIQUE,
     estado VARCHAR(30) NOT NULL DEFAULT 'BORRADOR' CHECK (estado IN ('BORRADOR', 'CERRADO', 'ENVIADO_A_REVISION', 'OBSERVADO', 'APROBADO')),
     version_sync INT NOT NULL DEFAULT 1 CHECK (version_sync >= 1),
@@ -148,7 +171,10 @@ CREATE TABLE IF NOT EXISTS inspecciones (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE inspecciones ADD COLUMN IF NOT EXISTS visita_id UUID REFERENCES visitas(id) ON DELETE SET NULL;
+
 CREATE INDEX IF NOT EXISTS idx_inspecciones_servicio_id ON inspecciones(servicio_id);
+CREATE INDEX IF NOT EXISTS idx_inspecciones_visita_id ON inspecciones(visita_id);
 CREATE INDEX IF NOT EXISTS idx_inspecciones_codigo ON inspecciones(codigo_inspeccion);
 CREATE INDEX IF NOT EXISTS idx_inspecciones_estado ON inspecciones(estado);
 CREATE INDEX IF NOT EXISTS idx_inspecciones_fecha ON inspecciones(fecha_ejecucion);
@@ -178,7 +204,7 @@ CREATE TRIGGER trg_proteger_snapshot_inspeccion
     FOR EACH ROW
     EXECUTE FUNCTION fn_proteger_snapshot_inspeccion_cerrada();
 
--- 8. Bitácora de Auditoría Concurrente
+-- 9. Bitácora de Auditoría Concurrente
 CREATE TABLE IF NOT EXISTS inspecciones_auditoria (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     inspeccion_id UUID NOT NULL REFERENCES inspecciones(id) ON DELETE CASCADE,
@@ -195,3 +221,68 @@ CREATE INDEX IF NOT EXISTS idx_auditoria_server_received_at ON inspecciones_audi
 CREATE UNIQUE INDEX IF NOT EXISTS idx_auditoria_inspeccion_operation_id
 ON inspecciones_auditoria(inspeccion_id, (payload_nuevo->>'operationId'))
 WHERE (payload_nuevo->>'operationId') IS NOT NULL;
+
+-- 10. Numeración Correlativa Atómica por Cliente y Tipo (Spec §6.1 / Decisión C13)
+CREATE TABLE IF NOT EXISTS correlativos (
+    cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('INFORME', 'REPORTE', 'CERTIFICADO')),
+    ultimo_numero INT NOT NULL DEFAULT 0 CHECK (ultimo_numero >= 0),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (cliente_id, tipo)
+);
+
+CREATE INDEX IF NOT EXISTS idx_correlativos_cliente_tipo ON correlativos(cliente_id, tipo);
+
+-- Función atómica para obtención de siguiente correlativo sin condiciones de carrera
+CREATE OR REPLACE FUNCTION fn_siguiente_correlativo(p_cliente_id UUID, p_tipo VARCHAR)
+RETURNS INT AS $$
+DECLARE
+    v_siguiente INT;
+BEGIN
+    INSERT INTO correlativos (cliente_id, tipo, ultimo_numero, updated_at)
+    VALUES (p_cliente_id, p_tipo, 1, NOW())
+    ON CONFLICT (cliente_id, tipo)
+    DO UPDATE SET ultimo_numero = correlativos.ultimo_numero + 1, updated_at = NOW()
+    RETURNING ultimo_numero INTO v_siguiente;
+
+    RETURN v_siguiente;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 11. Documentos Generados y Bandeja de Aprobación (Spec §6, §8.3, §13 / Decisión C13)
+CREATE TABLE IF NOT EXISTS documentos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE RESTRICT,
+    proyecto_id UUID REFERENCES proyectos(id) ON DELETE RESTRICT,
+    inspeccion_id UUID REFERENCES inspecciones(id) ON DELETE SET NULL,
+    tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('INFORME', 'REPORTE', 'CERTIFICADO')),
+    codigo VARCHAR(50) NOT NULL UNIQUE,
+    numero_correlativo INT NOT NULL CHECK (numero_correlativo > 0),
+    estado VARCHAR(30) NOT NULL DEFAULT 'BORRADOR' CHECK (estado IN ('BORRADOR', 'CERRADO', 'ENVIADO_A_REVISION', 'OBSERVADO', 'APROBADO', 'ENVIADO')),
+    fecha DATE NOT NULL DEFAULT CURRENT_DATE,
+    diagnostico TEXT NOT NULL DEFAULT '',
+    trabajos_realizados TEXT NOT NULL DEFAULT '',
+    insumos_usados JSONB NOT NULL DEFAULT '[]'::jsonb,
+    personal JSONB NOT NULL DEFAULT '[]'::jsonb,
+    acciones_correctivas JSONB NOT NULL DEFAULT '[]'::jsonb,
+    observaciones TEXT NOT NULL DEFAULT '',
+    recomendaciones TEXT NOT NULL DEFAULT '',
+    fotos INT NOT NULL DEFAULT 0,
+    numero_certificado VARCHAR(100) NOT NULL DEFAULT '',
+    vencimiento_certificado VARCHAR(50) NOT NULL DEFAULT '',
+    firma_cliente TEXT NOT NULL DEFAULT '',
+    firma_director TEXT,
+    comentario_observacion TEXT,
+    generados JSONB NOT NULL DEFAULT '[]'::jsonb,
+    anexos JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_documentos_cliente_tipo_correlativo UNIQUE (cliente_id, tipo, numero_correlativo)
+);
+
+CREATE INDEX IF NOT EXISTS idx_documentos_cliente_id ON documentos(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_documentos_proyecto_id ON documentos(proyecto_id);
+CREATE INDEX IF NOT EXISTS idx_documentos_inspeccion_id ON documentos(inspeccion_id);
+CREATE INDEX IF NOT EXISTS idx_documentos_tipo ON documentos(tipo);
+CREATE INDEX IF NOT EXISTS idx_documentos_estado ON documentos(estado);
+CREATE INDEX IF NOT EXISTS idx_documentos_codigo ON documentos(codigo);
