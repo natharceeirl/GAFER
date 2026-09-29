@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { DatabaseModule } from './database/database.module';
 import { StorageModule } from './shared/infrastructure/storage/storage.module';
 import { AuditoriaModule } from './shared/auditoria/auditoria.module';
+import { AuthModule } from './auth/auth.module';
 import { OperacionesModule } from './operaciones/operaciones.module';
 import { DocumentosModule } from './documentos/documentos.module';
 import { MapaMurinoModule } from './mapa-murino/mapa-murino.module';
@@ -16,6 +17,7 @@ import { PROVEEDOR_VALIDACION_ZOD } from './shared/infrastructure/pipes/validaci
     DatabaseModule,
     StorageModule,
     AuditoriaModule,
+    AuthModule,
     // Fase 1
     MantenimientoModule,
     ClienteExpedienteModule,
