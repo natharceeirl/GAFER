@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   CambioEstadoEquipoSchema,
   CatalogoTextoSchema,
+  EquipoActualizacionSchema,
   EquipoRegistroSchema,
   EquipoSchema,
   InsumoActualizacionSchema,
   InsumoRegistroSchema,
   InsumoSchema,
+  PersonalActualizacionSchema,
   PersonalRegistroSchema,
   PersonalSchema,
 } from './catalogos';
@@ -148,3 +150,59 @@ describe('CambioEstadoEquipoSchema', () => {
     esperarFallaEn(CambioEstadoEquipoSchema, {}, 'estadoOperativo');
   });
 });
+
+describe('EquipoActualizacionSchema', () => {
+  it('acepta cualquier subconjunto de los datos del equipo, incluso vacío', () => {
+    expect(EquipoActualizacionSchema.safeParse({}).success).toBe(true);
+    expect(
+      EquipoActualizacionSchema.safeParse({
+        nombre: 'Termonebulizadora Portátil',
+        marcaModelo: 'VectorFog H200',
+        estadoOperativo: 'MANTENIMIENTO',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('descarta id si se envía en el payload', () => {
+    const parseado = EquipoActualizacionSchema.parse({
+      nombre: 'Nuevo Nombre',
+      id,
+    });
+    expect(parseado).toEqual({ nombre: 'Nuevo Nombre' });
+  });
+
+  it('mantiene las reglas de validación de los campos que llegan', () => {
+    esperarFallaEn(EquipoActualizacionSchema, { codigoInterno: '' }, 'codigoInterno');
+    esperarFallaEn(EquipoActualizacionSchema, { tipo: 'DESCONOCIDO' }, 'tipo');
+    esperarFallaEn(EquipoActualizacionSchema, { estadoOperativo: 'INEXISTENTE' }, 'estadoOperativo');
+  });
+});
+
+describe('PersonalActualizacionSchema', () => {
+  it('acepta cualquier subconjunto de los datos del personal, incluso vacío', () => {
+    expect(PersonalActualizacionSchema.safeParse({}).success).toBe(true);
+    expect(
+      PersonalActualizacionSchema.safeParse({
+        nombres: 'Carlos Alberto',
+        cargo: 'SUPERVISOR',
+        telefono: '999888777',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('descarta id y estado si se envían en el payload', () => {
+    const parseado = PersonalActualizacionSchema.parse({
+      telefono: '999888777',
+      id,
+      estado: 'INACTIVO',
+    });
+    expect(parseado).toEqual({ telefono: '999888777' });
+  });
+
+  it('mantiene las reglas de validación de los campos que llegan', () => {
+    esperarFallaEn(PersonalActualizacionSchema, { dni: '123' }, 'dni');
+    esperarFallaEn(PersonalActualizacionSchema, { cargo: 'GERENTE' }, 'cargo');
+    esperarFallaEn(PersonalActualizacionSchema, { nombres: '' }, 'nombres');
+  });
+});
+

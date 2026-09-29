@@ -6,21 +6,33 @@ import {
   SERVICIO_CONTRATADO_REPOSITORY,
   ServicioContratadoRepository,
 } from '../../src/mantenimiento/domain/ports/servicio-contratado.repository';
+import { INSUMO_REPOSITORY, InsumoRepository } from '../../src/mantenimiento/domain/ports/insumo.repository';
+import { EQUIPO_REPOSITORY, EquipoRepository } from '../../src/mantenimiento/domain/ports/equipo.repository';
+import { PERSONAL_REPOSITORY, PersonalRepository } from '../../src/mantenimiento/domain/ports/personal.repository';
 import { Cliente } from '../../src/mantenimiento/domain/cliente';
 import { Proyecto } from '../../src/mantenimiento/domain/proyecto';
 import { ServicioContratado } from '../../src/mantenimiento/domain/servicio-contratado';
+import { Insumo } from '../../src/mantenimiento/domain/insumo';
+import { Equipo } from '../../src/mantenimiento/domain/equipo';
+import { Personal } from '../../src/mantenimiento/domain/personal';
 
-describe('Kysely Repositories contra PostgreSQL real (GAF-21)', () => {
+describe('Kysely Repositories contra PostgreSQL real (GAF-21 & GAF-22)', () => {
   let t: TestApp;
   let clienteRepo: ClienteRepository;
   let proyectoRepo: ProyectoRepository;
   let servicioRepo: ServicioContratadoRepository;
+  let insumoRepo: InsumoRepository;
+  let equipoRepo: EquipoRepository;
+  let personalRepo: PersonalRepository;
 
   beforeAll(async () => {
     t = await createTestApp();
     clienteRepo = t.app.get<ClienteRepository>(CLIENTE_REPOSITORY);
     proyectoRepo = t.app.get<ProyectoRepository>(PROYECTO_REPOSITORY);
     servicioRepo = t.app.get<ServicioContratadoRepository>(SERVICIO_CONTRATADO_REPOSITORY);
+    insumoRepo = t.app.get<InsumoRepository>(INSUMO_REPOSITORY);
+    equipoRepo = t.app.get<EquipoRepository>(EQUIPO_REPOSITORY);
+    personalRepo = t.app.get<PersonalRepository>(PERSONAL_REPOSITORY);
   });
 
   beforeEach(async () => {
@@ -252,6 +264,172 @@ describe('Kysely Repositories contra PostgreSQL real (GAF-21)', () => {
       expect(actualizado?.frecuencia).toBe('BIMESTRAL');
       expect(actualizado?.areaTratarM2).toBe(7000.0);
       expect(actualizado?.vigenciaDias).toBe(60);
+    });
+  });
+
+  describe('KyselyInsumoRepository', () => {
+    it('guarda, busca por ID y DIGESA, y lista activos y todos en PostgreSQL', async () => {
+      const insumo1 = new Insumo({
+        nombreComercial: 'Cipermetrina 25%',
+        principioActivo: 'Cipermetrina',
+        presentacion: 'LIQUIDO',
+        unidadMedida: 'L',
+        registroDigesa: 'RD-1001-2026',
+        concentracion: '25% p/v',
+        dosisEstandar: '5 ml / L',
+        fichaTecnicaKey: 'fichas/ciper.pdf',
+        hojaMsdsKey: 'msds/ciper.pdf',
+        resolucionKey: 'res/rd-1001.pdf',
+        proveedor: 'Bayer S.A.',
+        estado: 'ACTIVO',
+      });
+      const insumo2 = new Insumo({
+        nombreComercial: 'Bromadiolona Cebo',
+        principioActivo: 'Bromadiolona',
+        presentacion: 'BLOQUE',
+        unidadMedida: 'BLOQUE',
+        registroDigesa: 'RD-1002-2026',
+        concentracion: '0.005%',
+        dosisEstandar: '1 bloque / estacion',
+        fichaTecnicaKey: 'fichas/broma.pdf',
+        hojaMsdsKey: 'msds/broma.pdf',
+        estado: 'INACTIVO',
+      });
+
+      await insumoRepo.guardar(insumo1);
+      await insumoRepo.guardar(insumo2);
+
+      const porId = await insumoRepo.buscarPorId(insumo1.id);
+      expect(porId).not.toBeNull();
+      expect(porId?.nombreComercial).toBe('Cipermetrina 25%');
+      expect(porId?.resolucionKey).toBe('res/rd-1001.pdf');
+
+      const porDigesa = await insumoRepo.buscarPorDigesa('RD-1002-2026');
+      expect(porDigesa?.id).toBe(insumo2.id);
+
+      const activos = await insumoRepo.listarActivos();
+      expect(activos.length).toBe(1);
+      expect(activos[0].id).toBe(insumo1.id);
+
+      const todos = await insumoRepo.listarTodos();
+      expect(todos.length).toBe(2);
+
+      // Actualizar insumo vía guardar
+      insumo1.actualizar({
+        nombreComercial: 'Cipermetrina 50% Concentrada',
+        concentracion: '50% p/v',
+      });
+      await insumoRepo.guardar(insumo1);
+
+      const actualizado = await insumoRepo.buscarPorId(insumo1.id);
+      expect(actualizado?.nombreComercial).toBe('Cipermetrina 50% Concentrada');
+      expect(actualizado?.concentracion).toBe('50% p/v');
+    });
+  });
+
+  describe('KyselyEquipoRepository', () => {
+    it('guarda, busca por código interno, lista operativos y todos en PostgreSQL', async () => {
+      const eq1 = new Equipo({
+        codigoInterno: 'EQ-NEB-01',
+        nombre: 'Nebulizadora ULV',
+        tipo: 'NEBULIZACION',
+        marcaModelo: 'Vector Fog C-150',
+        estadoOperativo: 'OPERATIVO',
+        fechaAdquisicion: '2026-01-10',
+        ultimoMantenimiento: '2026-06-01',
+        proximoMantenimiento: '2026-12-01',
+      });
+      const eq2 = new Equipo({
+        codigoInterno: 'EQ-ASP-01',
+        nombre: 'Aspersora Manual',
+        tipo: 'ASPERSION',
+        marcaModelo: 'Guarany 20L',
+        estadoOperativo: 'MANTENIMIENTO',
+      });
+
+      await equipoRepo.guardar(eq1);
+      await equipoRepo.guardar(eq2);
+
+      const porId = await equipoRepo.buscarPorId(eq1.id);
+      expect(porId).not.toBeNull();
+      expect(porId?.codigoInterno).toBe('EQ-NEB-01');
+      expect(porId?.fechaAdquisicion).toBe('2026-01-10');
+
+      const porCodigo = await equipoRepo.buscarPorCodigoInterno('EQ-ASP-01');
+      expect(porCodigo?.id).toBe(eq2.id);
+      expect(porCodigo?.estadoOperativo).toBe('MANTENIMIENTO');
+
+      const operativos = await equipoRepo.listarOperativos();
+      expect(operativos.length).toBe(1);
+      expect(operativos[0].id).toBe(eq1.id);
+
+      const todos = await equipoRepo.listarTodos();
+      expect(todos.length).toBe(2);
+
+      // Actualizar datos del equipo
+      eq2.actualizarDatos({
+        estadoOperativo: 'OPERATIVO',
+        ultimoMantenimiento: '2026-09-20',
+      });
+      await equipoRepo.guardar(eq2);
+
+      const eq2Actualizado = await equipoRepo.buscarPorId(eq2.id);
+      expect(eq2Actualizado?.estadoOperativo).toBe('OPERATIVO');
+      expect(eq2Actualizado?.ultimoMantenimiento).toBe('2026-09-20');
+    });
+  });
+
+  describe('KyselyPersonalRepository', () => {
+    it('guarda, busca por DNI y usuario, y gestiona ciclo de vida en PostgreSQL', async () => {
+      const p1 = new Personal({
+        dni: '45892312',
+        nombres: 'Carlos',
+        apellidos: 'Mendoza Ruiz',
+        cargo: 'SUPERVISOR',
+        telefono: '958111333',
+        usuario: 'CMENDOZA',
+        estado: 'ACTIVO',
+      });
+      const p2 = new Personal({
+        dni: '70809010',
+        nombres: 'Ramiro',
+        apellidos: 'Vargas Luna',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '958222444',
+        usuario: 'RVARGAS',
+        estado: 'INACTIVO',
+      });
+
+      await personalRepo.guardar(p1);
+      await personalRepo.guardar(p2);
+
+      const porId = await personalRepo.buscarPorId(p1.id);
+      expect(porId).not.toBeNull();
+      expect(porId?.nombres).toBe('Carlos');
+      expect(porId?.cargo).toBe('SUPERVISOR');
+
+      const porDni = await personalRepo.buscarPorDni('70809010');
+      expect(porDni?.id).toBe(p2.id);
+      expect(porDni?.estado).toBe('INACTIVO');
+
+      const porUsuario = await personalRepo.buscarPorUsuario('cmendoza');
+      expect(porUsuario?.id).toBe(p1.id);
+
+      const activos = await personalRepo.listarActivos();
+      expect(activos.length).toBe(1);
+      expect(activos[0].id).toBe(p1.id);
+
+      const todos = await personalRepo.listarTodos();
+      expect(todos.length).toBe(2);
+
+      // Reactivar y actualizar
+      p2.activar();
+      p2.actualizarDatos({ telefono: '958999000' });
+      await personalRepo.guardar(p2);
+
+      const p2Actualizado = await personalRepo.buscarPorId(p2.id);
+      expect(p2Actualizado?.estado).toBe('ACTIVO');
+      expect(p2Actualizado?.telefono).toBe('958999000');
     });
   });
 });

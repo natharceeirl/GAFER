@@ -64,6 +64,10 @@ export const CambioEstadoEquipoSchema = z.object({
 });
 export type CambioEstadoEquipo = z.infer<typeof CambioEstadoEquipoSchema>;
 
+/** Datos que se pueden actualizar de un equipo ya registrado: cualquier subconjunto de los del alta. */
+export const EquipoActualizacionSchema = EquipoRegistroSchema.partial();
+export type EquipoActualizacion = z.infer<typeof EquipoActualizacionSchema>;
+
 /** Spec §7.6 — personal técnico y de supervisión. */
 export const CargoPersonalSchema = z.enum(['ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR']);
 export type CargoPersonal = z.infer<typeof CargoPersonalSchema>;
@@ -82,6 +86,10 @@ export type Personal = z.infer<typeof PersonalSchema>;
 
 export const PersonalRegistroSchema = PersonalSchema.omit({ id: true, estado: true });
 export type PersonalRegistro = z.infer<typeof PersonalRegistroSchema>;
+
+/** Datos que se pueden actualizar de un personal ya registrado: cualquier subconjunto de los del alta. */
+export const PersonalActualizacionSchema = PersonalRegistroSchema.partial();
+export type PersonalActualizacion = z.infer<typeof PersonalActualizacionSchema>;
 
 /** Spec §7.7 — catálogos de texto editables desde el panel web. */
 export const CatalogoTextoIdSchema = z.enum([

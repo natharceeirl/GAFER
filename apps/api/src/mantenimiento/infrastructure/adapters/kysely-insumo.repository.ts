@@ -77,6 +77,16 @@ export class KyselyInsumoRepository implements InsumoRepository {
     return rows.map((r) => this.mapToDomain(r));
   }
 
+  async listarTodos(): Promise<Insumo[]> {
+    const rows = await this.db
+      .selectFrom('insumos')
+      .selectAll()
+      .orderBy('nombre_comercial', 'asc')
+      .execute();
+
+    return rows.map((r) => this.mapToDomain(r));
+  }
+
   private mapToDomain(row: any): Insumo {
     return new Insumo({
       id: row.id,

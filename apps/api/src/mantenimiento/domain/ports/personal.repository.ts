@@ -8,4 +8,5 @@ export interface PersonalRepository {
   buscarPorDni(dni: string): Promise<Personal | null>;
   buscarPorUsuario(usuario: string): Promise<Personal | null>;
   listarActivos(): Promise<Personal[]>;
+  listarTodos(): Promise<Personal[]>;
 }

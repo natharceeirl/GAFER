@@ -316,4 +316,185 @@ describe('Mantenimiento Use Cases (T2.2)', () => {
       expect(mockServicioRepo.guardar).toHaveBeenCalled();
     });
   });
+
+  describe('ActivarInsumoUseCase', () => {
+    it('activa un insumo inactivo correctamente', async () => {
+      const { ActivarInsumoUseCase } = await import('./activar-insumo.usecase');
+      const { Insumo } = await import('../domain/insumo');
+      const insumo = new Insumo({
+        id: 'i1',
+        nombreComercial: 'Cipermetrina',
+        principioActivo: 'Cipermetrina',
+        presentacion: 'LIQUIDO',
+        unidadMedida: 'L',
+        registroDigesa: 'RD-1111',
+        concentracion: '25%',
+        dosisEstandar: '5ml',
+        fichaTecnicaKey: 'k1',
+        hojaMsdsKey: 'k2',
+        estado: 'INACTIVO',
+      });
+      const mockInsumoRepo = {
+        guardar: jest.fn().mockResolvedValue(undefined),
+        buscarPorId: jest.fn().mockResolvedValue(insumo),
+        buscarPorDigesa: jest.fn(),
+        listarActivos: jest.fn(),
+        listarTodos: jest.fn(),
+      };
+      const useCase = new ActivarInsumoUseCase(mockInsumoRepo);
+      const res = await useCase.execute('i1');
+      expect(res.getEstado()).toBe('ACTIVO');
+      expect(mockInsumoRepo.guardar).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('ActualizarEquipoUseCase', () => {
+    it('actualiza datos de un equipo existente', async () => {
+      const { ActualizarEquipoUseCase } = await import('./actualizar-equipo.usecase');
+      const { Equipo } = await import('../domain/equipo');
+      const equipo = new Equipo({
+        id: 'e1',
+        codigoInterno: 'EQ-01',
+        nombre: 'Nebulizador Original',
+        tipo: 'NEBULIZACION',
+      });
+      const mockEquipoRepo = {
+        guardar: jest.fn().mockResolvedValue(undefined),
+        buscarPorId: jest.fn().mockResolvedValue(equipo),
+        buscarPorCodigoInterno: jest.fn().mockResolvedValue(null),
+        listarOperativos: jest.fn(),
+        listarTodos: jest.fn(),
+      };
+      const useCase = new ActualizarEquipoUseCase(mockEquipoRepo);
+      const res = await useCase.execute({
+        id: 'e1',
+        nombre: 'Nebulizador Actualizado',
+        marcaModelo: 'VectorFog H200',
+      });
+      expect(res.nombre).toBe('Nebulizador Actualizado');
+      expect(res.marcaModelo).toBe('VectorFog H200');
+      expect(mockEquipoRepo.guardar).toHaveBeenCalledTimes(1);
+    });
+
+    it('rechaza actualización si nuevo codigoInterno ya pertenece a otro equipo', async () => {
+      const { ActualizarEquipoUseCase } = await import('./actualizar-equipo.usecase');
+      const { Equipo } = await import('../domain/equipo');
+      const equipo1 = new Equipo({
+        id: 'e1',
+        codigoInterno: 'EQ-01',
+        nombre: 'Equipo 1',
+        tipo: 'NEBULIZACION',
+      });
+      const equipo2 = new Equipo({
+        id: 'e2',
+        codigoInterno: 'EQ-02',
+        nombre: 'Equipo 2',
+        tipo: 'NEBULIZACION',
+      });
+      const mockEquipoRepo = {
+        guardar: jest.fn().mockResolvedValue(undefined),
+        buscarPorId: jest.fn().mockResolvedValue(equipo1),
+        buscarPorCodigoInterno: jest.fn().mockResolvedValue(equipo2),
+        listarOperativos: jest.fn(),
+        listarTodos: jest.fn(),
+      };
+      const useCase = new ActualizarEquipoUseCase(mockEquipoRepo);
+      await expect(
+        useCase.execute({ id: 'e1', codigoInterno: 'EQ-02' }),
+      ).rejects.toThrow('Ya existe un equipo registrado con el código interno: EQ-02');
+    });
+  });
+
+  describe('ActualizarPersonalUseCase', () => {
+    it('actualiza datos de personal correctamente', async () => {
+      const { ActualizarPersonalUseCase } = await import('./actualizar-personal.usecase');
+      const { Personal } = await import('../domain/personal');
+      const personal = new Personal({
+        id: 'p1',
+        dni: '45892312',
+        nombres: 'Luis',
+        apellidos: 'Quispe',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '958111222',
+      });
+      const mockRepo = {
+        guardar: jest.fn().mockResolvedValue(undefined),
+        buscarPorId: jest.fn().mockResolvedValue(personal),
+        buscarPorDni: jest.fn().mockResolvedValue(null),
+        buscarPorUsuario: jest.fn().mockResolvedValue(null),
+        listarActivos: jest.fn(),
+        listarTodos: jest.fn(),
+      };
+      const useCase = new ActualizarPersonalUseCase(mockRepo);
+      const res = await useCase.execute({
+        id: 'p1',
+        nombres: 'Luis Alberto',
+        cargo: 'SUPERVISOR',
+      });
+      expect(res.nombres).toBe('Luis Alberto');
+      expect(res.cargo).toBe('SUPERVISOR');
+      expect(mockRepo.guardar).toHaveBeenCalledTimes(1);
+    });
+
+    it('rechaza actualización si nuevo DNI pertenece a otro colaborador', async () => {
+      const { ActualizarPersonalUseCase } = await import('./actualizar-personal.usecase');
+      const { Personal } = await import('../domain/personal');
+      const personal1 = new Personal({
+        id: 'p1',
+        dni: '45892312',
+        nombres: 'Luis',
+        apellidos: 'Quispe',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '958111222',
+      });
+      const personal2 = new Personal({
+        id: 'p2',
+        dni: '70809010',
+        nombres: 'Maria',
+        apellidos: 'Perez',
+        cargo: 'SUPERVISOR',
+        telefono: '958333444',
+      });
+      const mockRepo = {
+        guardar: jest.fn().mockResolvedValue(undefined),
+        buscarPorId: jest.fn().mockResolvedValue(personal1),
+        buscarPorDni: jest.fn().mockResolvedValue(personal2),
+        buscarPorUsuario: jest.fn().mockResolvedValue(null),
+        listarActivos: jest.fn(),
+        listarTodos: jest.fn(),
+      };
+      const useCase = new ActualizarPersonalUseCase(mockRepo);
+      await expect(
+        useCase.execute({ id: 'p1', dni: '70809010' }),
+      ).rejects.toThrow('Ya existe un colaborador registrado con el DNI: 70809010');
+    });
+  });
+
+  describe('ActivarPersonalUseCase', () => {
+    it('reactiva un personal desactivado correctamente', async () => {
+      const { ActivarPersonalUseCase } = await import('./activar-personal.usecase');
+      const { Personal } = await import('../domain/personal');
+      const personal = new Personal({
+        id: 'p1',
+        dni: '45892312',
+        nombres: 'Luis',
+        apellidos: 'Quispe',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '958111222',
+        estado: 'INACTIVO',
+      });
+      const mockRepo = {
+        guardar: jest.fn().mockResolvedValue(undefined),
+        buscarPorId: jest.fn().mockResolvedValue(personal),
+        buscarPorDni: jest.fn(),
+        buscarPorUsuario: jest.fn(),
+        listarActivos: jest.fn(),
+        listarTodos: jest.fn(),
+      };
+      const useCase = new ActivarPersonalUseCase(mockRepo);
+      const res = await useCase.execute('p1');
+      expect(res.getEstado()).toBe('ACTIVO');
+      expect(mockRepo.guardar).toHaveBeenCalledTimes(1);
+    });
+  });
 });
