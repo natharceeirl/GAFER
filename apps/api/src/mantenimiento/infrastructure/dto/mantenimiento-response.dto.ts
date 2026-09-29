@@ -83,11 +83,17 @@ export class ProyectoResponseDto {
   @ApiProperty({ example: 'Mario Vargas' })
   contactoNombre!: string;
 
+  @ApiProperty({ example: 'Supervisor de Planta' })
+  contactoCargo!: string;
+
   @ApiProperty({ example: '954987654' })
   contactoTelefono!: string;
 
   @ApiProperty({ example: 'ACTIVO', enum: ['ACTIVO', 'INACTIVO'] })
   estado!: 'ACTIVO' | 'INACTIVO';
+
+  @ApiProperty({ example: 'Requerido pase médico y EPP', nullable: true })
+  observaciones!: string | null;
 }
 
 export class ServicioContratadoResponseDto {
@@ -108,6 +114,15 @@ export class ServicioContratadoResponseDto {
 
   @ApiProperty({ example: 3500.0 })
   areaTratarM2!: number;
+
+  @ApiProperty({ example: ['i1111111-1111-4111-8111-111111111111'], description: 'IDs de insumos autorizados' })
+  insumosAutorizados!: string[];
+
+  @ApiProperty({ example: ['e1111111-1111-4111-8111-111111111111'], description: 'IDs de equipos autorizados' })
+  equiposAutorizados!: string[];
+
+  @ApiProperty({ example: { 'i1111111-1111-4111-8111-111111111111': '5 ml / Litro' }, description: 'Dosis referencial por insumo' })
+  dosisReferencial!: Record<string, string>;
 
   @ApiProperty({ example: true })
   requiereCertificado!: boolean;

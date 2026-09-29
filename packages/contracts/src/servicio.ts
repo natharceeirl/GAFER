@@ -65,3 +65,37 @@ export const ServicioContratadoDetalleSchema = ServicioContratadoBaseSchema.exte
   estado: EstadoActivoInactivoSchema,
 }).superRefine(aplicarReglasServicio);
 export type ServicioContratadoDetalle = z.infer<typeof ServicioContratadoDetalleSchema>;
+
+/** Actualización parcial de un servicio contratado */
+export const ServicioContratadoActualizacionSchema = z
+  .object({
+    frecuencia: FrecuenciaServicioSchema.optional().describe('Frecuencia con la que se repite el servicio'),
+    areaTotalM2: z.number().positive().optional().describe('Superficie total en m²'),
+    areaTratarM2: z.number().positive().optional().describe('Superficie efectiva a tratar en m²'),
+    insumosAutorizados: z.array(z.string().uuid()).optional().describe('IDs de los insumos autorizados'),
+    equiposAutorizados: z.array(z.string().uuid()).optional().describe('IDs de los equipos autorizados'),
+    dosisReferencial: z.record(z.string()).optional().describe('Dosis referencial por insumo'),
+    requiereCertificado: z.boolean().optional().describe('Si emite certificado de saneamiento'),
+    vigenciaDias: z.number().int().positive().nullish().describe('Vigencia del certificado en días'),
+  })
+  .superRefine((servicio, ctx) => {
+    if (
+      servicio.areaTotalM2 !== undefined &&
+      servicio.areaTratarM2 !== undefined &&
+      servicio.areaTratarM2 > servicio.areaTotalM2
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['areaTratarM2'],
+        message: 'No puede superar el área total del local',
+      });
+    }
+    if (servicio.requiereCertificado === true && servicio.vigenciaDias == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['vigenciaDias'],
+        message: 'Un servicio con certificado requiere vigencia en días',
+      });
+    }
+  });
+export type ServicioContratadoActualizacion = z.infer<typeof ServicioContratadoActualizacionSchema>;

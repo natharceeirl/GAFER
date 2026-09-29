@@ -20,6 +20,8 @@ import { EquipoRepository } from '../domain/ports/equipo.repository';
 import { PersonalRepository } from '../domain/ports/personal.repository';
 import { S3StorageService } from '../../shared/infrastructure/storage/s3-storage.service';
 import { Cliente } from '../domain/cliente';
+import { Proyecto } from '../domain/proyecto';
+import { ServicioContratado } from '../domain/servicio-contratado';
 import { Insumo } from '../domain/insumo';
 import { Equipo } from '../domain/equipo';
 
@@ -32,7 +34,13 @@ describe('MantenimientoController', () => {
   let mockDesactivarClienteUseCase: jest.Mocked<DesactivarClienteUseCase>;
   let mockActivarClienteUseCase: jest.Mocked<ActivarClienteUseCase>;
   let mockProyectoUseCase: jest.Mocked<RegistrarProyectoUseCase>;
+  let mockActualizarProyectoUseCase: jest.Mocked<any>;
+  let mockActivarProyectoUseCase: jest.Mocked<any>;
+  let mockDesactivarProyectoUseCase: jest.Mocked<any>;
   let mockServicioUseCase: jest.Mocked<RegistrarServicioContratadoUseCase>;
+  let mockActualizarServicioUseCase: jest.Mocked<any>;
+  let mockActivarServicioUseCase: jest.Mocked<any>;
+  let mockDesactivarServicioUseCase: jest.Mocked<any>;
   let mockInsumoUseCase: jest.Mocked<RegistrarInsumoUseCase>;
   let mockActualizarInsumoUseCase: jest.Mocked<any>;
   let mockDesactivarInsumoUseCase: jest.Mocked<DesactivarInsumoUseCase>;
@@ -56,7 +64,13 @@ describe('MantenimientoController', () => {
     mockDesactivarClienteUseCase = { execute: jest.fn() } as any;
     mockActivarClienteUseCase = { execute: jest.fn() } as any;
     mockProyectoUseCase = { execute: jest.fn() } as any;
+    mockActualizarProyectoUseCase = { execute: jest.fn() } as any;
+    mockActivarProyectoUseCase = { execute: jest.fn() } as any;
+    mockDesactivarProyectoUseCase = { execute: jest.fn() } as any;
     mockServicioUseCase = { execute: jest.fn() } as any;
+    mockActualizarServicioUseCase = { execute: jest.fn() } as any;
+    mockActivarServicioUseCase = { execute: jest.fn() } as any;
+    mockDesactivarServicioUseCase = { execute: jest.fn() } as any;
     mockInsumoUseCase = { execute: jest.fn() } as any;
     mockActualizarInsumoUseCase = { execute: jest.fn() } as any;
     mockDesactivarInsumoUseCase = { execute: jest.fn() } as any;
@@ -70,38 +84,38 @@ describe('MantenimientoController', () => {
       buscarPorId: jest.fn(),
       buscarPorRuc: jest.fn(),
       buscarPorCodigoCorto: jest.fn(),
-      listarTodos: jest.fn(),
+      listarTodos: jest.fn().mockResolvedValue([]),
     };
     mockProyectoRepo = {
       guardar: jest.fn(),
       buscarPorId: jest.fn(),
-      buscarPorClienteId: jest.fn(),
+      buscarPorClienteId: jest.fn().mockResolvedValue([]),
       buscarPorClienteYNombre: jest.fn(),
     };
     mockServicioRepo = {
       guardar: jest.fn(),
       buscarPorId: jest.fn(),
-      buscarPorProyectoId: jest.fn(),
+      buscarPorProyectoId: jest.fn().mockResolvedValue([]),
     };
     mockInsumoRepo = {
       guardar: jest.fn(),
       buscarPorId: jest.fn(),
       buscarPorDigesa: jest.fn(),
-      listarActivos: jest.fn(),
+      listarActivos: jest.fn().mockResolvedValue([]),
     };
     mockEquipoRepo = {
       guardar: jest.fn(),
       buscarPorId: jest.fn(),
       buscarPorCodigoInterno: jest.fn(),
       listarOperativos: jest.fn(),
-      listarTodos: jest.fn(),
+      listarTodos: jest.fn().mockResolvedValue([]),
     };
     mockPersonalRepo = {
       guardar: jest.fn(),
       buscarPorId: jest.fn(),
       buscarPorDni: jest.fn(),
       buscarPorUsuario: jest.fn(),
-      listarActivos: jest.fn(),
+      listarActivos: jest.fn().mockResolvedValue([]),
     };
     mockStorageService = {
       getBucketName: jest.fn().mockReturnValue('gafer-test-bucket'),
@@ -116,7 +130,13 @@ describe('MantenimientoController', () => {
       mockDesactivarClienteUseCase,
       mockActivarClienteUseCase,
       mockProyectoUseCase,
+      mockActualizarProyectoUseCase,
+      mockActivarProyectoUseCase,
+      mockDesactivarProyectoUseCase,
       mockServicioUseCase,
+      mockActualizarServicioUseCase,
+      mockActivarServicioUseCase,
+      mockDesactivarServicioUseCase,
       mockInsumoUseCase,
       mockActualizarInsumoUseCase,
       mockDesactivarInsumoUseCase,
@@ -217,6 +237,143 @@ describe('MantenimientoController', () => {
 
       const res = await controller.desactivarCliente('c-1');
       expect(res.estado).toBe('INACTIVO');
+    });
+  });
+
+  describe('Proyectos / Sedes Endpoints', () => {
+    it('debe registrar un proyecto y retornar los campos completos', async () => {
+      const mockProyecto = new Proyecto({
+        id: 'p-1',
+        clienteId: 'c-1',
+        nombre: 'PLANTA_SUR',
+        direccionSede: 'Carretera Costanera Km 12',
+        distrito: 'Mollendo',
+        provincia: 'Islay',
+        departamento: 'Arequipa',
+        contactoNombre: 'Mario Vargas',
+        contactoCargo: 'Supervisor de Planta',
+        contactoTelefono: '954987654',
+        observaciones: 'EPP obligatorio',
+      });
+      mockProyectoUseCase.execute.mockResolvedValue(mockProyecto);
+
+      const res = await controller.crearProyecto({
+        clienteId: 'c-1',
+        nombre: 'PLANTA_SUR',
+        direccionSede: 'Carretera Costanera Km 12',
+        distrito: 'Mollendo',
+        provincia: 'Islay',
+        departamento: 'Arequipa',
+        contactoNombre: 'Mario Vargas',
+        contactoCargo: 'Supervisor de Planta',
+        contactoTelefono: '954987654',
+        observaciones: 'EPP obligatorio',
+      });
+
+      expect(res.id).toBe('p-1');
+      expect(res.contactoCargo).toBe('Supervisor de Planta');
+      expect(res.observaciones).toBe('EPP obligatorio');
+    });
+
+    it('debe obtener un proyecto por ID', async () => {
+      const mockProyecto = new Proyecto({
+        id: 'p-1',
+        clienteId: 'c-1',
+        nombre: 'PLANTA_SUR',
+        direccionSede: 'Carretera Costanera Km 12',
+        distrito: 'Mollendo',
+        provincia: 'Islay',
+        departamento: 'Arequipa',
+        contactoNombre: 'Mario Vargas',
+        contactoCargo: 'Supervisor de Planta',
+        contactoTelefono: '954987654',
+      });
+      mockProyectoRepo.buscarPorId.mockResolvedValue(mockProyecto);
+
+      const res = await controller.obtenerProyecto('p-1');
+      expect(res.id).toBe('p-1');
+      expect(res.nombre).toBe('PLANTA_SUR');
+    });
+
+    it('debe actualizar un proyecto', async () => {
+      const mockProyecto = new Proyecto({
+        id: 'p-1',
+        clienteId: 'c-1',
+        nombre: 'PLANTA_SUR_MOD',
+        direccionSede: 'Carretera Costanera Km 14',
+        distrito: 'Mollendo',
+        provincia: 'Islay',
+        departamento: 'Arequipa',
+        contactoNombre: 'Mario Vargas Peña',
+        contactoCargo: 'Jefe de Planta',
+        contactoTelefono: '954999888',
+      });
+      mockActualizarProyectoUseCase.execute.mockResolvedValue(mockProyecto);
+
+      const res = await controller.actualizarProyecto('p-1', {
+        nombre: 'PLANTA_SUR_MOD',
+      });
+      expect(res.nombre).toBe('PLANTA_SUR_MOD');
+    });
+  });
+
+  describe('Servicios Contratados Endpoints', () => {
+    it('debe registrar un servicio contratado incluyendo insumos, equipos y dosis', async () => {
+      const { ServicioContratado } = await import('../domain/servicio-contratado');
+      const mockServicio = new ServicioContratado({
+        id: 's-1',
+        proyectoId: 'p-1',
+        tipoServicio: 'DSF',
+        frecuencia: 'MENSUAL',
+        areaTotalM2: 5000,
+        areaTratarM2: 3500,
+        insumosAutorizados: ['i-1'],
+        equiposAutorizados: ['e-1'],
+        dosisReferencial: { 'i-1': '5 ml / Litro' },
+        requiereCertificado: true,
+        vigenciaDias: 30,
+      });
+      mockServicioUseCase.execute.mockResolvedValue(mockServicio);
+
+      const res = await controller.crearServicioContratado({
+        proyectoId: 'p-1',
+        tipoServicio: 'DSF',
+        frecuencia: 'MENSUAL',
+        areaTotalM2: 5000,
+        areaTratarM2: 3500,
+        insumosAutorizados: ['i-1'],
+        equiposAutorizados: ['e-1'],
+        dosisReferencial: { 'i-1': '5 ml / Litro' },
+        requiereCertificado: true,
+        vigenciaDias: 30,
+      });
+
+      expect(res.id).toBe('s-1');
+      expect(res.insumosAutorizados).toEqual(['i-1']);
+      expect(res.equiposAutorizados).toEqual(['e-1']);
+      expect(res.dosisReferencial).toEqual({ 'i-1': '5 ml / Litro' });
+    });
+
+    it('debe obtener un servicio contratado por ID con insumos, equipos y dosis', async () => {
+      const { ServicioContratado } = await import('../domain/servicio-contratado');
+      const mockServicio = new ServicioContratado({
+        id: 's-1',
+        proyectoId: 'p-1',
+        tipoServicio: 'DRT',
+        frecuencia: 'QUINCENAL',
+        areaTotalM2: 1000,
+        areaTratarM2: 500,
+        insumosAutorizados: ['i-2'],
+        equiposAutorizados: ['e-2'],
+        dosisReferencial: { 'i-2': '1 bloque' },
+      });
+      mockServicioRepo.buscarPorId.mockResolvedValue(mockServicio);
+
+      const res = await controller.obtenerServicioContratado('s-1');
+      expect(res.id).toBe('s-1');
+      expect(res.tipoServicio).toBe('DRT');
+      expect(res.insumosAutorizados).toEqual(['i-2']);
+      expect(res.dosisReferencial).toEqual({ 'i-2': '1 bloque' });
     });
   });
 

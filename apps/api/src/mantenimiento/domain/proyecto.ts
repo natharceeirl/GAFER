@@ -19,16 +19,16 @@ export interface ProyectoProps {
 export class Proyecto {
   public readonly id: string;
   public readonly clienteId: string;
-  public readonly nombre: string;
-  public readonly direccionSede: string;
-  public readonly distrito: string;
-  public readonly provincia: string;
-  public readonly departamento: string;
-  public readonly contactoNombre: string;
-  public readonly contactoCargo: string;
-  public readonly contactoTelefono: string;
+  public nombre: string;
+  public direccionSede: string;
+  public distrito: string;
+  public provincia: string;
+  public departamento: string;
+  public contactoNombre: string;
+  public contactoCargo: string;
+  public contactoTelefono: string;
   private estado: EstadoGeneral;
-  public readonly observaciones: string | null;
+  public observaciones: string | null;
 
   constructor(props: ProyectoProps) {
     if (!/^[A-Z0-9_]{3,50}$/.test(props.nombre)) {
@@ -55,6 +55,52 @@ export class Proyecto {
     this.contactoTelefono = props.contactoTelefono.trim();
     this.estado = props.estado ?? 'ACTIVO';
     this.observaciones = props.observaciones ?? null;
+  }
+
+  actualizarDatos(props: {
+    nombre?: string;
+    direccionSede?: string;
+    distrito?: string;
+    provincia?: string;
+    departamento?: string;
+    contactoNombre?: string;
+    contactoCargo?: string;
+    contactoTelefono?: string;
+    observaciones?: string | null;
+  }): void {
+    if (props.nombre !== undefined) {
+      if (!/^[A-Z0-9_]{3,50}$/.test(props.nombre)) {
+        throw new Error('El nombre de la sede/proyecto debe tener entre 3 y 50 caracteres alfanuméricos en mayúsculas sin espacios (ej. PLANTA_SUR)');
+      }
+      this.nombre = props.nombre;
+    }
+    if (props.direccionSede !== undefined) {
+      if (!props.direccionSede || props.direccionSede.trim().length === 0) {
+        throw new Error('La dirección física de la sede es obligatoria');
+      }
+      this.direccionSede = props.direccionSede.trim();
+    }
+    if (props.distrito !== undefined) {
+      this.distrito = props.distrito.trim();
+    }
+    if (props.provincia !== undefined) {
+      this.provincia = props.provincia.trim();
+    }
+    if (props.departamento !== undefined) {
+      this.departamento = props.departamento.trim();
+    }
+    if (props.contactoNombre !== undefined) {
+      this.contactoNombre = props.contactoNombre.trim();
+    }
+    if (props.contactoCargo !== undefined) {
+      this.contactoCargo = props.contactoCargo.trim();
+    }
+    if (props.contactoTelefono !== undefined) {
+      this.contactoTelefono = props.contactoTelefono.trim();
+    }
+    if (props.observaciones !== undefined) {
+      this.observaciones = props.observaciones;
+    }
   }
 
   desactivar(): void {

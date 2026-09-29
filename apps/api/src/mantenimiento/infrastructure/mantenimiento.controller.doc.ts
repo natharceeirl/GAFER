@@ -117,6 +117,45 @@ export function ApiListarProyectosPorClienteDoc() {
   );
 }
 
+export function ApiObtenerProyectoDoc() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Obtener detalle de una sede/proyecto por ID' }),
+    ApiParam({ name: 'id', description: 'UUID de la sede/proyecto' }),
+    ApiResponse({ status: 200, description: 'Sede/proyecto encontrada', type: ProyectoResponseDto }),
+    ApiResponse({ status: 400, description: 'UUID inválido', type: BadRequestErrorDto }),
+    ApiResponse({ status: 404, description: 'Sede no encontrada', type: NotFoundErrorDto }),
+  );
+}
+
+export function ApiActualizarProyectoDoc() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Actualizar datos de una sede/proyecto existente' }),
+    ApiParam({ name: 'id', description: 'UUID de la sede/proyecto' }),
+    ApiResponse({ status: 200, description: 'Sede/proyecto actualizada', type: ProyectoResponseDto }),
+    ApiResponse({ status: 400, description: 'Datos inválidos', type: BadRequestErrorDto }),
+    ApiResponse({ status: 404, description: 'Sede no encontrada', type: NotFoundErrorDto }),
+    ApiResponse({ status: 409, description: 'Nombre de sede duplicado para este cliente', type: ConflictErrorDto }),
+  );
+}
+
+export function ApiDesactivarProyectoDoc() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Desactivar una sede/proyecto (baja lógica)' }),
+    ApiParam({ name: 'id', description: 'UUID de la sede/proyecto' }),
+    ApiResponse({ status: 200, description: 'Sede desactivada', type: EstadoSimpleResponseDto }),
+    ApiResponse({ status: 404, description: 'Sede no encontrada', type: NotFoundErrorDto }),
+  );
+}
+
+export function ApiActivarProyectoDoc() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Reactivar una sede/proyecto previamente desactivada' }),
+    ApiParam({ name: 'id', description: 'UUID de la sede/proyecto' }),
+    ApiResponse({ status: 200, description: 'Sede reactivada', type: EstadoSimpleResponseDto }),
+    ApiResponse({ status: 404, description: 'Sede no encontrada', type: NotFoundErrorDto }),
+  );
+}
+
 // ==========================================
 // SERVICIOS CONTRATADOS
 // ==========================================
@@ -139,6 +178,44 @@ export function ApiListarServiciosPorProyectoDoc() {
     ApiParam({ name: 'proyectoId', description: 'UUID de la sede' }),
     ApiResponse({ status: 200, description: 'Servicios de la sede', type: [ServicioContratadoResponseDto] }),
     ApiResponse({ status: 400, description: 'UUID de sede inválido', type: BadRequestErrorDto }),
+  );
+}
+
+export function ApiObtenerServicioContratadoDoc() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Obtener detalle de un servicio contratado por ID' }),
+    ApiParam({ name: 'id', description: 'UUID del servicio contratado' }),
+    ApiResponse({ status: 200, description: 'Servicio contratado encontrado', type: ServicioContratadoResponseDto }),
+    ApiResponse({ status: 400, description: 'UUID inválido', type: BadRequestErrorDto }),
+    ApiResponse({ status: 404, description: 'Servicio contratado no encontrado', type: NotFoundErrorDto }),
+  );
+}
+
+export function ApiActualizarServicioContratadoDoc() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Actualizar un servicio contratado' }),
+    ApiParam({ name: 'id', description: 'UUID del servicio contratado' }),
+    ApiResponse({ status: 200, description: 'Servicio contratado actualizado', type: ServicioContratadoResponseDto }),
+    ApiResponse({ status: 400, description: 'Datos inválidos', type: BadRequestErrorDto }),
+    ApiResponse({ status: 404, description: 'Servicio contratado no encontrado', type: NotFoundErrorDto }),
+  );
+}
+
+export function ApiDesactivarServicioContratadoDoc() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Desactivar un servicio contratado (baja lógica)' }),
+    ApiParam({ name: 'id', description: 'UUID del servicio contratado' }),
+    ApiResponse({ status: 200, description: 'Servicio desactivado', type: EstadoSimpleResponseDto }),
+    ApiResponse({ status: 404, description: 'Servicio contratado no encontrado', type: NotFoundErrorDto }),
+  );
+}
+
+export function ApiActivarServicioContratadoDoc() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Reactivar un servicio contratado previamente desactivado' }),
+    ApiParam({ name: 'id', description: 'UUID del servicio contratado' }),
+    ApiResponse({ status: 200, description: 'Servicio reactivado', type: EstadoSimpleResponseDto }),
+    ApiResponse({ status: 404, description: 'Servicio contratado no encontrado', type: NotFoundErrorDto }),
   );
 }
 

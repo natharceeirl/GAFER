@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { ProyectoDetalleSchema, ProyectoRegistroSchema, ProyectoSchema } from './proyecto';
+import {
+  ProyectoActualizacionSchema,
+  ProyectoDetalleSchema,
+  ProyectoRegistroSchema,
+  ProyectoSchema,
+} from './proyecto';
 import { esperarFallaEn } from './pruebas';
 
 const registro = {
@@ -58,5 +63,19 @@ describe('ProyectoSchema (contrato original)', () => {
       estado: 'ACTIVO',
     });
     expect(ok.success).toBe(true);
+  });
+});
+
+describe('ProyectoActualizacionSchema', () => {
+  it('acepta actualización parcial válida', () => {
+    const res = ProyectoActualizacionSchema.safeParse({
+      nombre: 'PLANTA_NORTE_2',
+      contactoTelefono: '958999888',
+    });
+    expect(res.success).toBe(true);
+  });
+
+  it('rechaza nombre con formato inválido en actualización', () => {
+    esperarFallaEn(ProyectoActualizacionSchema, { nombre: 'planta baja' }, 'nombre');
   });
 });

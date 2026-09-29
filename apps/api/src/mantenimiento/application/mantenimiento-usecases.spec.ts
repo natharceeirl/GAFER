@@ -212,4 +212,108 @@ describe('Mantenimiento Use Cases (T2.2)', () => {
       ).rejects.toThrow('Ya existe un colaborador registrado con el DNI: 45892312');
     });
   });
+
+  describe('ActualizarProyectoUseCase', () => {
+    it('actualiza datos de sede correctamente', async () => {
+      const { ActualizarProyectoUseCase } = await import('./actualizar-proyecto.usecase');
+      const proyecto = new Proyecto({
+        id: 'p1',
+        clienteId: 'c1',
+        nombre: 'SEDE_ORIGINAL',
+        direccionSede: 'Calle 1',
+        distrito: 'Distrito 1',
+        provincia: 'Provincia 1',
+        departamento: 'Dept 1',
+        contactoNombre: 'Juan',
+        contactoCargo: 'Jefe',
+        contactoTelefono: '958123456',
+      });
+      mockProyectoRepo.buscarPorId.mockResolvedValue(proyecto);
+      mockProyectoRepo.buscarPorClienteYNombre.mockResolvedValue(null);
+
+      const useCase = new ActualizarProyectoUseCase(mockProyectoRepo);
+      const res = await useCase.execute({
+        id: 'p1',
+        nombre: 'SEDE_MODIFICADA',
+        direccionSede: 'Calle 2',
+      });
+
+      expect(res.nombre).toBe('SEDE_MODIFICADA');
+      expect(res.direccionSede).toBe('Calle 2');
+      expect(mockProyectoRepo.guardar).toHaveBeenCalled();
+    });
+
+    it('rechaza si nombre está duplicado en el mismo cliente', async () => {
+      const { ActualizarProyectoUseCase } = await import('./actualizar-proyecto.usecase');
+      const proyecto = new Proyecto({
+        id: 'p1',
+        clienteId: 'c1',
+        nombre: 'SEDE_ORIGINAL',
+        direccionSede: 'Calle 1',
+        distrito: 'Distrito 1',
+        provincia: 'Provincia 1',
+        departamento: 'Dept 1',
+        contactoNombre: 'Juan',
+        contactoCargo: 'Jefe',
+        contactoTelefono: '958123456',
+      });
+      const proyectoExistente = new Proyecto({
+        id: 'p2',
+        clienteId: 'c1',
+        nombre: 'SEDE_EXISTENTE',
+        direccionSede: 'Calle 3',
+        distrito: 'Distrito 1',
+        provincia: 'Provincia 1',
+        departamento: 'Dept 1',
+        contactoNombre: 'Juan',
+        contactoCargo: 'Jefe',
+        contactoTelefono: '958123456',
+      });
+      mockProyectoRepo.buscarPorId.mockResolvedValue(proyecto);
+      mockProyectoRepo.buscarPorClienteYNombre.mockResolvedValue(proyectoExistente);
+
+      const useCase = new ActualizarProyectoUseCase(mockProyectoRepo);
+      await expect(
+        useCase.execute({ id: 'p1', nombre: 'SEDE_EXISTENTE' }),
+      ).rejects.toThrow('El cliente ya posee una sede registrada con el nombre: SEDE_EXISTENTE');
+    });
+  });
+
+  describe('ActualizarServicioContratadoUseCase', () => {
+    it('actualiza datos del servicio contratado correctamente', async () => {
+      const { ActualizarServicioContratadoUseCase } = await import(
+        './actualizar-servicio-contratado.usecase'
+      );
+      const { ServicioContratado } = await import('../domain/servicio-contratado');
+      const servicio = new ServicioContratado({
+        id: 's1',
+        proyectoId: 'p1',
+        tipoServicio: 'DSF',
+        frecuencia: 'MENSUAL',
+        areaTotalM2: 1000,
+        areaTratarM2: 500,
+      });
+
+      const mockServicioRepo = {
+        guardar: jest.fn().mockResolvedValue(undefined),
+        buscarPorId: jest.fn().mockResolvedValue(servicio),
+        buscarPorProyectoId: jest.fn(),
+      };
+
+      const useCase = new ActualizarServicioContratadoUseCase(mockServicioRepo);
+      const res = await useCase.execute({
+        id: 's1',
+        frecuencia: 'QUINCENAL',
+        areaTratarM2: 800,
+        insumosAutorizados: ['i1'],
+        equiposAutorizados: ['e1'],
+        dosisReferencial: { i1: '5 ml/L' },
+      });
+
+      expect(res.frecuencia).toBe('QUINCENAL');
+      expect(res.areaTratarM2).toBe(800);
+      expect(res.insumosAutorizados).toEqual(['i1']);
+      expect(mockServicioRepo.guardar).toHaveBeenCalled();
+    });
+  });
 });

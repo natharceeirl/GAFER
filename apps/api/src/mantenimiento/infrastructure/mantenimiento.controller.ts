@@ -24,6 +24,12 @@ import { RegistrarPersonalUseCase } from '../application/registrar-personal.usec
 import { ActualizarClienteUseCase } from '../application/actualizar-cliente.usecase';
 import { DesactivarClienteUseCase } from '../application/desactivar-cliente.usecase';
 import { ActivarClienteUseCase } from '../application/activar-cliente.usecase';
+import { ActualizarProyectoUseCase } from '../application/actualizar-proyecto.usecase';
+import { ActivarProyectoUseCase } from '../application/activar-proyecto.usecase';
+import { DesactivarProyectoUseCase } from '../application/desactivar-proyecto.usecase';
+import { ActualizarServicioContratadoUseCase } from '../application/actualizar-servicio-contratado.usecase';
+import { ActivarServicioContratadoUseCase } from '../application/activar-servicio-contratado.usecase';
+import { DesactivarServicioContratadoUseCase } from '../application/desactivar-servicio-contratado.usecase';
 import { ActualizarInsumoUseCase } from '../application/actualizar-insumo.usecase';
 import { DesactivarInsumoUseCase } from '../application/desactivar-insumo.usecase';
 import { ActualizarEstadoEquipoUseCase } from '../application/actualizar-estado-equipo.usecase';
@@ -54,6 +60,7 @@ import {
   PERSONAL_REPOSITORY,
   PersonalRepository,
 } from '../domain/ports/personal.repository';
+import { ServicioContratado } from '../domain/servicio-contratado';
 
 // S3 Storage
 import { S3StorageService } from '../../shared/infrastructure/storage/s3-storage.service';
@@ -63,7 +70,9 @@ import {
   CrearClienteDto,
   ActualizarClienteDto,
   CrearProyectoDto,
+  ActualizarProyectoDto,
   CrearServicioContratadoDto,
+  ActualizarServicioContratadoDto,
   CrearInsumoDto,
   ActualizarInsumoDto,
   CrearEquipoDto,
@@ -102,8 +111,16 @@ import {
   ApiActivarClienteDoc,
   ApiCrearProyectoDoc,
   ApiListarProyectosPorClienteDoc,
+  ApiObtenerProyectoDoc,
+  ApiActualizarProyectoDoc,
+  ApiDesactivarProyectoDoc,
+  ApiActivarProyectoDoc,
   ApiCrearServicioContratadoDoc,
   ApiListarServiciosPorProyectoDoc,
+  ApiObtenerServicioContratadoDoc,
+  ApiActualizarServicioContratadoDoc,
+  ApiDesactivarServicioContratadoDoc,
+  ApiActivarServicioContratadoDoc,
   ApiCrearInsumoDoc,
   ApiListarInsumosDoc,
   ApiActualizarInsumoDoc,
@@ -127,7 +144,13 @@ export class MantenimientoController {
     private readonly desactivarClienteUseCase: DesactivarClienteUseCase,
     private readonly activarClienteUseCase: ActivarClienteUseCase,
     private readonly registrarProyectoUseCase: RegistrarProyectoUseCase,
+    private readonly actualizarProyectoUseCase: ActualizarProyectoUseCase,
+    private readonly activarProyectoUseCase: ActivarProyectoUseCase,
+    private readonly desactivarProyectoUseCase: DesactivarProyectoUseCase,
     private readonly registrarServicioContratadoUseCase: RegistrarServicioContratadoUseCase,
+    private readonly actualizarServicioContratadoUseCase: ActualizarServicioContratadoUseCase,
+    private readonly activarServicioContratadoUseCase: ActivarServicioContratadoUseCase,
+    private readonly desactivarServicioContratadoUseCase: DesactivarServicioContratadoUseCase,
     private readonly registrarInsumoUseCase: RegistrarInsumoUseCase,
     private readonly actualizarInsumoUseCase: ActualizarInsumoUseCase,
     private readonly desactivarInsumoUseCase: DesactivarInsumoUseCase,
@@ -287,18 +310,7 @@ export class MantenimientoController {
   @ApiCrearProyectoDoc()
   async crearProyecto(@Body() dto: CrearProyectoDto): Promise<ProyectoResponseDto> {
     const proyecto = await this.registrarProyectoUseCase.execute(dto);
-    return {
-      id: proyecto.id,
-      clienteId: proyecto.clienteId,
-      nombre: proyecto.nombre,
-      direccionSede: proyecto.direccionSede,
-      distrito: proyecto.distrito,
-      provincia: proyecto.provincia,
-      departamento: proyecto.departamento,
-      contactoNombre: proyecto.contactoNombre,
-      contactoTelefono: proyecto.contactoTelefono,
-      estado: proyecto.getEstado(),
-    };
+    return this.mapProyectoResponse(proyecto);
   }
 
   @Get('proyectos/cliente/:clienteId')
@@ -307,7 +319,67 @@ export class MantenimientoController {
     @Param('clienteId', new ParseUUIDPipe({ version: '4' })) clienteId: string,
   ): Promise<ProyectoResponseDto[]> {
     const proyectos = await this.proyectoRepo.buscarPorClienteId(clienteId);
-    return proyectos.map((p) => ({
+    return proyectos.map((p) => this.mapProyectoResponse(p));
+  }
+
+  @Get('proyectos/:id')
+  @ApiObtenerProyectoDoc()
+  async obtenerProyecto(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<ProyectoResponseDto> {
+    const proyecto = await this.proyectoRepo.buscarPorId(id);
+    if (!proyecto) {
+      throw new NotFoundException(`Sede/Proyecto ${id} no encontrado`);
+    }
+    return this.mapProyectoResponse(proyecto);
+  }
+
+  @Patch('proyectos/:id')
+  @ApiActualizarProyectoDoc()
+  async actualizarProyecto(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: ActualizarProyectoDto,
+  ): Promise<ProyectoResponseDto> {
+    const proyecto = await this.actualizarProyectoUseCase.execute({
+      id,
+      ...dto,
+    });
+    return this.mapProyectoResponse(proyecto);
+  }
+
+  @Patch('proyectos/:id/desactivar')
+  @ApiDesactivarProyectoDoc()
+  async desactivarProyecto(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<EstadoSimpleResponseDto> {
+    const proyecto = await this.desactivarProyectoUseCase.execute(id);
+    return { id: proyecto.id, estado: proyecto.getEstado() };
+  }
+
+  @Patch('proyectos/:id/activar')
+  @ApiActivarProyectoDoc()
+  async activarProyecto(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<EstadoSimpleResponseDto> {
+    const proyecto = await this.activarProyectoUseCase.execute(id);
+    return { id: proyecto.id, estado: proyecto.getEstado() };
+  }
+
+  private mapProyectoResponse(p: {
+    id: string;
+    clienteId: string;
+    nombre: string;
+    direccionSede: string;
+    distrito: string;
+    provincia: string;
+    departamento: string;
+    contactoNombre: string;
+    contactoCargo: string;
+    contactoTelefono: string;
+    getEstado: () => 'ACTIVO' | 'INACTIVO';
+    observaciones: string | null;
+  }): ProyectoResponseDto {
+    return {
       id: p.id,
       clienteId: p.clienteId,
       nombre: p.nombre,
@@ -316,9 +388,11 @@ export class MantenimientoController {
       provincia: p.provincia,
       departamento: p.departamento,
       contactoNombre: p.contactoNombre,
+      contactoCargo: p.contactoCargo,
       contactoTelefono: p.contactoTelefono,
       estado: p.getEstado(),
-    }));
+      observaciones: p.observaciones,
+    };
   }
 
   // ==========================================
@@ -331,17 +405,7 @@ export class MantenimientoController {
     @Body() dto: CrearServicioContratadoDto,
   ): Promise<ServicioContratadoResponseDto> {
     const servicio = await this.registrarServicioContratadoUseCase.execute(dto);
-    return {
-      id: servicio.id,
-      proyectoId: servicio.proyectoId,
-      tipoServicio: servicio.tipoServicio,
-      frecuencia: servicio.frecuencia,
-      areaTotalM2: servicio.areaTotalM2,
-      areaTratarM2: servicio.areaTratarM2,
-      requiereCertificado: servicio.requiereCertificado,
-      vigenciaDias: servicio.vigenciaDias,
-      estado: servicio.getEstado(),
-    };
+    return this.mapServicioResponse(servicio);
   }
 
   @Get('servicios-contratados/proyecto/:proyectoId')
@@ -350,17 +414,67 @@ export class MantenimientoController {
     @Param('proyectoId', new ParseUUIDPipe({ version: '4' })) proyectoId: string,
   ): Promise<ServicioContratadoResponseDto[]> {
     const servicios = await this.servicioRepo.buscarPorProyectoId(proyectoId);
-    return servicios.map((s) => ({
+    return servicios.map((s) => this.mapServicioResponse(s));
+  }
+
+  @Get('servicios-contratados/:id')
+  @ApiObtenerServicioContratadoDoc()
+  async obtenerServicioContratado(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<ServicioContratadoResponseDto> {
+    const servicio = await this.servicioRepo.buscarPorId(id);
+    if (!servicio) {
+      throw new NotFoundException(`Servicio contratado ${id} no encontrado`);
+    }
+    return this.mapServicioResponse(servicio);
+  }
+
+  @Patch('servicios-contratados/:id')
+  @ApiActualizarServicioContratadoDoc()
+  async actualizarServicioContratado(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: ActualizarServicioContratadoDto,
+  ): Promise<ServicioContratadoResponseDto> {
+    const servicio = await this.actualizarServicioContratadoUseCase.execute({
+      id,
+      ...dto,
+    });
+    return this.mapServicioResponse(servicio);
+  }
+
+  @Patch('servicios-contratados/:id/desactivar')
+  @ApiDesactivarServicioContratadoDoc()
+  async desactivarServicioContratado(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<EstadoSimpleResponseDto> {
+    const servicio = await this.desactivarServicioContratadoUseCase.execute(id);
+    return { id: servicio.id, estado: servicio.getEstado() };
+  }
+
+  @Patch('servicios-contratados/:id/activar')
+  @ApiActivarServicioContratadoDoc()
+  async activarServicioContratado(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<EstadoSimpleResponseDto> {
+    const servicio = await this.activarServicioContratadoUseCase.execute(id);
+    return { id: servicio.id, estado: servicio.getEstado() };
+  }
+
+  private mapServicioResponse(s: ServicioContratado): ServicioContratadoResponseDto {
+    return {
       id: s.id,
       proyectoId: s.proyectoId,
       tipoServicio: s.tipoServicio,
       frecuencia: s.frecuencia,
       areaTotalM2: s.areaTotalM2,
       areaTratarM2: s.areaTratarM2,
+      insumosAutorizados: s.insumosAutorizados,
+      equiposAutorizados: s.equiposAutorizados,
+      dosisReferencial: s.dosisReferencial,
       requiereCertificado: s.requiereCertificado,
       vigenciaDias: s.vigenciaDias,
       estado: s.getEstado(),
-    }));
+    };
   }
 
   // ==========================================

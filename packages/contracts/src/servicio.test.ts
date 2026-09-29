@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { FrecuenciaServicioSchema, ServicioContratadoDetalleSchema, ServicioContratadoRegistroSchema } from './servicio';
+import {
+  FrecuenciaServicioSchema,
+  ServicioContratadoActualizacionSchema,
+  ServicioContratadoDetalleSchema,
+  ServicioContratadoRegistroSchema,
+} from './servicio';
 import { esperarFallaEn, rutasInvalidas } from './pruebas';
 
 const registro = {
@@ -60,5 +65,32 @@ describe('ServicioContratadoDetalleSchema', () => {
     expect(ServicioContratadoDetalleSchema.safeParse(detalle).success).toBe(true);
     esperarFallaEn(ServicioContratadoDetalleSchema, { ...detalle, areaTratarM2: 9999 }, 'areaTratarM2');
     esperarFallaEn(ServicioContratadoDetalleSchema, { ...detalle, id: 'x' }, 'id');
+  });
+});
+
+describe('ServicioContratadoActualizacionSchema', () => {
+  it('acepta actualización parcial válida', () => {
+    const res = ServicioContratadoActualizacionSchema.safeParse({
+      frecuencia: 'MENSUAL',
+      areaTotalM2: 600,
+      areaTratarM2: 400,
+    });
+    expect(res.success).toBe(true);
+  });
+
+  it('rechaza si areaTratarM2 > areaTotalM2 en la actualización', () => {
+    esperarFallaEn(
+      ServicioContratadoActualizacionSchema,
+      { areaTotalM2: 100, areaTratarM2: 150 },
+      'areaTratarM2',
+    );
+  });
+
+  it('exige vigencia si requiereCertificado es true en la actualización', () => {
+    esperarFallaEn(
+      ServicioContratadoActualizacionSchema,
+      { requiereCertificado: true },
+      'vigenciaDias',
+    );
   });
 });
