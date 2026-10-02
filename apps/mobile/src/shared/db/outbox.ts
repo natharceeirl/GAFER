@@ -119,7 +119,7 @@ export class OutboxQueue {
         return null;
       }
 
-      const resBody: LoteSyncResponse = await response.json();
+      const resBody = (await response.json()) as LoteSyncResponse;
       const exitosos = [...resBody.procesadas, ...resBody.omitidasIdempotentes];
       await this.marcarSincronizadas(exitosos);
       await this.limpiarSincronizados();
