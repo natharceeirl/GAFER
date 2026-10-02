@@ -52,6 +52,10 @@ jobs:
       - name: Instalar dependencias
         run: pnpm install --frozen-lockfile
 
+      # Revisa el estilo del código con ESLint. Hoy solo apps/web define el script "lint".
+      - name: Lint
+        run: pnpm lint
+
       # Ejecuta los tests unitarios de todo el monorepo. Su script "pretest" compila contracts y api.
       - name: Pruebas unitarias
         run: pnpm test
