@@ -60,6 +60,10 @@ jobs:
       - name: Pruebas unitarias
         run: pnpm test
 
+      # Verifica los tipos de TypeScript en web, mobile y worker. Su script "pretypecheck" compila contracts y api primero.
+      - name: Verificación de tipos
+        run: pnpm typecheck
+
       # Levanta la API real contra el PostgreSQL del servicio de arriba y mide cobertura.
       - name: Pruebas e2e de inmutabilidad (con cobertura)
         run: pnpm --filter @gafer/api test:e2e:cov

@@ -8,6 +8,8 @@
     "test": "pnpm -r --if-present test",
     "test:e2e": "pnpm --filter @gafer/api test:e2e",
     "lint": "pnpm -r --if-present lint",
+    "pretypecheck": "pnpm --filter @gafer/contracts build && pnpm --filter @gafer/api build",
+    "typecheck": "pnpm -r --if-present typecheck",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down",
     "db:migrate": "pnpm --filter @gafer/api db:migrate",
