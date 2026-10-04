@@ -6,38 +6,29 @@
  *   v1.0  2026-09-20  ahilacondo  Creación del archivo.
  */
 import request = require('supertest');
+import { CargoPersonal } from '@gafer/contracts';
+import { autorizacion } from './auth';
 
-/** Envía peticiones a la aplicación de pruebas. */
-export function api(baseUrl: string) {
+/**
+ * Envía peticiones a la aplicación de pruebas.
+ * Por defecto firma cada petición con un token de Administrador (las rutas exigen sesión);
+ * un encabezado Authorization pasado en la llamada lo reemplaza, y `cargo: null` envía sin token.
+ */
+export function api(baseUrl: string, cargo: CargoPersonal | null = 'ADMINISTRADOR') {
+  const porDefecto: Record<string, string> = cargo ? autorizacion(cargo) : {};
+  const con = (req: request.Test, headers?: Record<string, string>) => {
+    for (const [k, v] of Object.entries({ ...porDefecto, ...headers })) req = req.set(k, v);
+    return req;
+  };
+
   return {
-    get: (url: string, headers?: Record<string, string>) => {
-      let req = request(baseUrl).get(`/api${url}`);
-      if (headers) {
-        for (const [k, v] of Object.entries(headers)) req = req.set(k, v);
-      }
-      return req;
-    },
-    post: (url: string, body?: object, headers?: Record<string, string>) => {
-      let req = request(baseUrl).post(`/api${url}`);
-      if (headers) {
-        for (const [k, v] of Object.entries(headers)) req = req.set(k, v);
-      }
-      return req.send(body ?? {});
-    },
-    put: (url: string, body?: object, headers?: Record<string, string>) => {
-      let req = request(baseUrl).put(`/api${url}`);
-      if (headers) {
-        for (const [k, v] of Object.entries(headers)) req = req.set(k, v);
-      }
-      return req.send(body ?? {});
-    },
-    patch: (url: string, body?: object, headers?: Record<string, string>) => {
-      let req = request(baseUrl).patch(`/api${url}`);
-      if (headers) {
-        for (const [k, v] of Object.entries(headers)) req = req.set(k, v);
-      }
-      return req.send(body ?? {});
-    },
+    get: (url: string, headers?: Record<string, string>) => con(request(baseUrl).get(`/api${url}`), headers),
+    post: (url: string, body?: object, headers?: Record<string, string>) =>
+      con(request(baseUrl).post(`/api${url}`), headers).send(body ?? {}),
+    put: (url: string, body?: object, headers?: Record<string, string>) =>
+      con(request(baseUrl).put(`/api${url}`), headers).send(body ?? {}),
+    patch: (url: string, body?: object, headers?: Record<string, string>) =>
+      con(request(baseUrl).patch(`/api${url}`), headers).send(body ?? {}),
   };
 }
 export type Api = ReturnType<typeof api>;

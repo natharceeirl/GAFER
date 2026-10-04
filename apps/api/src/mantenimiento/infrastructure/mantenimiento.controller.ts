@@ -4,16 +4,14 @@ import {
   Get,
   Inject,
   NotFoundException,
-  Optional,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Put,
   Query,
-  Req,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 // Use Cases - Creación
 import { RegistrarClienteUseCase } from '../application/registrar-cliente.usecase';
@@ -50,7 +48,9 @@ import { AgregarItemCatalogoTextoUseCase } from '../application/agregar-item-cat
 import { ObtenerConfiguracionUseCase } from '../application/obtener-configuracion.usecase';
 import { ActualizarConfiguracionUseCase } from '../application/actualizar-configuracion.usecase';
 import { ConsultarAuditoriaUseCase } from '../application/consultar-auditoria.usecase';
-import { TOKEN_SERVICE, TokenServicePort } from '../../auth/domain/ports/token.service.port';
+import { TokenPayload } from '../../auth/domain/ports/token.service.port';
+import { Roles } from '../../auth/infrastructure/decorators/roles.decorator';
+import { UsuarioActual } from '../../auth/infrastructure/decorators/usuario-actual.decorator';
 
 // Ports
 import {
@@ -176,6 +176,7 @@ import {
 } from './mantenimiento.controller.doc';
 
 @ApiTags('Mantenimiento')
+@ApiBearerAuth()
 @Controller('mantenimiento')
 export class MantenimientoController {
   constructor(
@@ -222,9 +223,6 @@ export class MantenimientoController {
     @Inject(PERSONAL_REPOSITORY)
     private readonly personalRepo: PersonalRepository,
     private readonly storageService: S3StorageService,
-    @Optional()
-    @Inject(TOKEN_SERVICE)
-    private readonly tokenService?: TokenServicePort,
   ) {}
 
   // ==========================================
@@ -232,6 +230,7 @@ export class MantenimientoController {
   // ==========================================
 
   @Post('clientes')
+  @Roles('ADMINISTRADOR')
   @ApiCrearClienteDoc()
   async crearCliente(@Body() dto: CrearClienteDto): Promise<ClienteResponseDto> {
     const cliente = await this.registrarClienteUseCase.execute(dto);
@@ -249,6 +248,7 @@ export class MantenimientoController {
   }
 
   @Get('clientes')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiListarClientesDoc()
   async listarClientes(
     @Query() query?: PaginacionQueryDto,
@@ -288,6 +288,7 @@ export class MantenimientoController {
   }
 
   @Get('clientes/:id')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiObtenerClienteDoc()
   async obtenerCliente(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -313,6 +314,7 @@ export class MantenimientoController {
   }
 
   @Patch('clientes/:id')
+  @Roles('ADMINISTRADOR')
   @ApiActualizarClienteDoc()
   async actualizarCliente(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -339,6 +341,7 @@ export class MantenimientoController {
   }
 
   @Patch('clientes/:id/desactivar')
+  @Roles('ADMINISTRADOR')
   @ApiDesactivarClienteDoc()
   async desactivarCliente(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -348,6 +351,7 @@ export class MantenimientoController {
   }
 
   @Patch('clientes/:id/activar')
+  @Roles('ADMINISTRADOR')
   @ApiActivarClienteDoc()
   async activarCliente(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -361,6 +365,7 @@ export class MantenimientoController {
   // ==========================================
 
   @Post('proyectos')
+  @Roles('ADMINISTRADOR')
   @ApiCrearProyectoDoc()
   async crearProyecto(@Body() dto: CrearProyectoDto): Promise<ProyectoResponseDto> {
     const proyecto = await this.registrarProyectoUseCase.execute(dto);
@@ -368,6 +373,7 @@ export class MantenimientoController {
   }
 
   @Get('proyectos/cliente/:clienteId')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiListarProyectosPorClienteDoc()
   async listarProyectosPorCliente(
     @Param('clienteId', new ParseUUIDPipe({ version: '4' })) clienteId: string,
@@ -377,6 +383,7 @@ export class MantenimientoController {
   }
 
   @Get('proyectos/:id')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiObtenerProyectoDoc()
   async obtenerProyecto(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -389,6 +396,7 @@ export class MantenimientoController {
   }
 
   @Patch('proyectos/:id')
+  @Roles('ADMINISTRADOR')
   @ApiActualizarProyectoDoc()
   async actualizarProyecto(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -402,6 +410,7 @@ export class MantenimientoController {
   }
 
   @Patch('proyectos/:id/desactivar')
+  @Roles('ADMINISTRADOR')
   @ApiDesactivarProyectoDoc()
   async desactivarProyecto(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -411,6 +420,7 @@ export class MantenimientoController {
   }
 
   @Patch('proyectos/:id/activar')
+  @Roles('ADMINISTRADOR')
   @ApiActivarProyectoDoc()
   async activarProyecto(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -454,6 +464,7 @@ export class MantenimientoController {
   // ==========================================
 
   @Post('servicios-contratados')
+  @Roles('ADMINISTRADOR')
   @ApiCrearServicioContratadoDoc()
   async crearServicioContratado(
     @Body() dto: CrearServicioContratadoDto,
@@ -463,6 +474,7 @@ export class MantenimientoController {
   }
 
   @Get('servicios-contratados/proyecto/:proyectoId')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiListarServiciosPorProyectoDoc()
   async listarServiciosPorProyecto(
     @Param('proyectoId', new ParseUUIDPipe({ version: '4' })) proyectoId: string,
@@ -472,6 +484,7 @@ export class MantenimientoController {
   }
 
   @Get('servicios-contratados/:id')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiObtenerServicioContratadoDoc()
   async obtenerServicioContratado(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -484,6 +497,7 @@ export class MantenimientoController {
   }
 
   @Patch('servicios-contratados/:id')
+  @Roles('ADMINISTRADOR')
   @ApiActualizarServicioContratadoDoc()
   async actualizarServicioContratado(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -497,6 +511,7 @@ export class MantenimientoController {
   }
 
   @Patch('servicios-contratados/:id/desactivar')
+  @Roles('ADMINISTRADOR')
   @ApiDesactivarServicioContratadoDoc()
   async desactivarServicioContratado(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -506,6 +521,7 @@ export class MantenimientoController {
   }
 
   @Patch('servicios-contratados/:id/activar')
+  @Roles('ADMINISTRADOR')
   @ApiActivarServicioContratadoDoc()
   async activarServicioContratado(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -536,6 +552,7 @@ export class MantenimientoController {
   // ==========================================
 
   @Post('insumos')
+  @Roles('ADMINISTRADOR')
   @ApiCrearInsumoDoc()
   async crearInsumo(@Body() dto: CrearInsumoDto): Promise<InsumoResponseDto> {
     const insumo = await this.registrarInsumoUseCase.execute(dto);
@@ -556,6 +573,7 @@ export class MantenimientoController {
   }
 
   @Get('insumos')
+  @Roles('ADMINISTRADOR', 'TECNICO_OPERADOR')
   @ApiListarInsumosDoc()
   async listarInsumos(
     @Query() query?: PaginacionQueryDto,
@@ -599,6 +617,7 @@ export class MantenimientoController {
   }
 
   @Get('insumos/:id')
+  @Roles('ADMINISTRADOR', 'TECNICO_OPERADOR')
   @ApiObtenerInsumoDoc()
   async obtenerInsumo(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -625,6 +644,7 @@ export class MantenimientoController {
   }
 
   @Patch('insumos/:id')
+  @Roles('ADMINISTRADOR')
   @ApiActualizarInsumoDoc()
   async actualizarInsumo(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -652,6 +672,7 @@ export class MantenimientoController {
   }
 
   @Patch('insumos/:id/desactivar')
+  @Roles('ADMINISTRADOR')
   @ApiDesactivarInsumoDoc()
   async desactivarInsumo(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -661,6 +682,7 @@ export class MantenimientoController {
   }
 
   @Patch('insumos/:id/activar')
+  @Roles('ADMINISTRADOR')
   @ApiActivarInsumoDoc()
   async activarInsumo(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -674,6 +696,7 @@ export class MantenimientoController {
   // ==========================================
 
   @Post('equipos')
+  @Roles('ADMINISTRADOR')
   @ApiCrearEquipoDoc()
   async crearEquipo(@Body() dto: CrearEquipoDto): Promise<EquipoResponseDto> {
     const equipo = await this.registrarEquipoUseCase.execute(dto);
@@ -691,6 +714,7 @@ export class MantenimientoController {
   }
 
   @Get('equipos')
+  @Roles('ADMINISTRADOR', 'TECNICO_OPERADOR')
   @ApiListarEquiposDoc()
   async listarEquipos(
     @Query() query?: PaginacionQueryDto,
@@ -730,6 +754,7 @@ export class MantenimientoController {
   }
 
   @Get('equipos/:id')
+  @Roles('ADMINISTRADOR', 'TECNICO_OPERADOR')
   @ApiObtenerEquipoDoc()
   async obtenerEquipo(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -752,6 +777,7 @@ export class MantenimientoController {
   }
 
   @Patch('equipos/:id')
+  @Roles('ADMINISTRADOR')
   @ApiActualizarEquipoDoc()
   async actualizarEquipo(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -775,6 +801,7 @@ export class MantenimientoController {
   }
 
   @Patch('equipos/:id/estado')
+  @Roles('ADMINISTRADOR')
   @ApiCambiarEstadoEquipoDoc()
   async cambiarEstadoEquipo(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -802,6 +829,7 @@ export class MantenimientoController {
   // ==========================================
 
   @Post('personal')
+  @Roles('ADMINISTRADOR')
   @ApiCrearPersonalDoc()
   async crearPersonal(@Body() dto: CrearPersonalDto): Promise<PersonalResponseDto> {
     const personal = await this.registrarPersonalUseCase.execute(dto);
@@ -818,6 +846,7 @@ export class MantenimientoController {
   }
 
   @Get('personal')
+  @Roles('ADMINISTRADOR')
   @ApiListarPersonalDoc()
   async listarPersonal(
     @Query() query?: PaginacionQueryDto,
@@ -856,6 +885,7 @@ export class MantenimientoController {
   }
 
   @Get('personal/:id')
+  @Roles('ADMINISTRADOR')
   @ApiObtenerPersonalDoc()
   async obtenerPersonal(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -877,6 +907,7 @@ export class MantenimientoController {
   }
 
   @Patch('personal/:id')
+  @Roles('ADMINISTRADOR')
   @ApiActualizarPersonalDoc()
   async actualizarPersonal(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -899,6 +930,7 @@ export class MantenimientoController {
   }
 
   @Patch('personal/:id/desactivar')
+  @Roles('ADMINISTRADOR')
   @ApiDesactivarPersonalDoc()
   async desactivarPersonal(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -908,6 +940,7 @@ export class MantenimientoController {
   }
 
   @Patch('personal/:id/activar')
+  @Roles('ADMINISTRADOR')
   @ApiActivarPersonalDoc()
   async activarPersonal(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -921,6 +954,7 @@ export class MantenimientoController {
   // ==========================================
 
   @Post('storage/upload-url')
+  @Roles('ADMINISTRADOR')
   @ApiGenerarUploadUrlDoc()
   async generarUploadUrl(@Body() dto: GenerarUploadUrlDto): Promise<UploadUrlResponseDto> {
     const uploadUrl = await this.storageService.generarPresignedUploadUrl(
@@ -936,6 +970,7 @@ export class MantenimientoController {
   }
 
   @Post('storage/download-url')
+  @Roles('ADMINISTRADOR', 'TECNICO_OPERADOR')
   @ApiGenerarDownloadUrlDoc()
   async generarDownloadUrl(@Body() dto: GenerarDownloadUrlDto): Promise<DownloadUrlResponseDto> {
     const downloadUrl = await this.storageService.generarPresignedDownloadUrl(
@@ -953,10 +988,10 @@ export class MantenimientoController {
   // ==========================================
 
   @Get('catalogos-texto')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiListarCatalogosTextoDoc()
-  async listarCatalogosTexto(@Req() req: any): Promise<CatalogoTextoResponseDto[]> {
-    const rol = this.resolverRol(req);
-    const catalogos = await this.listarCatalogosTextoUseCase.execute(rol);
+  async listarCatalogosTexto(@UsuarioActual() usuario: TokenPayload): Promise<CatalogoTextoResponseDto[]> {
+    const catalogos = await this.listarCatalogosTextoUseCase.execute(usuario.cargo);
     return catalogos.map((c) => ({
       id: c.id,
       titulo: c.titulo,
@@ -966,13 +1001,13 @@ export class MantenimientoController {
   }
 
   @Get('catalogos-texto/:id')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiObtenerCatalogoTextoDoc()
   async obtenerCatalogoTexto(
     @Param('id') id: string,
-    @Req() req: any,
+    @UsuarioActual() usuario: TokenPayload,
   ): Promise<CatalogoTextoResponseDto> {
-    const rol = this.resolverRol(req);
-    const catalogo = await this.obtenerCatalogoTextoUseCase.execute(id, rol);
+    const catalogo = await this.obtenerCatalogoTextoUseCase.execute(id, usuario.cargo);
     return {
       id: catalogo.id,
       titulo: catalogo.titulo,
@@ -982,13 +1017,14 @@ export class MantenimientoController {
   }
 
   @Put('catalogos-texto/:id')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR')
   @ApiActualizarCatalogoTextoDoc()
   async actualizarCatalogoTexto(
     @Param('id') id: string,
     @Body() dto: ActualizarCatalogoTextoDto,
-    @Req() req: any,
+    @UsuarioActual() usuario: TokenPayload,
   ): Promise<CatalogoTextoResponseDto> {
-    const actor = this.resolverActor(req);
+    const actor = this.resolverActor(usuario);
     const catalogo = await this.actualizarCatalogoTextoUseCase.execute({
       id,
       items: dto.items,
@@ -1005,13 +1041,14 @@ export class MantenimientoController {
   }
 
   @Post('catalogos-texto/:id/items')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR')
   @ApiAgregarItemCatalogoTextoDoc()
   async agregarItemCatalogoTexto(
     @Param('id') id: string,
     @Body() dto: AgregarItemCatalogoTextoDto,
-    @Req() req: any,
+    @UsuarioActual() usuario: TokenPayload,
   ): Promise<CatalogoTextoResponseDto> {
-    const actor = this.resolverActor(req);
+    const actor = this.resolverActor(usuario);
     const catalogo = await this.agregarItemCatalogoTextoUseCase.execute({
       id,
       item: dto.item,
@@ -1032,6 +1069,7 @@ export class MantenimientoController {
   // ==========================================
 
   @Get('configuracion')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR')
   @ApiObtenerConfiguracionDoc()
   async obtenerConfiguracion(): Promise<ConfiguracionSistemaResponseDto> {
     const config = await this.obtenerConfiguracionUseCase.execute();
@@ -1050,12 +1088,13 @@ export class MantenimientoController {
   }
 
   @Patch('configuracion')
+  @Roles('ADMINISTRADOR')
   @ApiActualizarConfiguracionDoc()
   async actualizarConfiguracion(
     @Body() dto: ActualizarConfiguracionDto,
-    @Req() req: any,
+    @UsuarioActual() usuario: TokenPayload,
   ): Promise<ConfiguracionSistemaResponseDto> {
-    const actor = this.resolverActor(req);
+    const actor = this.resolverActor(usuario);
     const config = await this.actualizarConfiguracionUseCase.execute({
       director: dto.director,
       resolucionSanitaria: dto.resolucionSanitaria,
@@ -1083,15 +1122,15 @@ export class MantenimientoController {
   // ==========================================
 
   @Get('auditoria')
+  @Roles('ADMINISTRADOR')
   @ApiConsultarAuditoriaDoc()
   async consultarAuditoria(
     @Query() query: ConsultaAuditoriaDto,
-    @Req() req: any,
+    @UsuarioActual() usuario: TokenPayload,
   ): Promise<AuditoriaPaginadaResponseDto> {
-    const rol = this.resolverRol(req);
     const resultado = await this.consultarAuditoriaUseCase.execute({
       filtros: query,
-      actorRol: rol ?? '',
+      actorRol: usuario.cargo,
     });
     return {
       total: resultado.total,
@@ -1102,47 +1141,11 @@ export class MantenimientoController {
   }
 
   // ==========================================
-  // HELPERS DE RESOLUCIÓN DE ACTOR Y ROL
+  // HELPER DE ACTOR
   // ==========================================
 
-  private resolverActor(req: any): { actorId: string | null; actorUsuario: string; actorRol: string } {
-    const authHeader = req?.headers?.['authorization'];
-    if (authHeader && typeof authHeader === 'string' && this.tokenService) {
-      const [tipo, token] = authHeader.split(' ');
-      if (tipo === 'Bearer' && token) {
-        try {
-          const payload = this.tokenService.verificarToken(token);
-          return {
-            actorId: payload.id,
-            actorUsuario: payload.usuario,
-            actorRol: payload.cargo,
-          };
-        } catch {
-          // Token inválido o expirado
-        }
-      }
-    }
-
-    const actorUsuario = (req?.headers?.['x-actor-usuario'] || req?.headers?.['x-actor'] || req?.user?.usuario || 'ADMIN') as string;
-    const actorRol = (req?.headers?.['x-actor-rol'] || req?.user?.cargo || 'ADMINISTRADOR') as string;
-    const actorId = (req?.headers?.['x-actor-id'] || req?.user?.id || null) as string | null;
-
-    return { actorId, actorUsuario, actorRol };
-  }
-
-  private resolverRol(req: any): string | undefined {
-    const authHeader = req?.headers?.['authorization'];
-    if (authHeader && typeof authHeader === 'string' && this.tokenService) {
-      const [tipo, token] = authHeader.split(' ');
-      if (tipo === 'Bearer' && token) {
-        try {
-          const payload = this.tokenService.verificarToken(token);
-          return payload.cargo;
-        } catch {
-          return undefined;
-        }
-      }
-    }
-    return (req?.headers?.['x-actor-rol'] || req?.user?.cargo) as string | undefined;
+  /** El actor sale siempre de la sesión validada por AuthGuard; ningún encabezado puede suplantarlo. */
+  private resolverActor(usuario: TokenPayload): { actorId: string; actorUsuario: string; actorRol: string } {
+    return { actorId: usuario.id, actorUsuario: usuario.usuario, actorRol: usuario.cargo };
   }
 }

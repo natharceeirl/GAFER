@@ -1,13 +1,16 @@
 import { Body, Controller, Param, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RegistrarInspeccionEstacionUseCase } from '../application/registrar-inspeccion-estacion.usecase';
+import { Roles } from '../../auth/infrastructure/decorators/roles.decorator';
 
 @ApiTags('Fase 3 - Mapa Murino')
+@ApiBearerAuth()
 @Controller('mapa-murino/estaciones')
 export class MapaMurinoController {
   constructor(private readonly registrarInspeccion: RegistrarInspeccionEstacionUseCase) {}
 
   @Post(':id/inspeccion')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiOperation({
     summary: 'Registrar inspección en estación de control murino (Scaffold Fase 3)',
     description: 'Actualiza el estado visual (aura/color) de la trampa según si se detectó consumo de cebo.',

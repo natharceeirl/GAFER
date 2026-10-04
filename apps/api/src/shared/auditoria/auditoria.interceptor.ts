@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   CallHandler,
   ExecutionContext,
   Injectable,
@@ -16,31 +15,18 @@ export class AuditoriaInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const handler = context.getHandler().name;
     const request = context.switchToHttp().getRequest();
-    const actor = request?.headers?.['x-actor'] ?? 'desconocido';
+    // El actor es siempre la sesión validada por AuthGuard (que corre antes que los interceptores);
+    // el encabezado x-actor ya no se acepta porque cualquiera podía suplantar a otra persona en la auditoría.
+    const actor = request?.user?.usuario ?? 'desconocido';
     const url = request?.url ?? '';
 
-    return from(this.validarActorSiPresente(url, request?.headers?.['x-actor'])).pipe(
-      mergeMap(() =>
-        next.handle().pipe(
-          mergeMap((responseBody) =>
-            from(this.procesarAuditoria(handler, request, responseBody, actor, url)).pipe(
-              mergeMap(() => from(Promise.resolve(responseBody))),
-            ),
-          ),
+    return next.handle().pipe(
+      mergeMap((responseBody) =>
+        from(this.procesarAuditoria(handler, request, responseBody, actor, url)).pipe(
+          mergeMap(() => from(Promise.resolve(responseBody))),
         ),
       ),
     );
-  }
-
-  private async validarActorSiPresente(url: string, actorHeader?: string): Promise<void> {
-    if (actorHeader && url.includes('/operaciones/inspecciones')) {
-      const actorId = await this.auditoriaService.resolverActorId(actorHeader);
-      if (!actorId) {
-        throw new BadRequestException(
-          `El encabezado x-actor '${actorHeader}' no corresponde a un personal técnico registrado`,
-        );
-      }
-    }
   }
 
   private async procesarAuditoria(
@@ -69,13 +55,8 @@ export class AuditoriaInterceptor implements NestInterceptor {
   // 1. Implementar decorador declarativo @Auditable({ entidad: 'INSPECCION', accion: 'CREACION' | 'CIERRE' }) o EventEmitter de dominio.
   // 2. Extraer los metadatos de auditoría limpiamente sin acoplarse al nombre del método del controlador.
   private async manejarAuditoriaInspeccion(handler: string, req: any, res: any): Promise<void> {
-    const actorHeader = req?.headers?.['x-actor'];
-    let actorId = await this.auditoriaService.resolverActorId(actorHeader);
-
-    // Si no vino en header pero vino en el payload (ej. personalIds de cierre)
-    if (!actorId && req?.body?.personalIds && req.body.personalIds.length > 0) {
-      actorId = await this.auditoriaService.resolverActorId(req.body.personalIds[0]);
-    }
+    // Solo se audita si la persona de la sesión existe en personal (la tabla exige esa referencia).
+    const actorId = await this.auditoriaService.resolverActorId(req?.user?.id);
 
     if (!actorId) {
       return;

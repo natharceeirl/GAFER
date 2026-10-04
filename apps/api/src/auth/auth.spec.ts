@@ -8,6 +8,7 @@ import { generarHashClave } from './domain/clave-hash';
 import { AuthGuard } from './infrastructure/guards/auth.guard';
 import { RolesGuard } from './infrastructure/guards/roles.guard';
 import { ROLES_KEY } from './infrastructure/decorators/roles.decorator';
+import { IS_PUBLIC_KEY } from './infrastructure/decorators/public.decorator';
 
 const CLAVE_ADMIN = 'clave-admin-de-prueba';
 const CLAVE_SUPERVISOR = 'clave-supervisor-de-prueba';
@@ -212,64 +213,87 @@ describe('Autenticación y Roles (GAF-8 / Spec §12 y Decisión C10)', () => {
     let rolesGuard: RolesGuard;
     let reflector: Reflector;
 
+    const contexto = (request: object): any => ({
+      getHandler: () => {},
+      getClass: () => {},
+      switchToHttp: () => ({ getRequest: () => request }),
+    });
+
+    /** Simula los metadatos de la ruta: si es pública y qué roles declara. */
+    const rutaConMetadatos = (meta: { publica?: boolean; roles?: string[] }) =>
+      jest.spyOn(reflector, 'getAllAndOverride').mockImplementation((clave: unknown) => {
+        if (clave === IS_PUBLIC_KEY) return meta.publica;
+        if (clave === ROLES_KEY) return meta.roles;
+        return undefined;
+      });
+
     beforeEach(() => {
-      authGuard = new AuthGuard(tokenService);
       reflector = new Reflector();
+      authGuard = new AuthGuard(tokenService, reflector);
       rolesGuard = new RolesGuard(reflector);
     });
 
     it('AuthGuard valida encabezado Bearer y asigna req.user', () => {
-      const usuario = new Usuario('u1', '1', 'A', 'B', 'ADMINISTRADOR', '1', 'user', 'h');
+      rutaConMetadatos({ roles: ['ADMINISTRADOR'] });
+      const usuario = new Usuario('u1', '1', 'A', 'B', 'ADMINISTRADOR', '1', 'user', null);
       const token = tokenService.generarToken(usuario);
 
-      const mockRequest: any = {
-        headers: { authorization: `Bearer ${token}` },
-      };
-      const mockContext: any = {
-        switchToHttp: () => ({ getRequest: () => mockRequest }),
-      };
+      const request: any = { headers: { authorization: `Bearer ${token}` } };
 
-      const permitido = authGuard.canActivate(mockContext);
-      expect(permitido).toBe(true);
-      expect(mockRequest.user.cargo).toBe('ADMINISTRADOR');
+      expect(authGuard.canActivate(contexto(request))).toBe(true);
+      expect(request.user.cargo).toBe('ADMINISTRADOR');
     });
 
-    it('AuthGuard rechaza si falta encabezado o prefijo Bearer', () => {
-      const mockReqSinHeader: any = { headers: {} };
-      const ctx1: any = { switchToHttp: () => ({ getRequest: () => mockReqSinHeader }) };
-      expect(() => authGuard.canActivate(ctx1)).toThrow(UnauthorizedException);
+    it('AuthGuard rechaza con 401 si falta encabezado, prefijo Bearer o el token es inválido', () => {
+      rutaConMetadatos({ roles: ['ADMINISTRADOR'] });
 
-      const mockReqSinBearer: any = { headers: { authorization: 'Basic 12345' } };
-      const ctx2: any = { switchToHttp: () => ({ getRequest: () => mockReqSinBearer }) };
-      expect(() => authGuard.canActivate(ctx2)).toThrow(UnauthorizedException);
+      expect(() => authGuard.canActivate(contexto({ headers: {} }))).toThrow(UnauthorizedException);
+      expect(() => authGuard.canActivate(contexto({ headers: { authorization: 'Basic 12345' } }))).toThrow(
+        UnauthorizedException,
+      );
+      expect(() => authGuard.canActivate(contexto({ headers: { authorization: 'Bearer basura.basura.basura' } }))).toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('AuthGuard deja pasar sin token solo las rutas marcadas como públicas', () => {
+      rutaConMetadatos({ publica: true });
+      const request: any = { headers: {} };
+
+      expect(authGuard.canActivate(contexto(request))).toBe(true);
+      expect(request.user).toBeUndefined();
     });
 
     it('RolesGuard permite acceso cuando el rol coincide', () => {
-      jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['ADMINISTRADOR']);
+      rutaConMetadatos({ roles: ['ADMINISTRADOR'] });
 
-      const mockContext: any = {
-        getHandler: () => {},
-        getClass: () => {},
-        switchToHttp: () => ({
-          getRequest: () => ({ user: { cargo: 'ADMINISTRADOR' } }),
-        }),
-      };
-
-      expect(rolesGuard.canActivate(mockContext)).toBe(true);
+      expect(rolesGuard.canActivate(contexto({ user: { cargo: 'ADMINISTRADOR' } }))).toBe(true);
     });
 
     it('RolesGuard deniega acceso (403) cuando el rol no coincide', () => {
-      jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['ADMINISTRADOR']);
+      rutaConMetadatos({ roles: ['ADMINISTRADOR'] });
 
-      const mockContext: any = {
-        getHandler: () => {},
-        getClass: () => {},
-        switchToHttp: () => ({
-          getRequest: () => ({ user: { cargo: 'SUPERVISOR' } }),
-        }),
-      };
+      expect(() => rolesGuard.canActivate(contexto({ user: { cargo: 'SUPERVISOR' } }))).toThrow(ForbiddenException);
+    });
 
-      expect(() => rolesGuard.canActivate(mockContext)).toThrow(ForbiddenException);
+    it('RolesGuard falla cerrado: una ruta no pública sin @Roles responde 403 aunque haya sesión', () => {
+      rutaConMetadatos({});
+      expect(() => rolesGuard.canActivate(contexto({ user: { cargo: 'ADMINISTRADOR' } }))).toThrow(ForbiddenException);
+
+      rutaConMetadatos({ roles: [] });
+      expect(() => rolesGuard.canActivate(contexto({ user: { cargo: 'ADMINISTRADOR' } }))).toThrow(ForbiddenException);
+    });
+
+    it('RolesGuard deniega una ruta con roles si no hay sesión', () => {
+      rutaConMetadatos({ roles: ['ADMINISTRADOR'] });
+
+      expect(() => rolesGuard.canActivate(contexto({}))).toThrow(ForbiddenException);
+    });
+
+    it('RolesGuard no exige roles en una ruta pública', () => {
+      rutaConMetadatos({ publica: true });
+
+      expect(rolesGuard.canActivate(contexto({}))).toBe(true);
     });
   });
 });

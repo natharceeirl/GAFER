@@ -70,7 +70,10 @@ export class TokenService implements TokenServicePort {
       .update(`${headerB64}.${payloadB64}`)
       .digest('base64url');
 
-    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(signatureEsperada))) {
+    const firmaRecibida = Buffer.from(signature);
+    const firmaEsperada = Buffer.from(signatureEsperada);
+    // timingSafeEqual lanza si las longitudes difieren; una firma de otro largo es simplemente inválida (401, no 500).
+    if (firmaRecibida.length !== firmaEsperada.length || !crypto.timingSafeEqual(firmaRecibida, firmaEsperada)) {
       throw new UnauthorizedException('Firma de token inválida');
     }
 

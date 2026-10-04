@@ -88,3 +88,18 @@ export async function asignarClavePrueba(db: Pool, usuario: string): Promise<voi
   ]);
   if (res.rowCount !== 1) throw new Error(`Personal ${usuario} no existe en la BD de pruebas`);
 }
+
+/**
+ * Encabezado Authorization de una persona que sí existe en `personal` (se crea si hace falta).
+ * Úsalo cuando la operación deja rastro con clave foránea a la persona, como la bitácora de auditoría.
+ */
+export async function autorizacionDePersonal(
+  db: Pool,
+  cargo: CargoPersonal,
+  usuario: string,
+): Promise<Record<string, string>> {
+  const nombre = usuario.toUpperCase();
+  const existente = await db.query('SELECT id FROM personal WHERE usuario = $1', [nombre]);
+  const id = existente.rows[0]?.id ?? (await crearUsuarioConClave(db, cargo, nombre)).id;
+  return autorizacion(cargo, { id, usuario: nombre });
+}

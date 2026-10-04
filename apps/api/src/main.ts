@@ -39,6 +39,7 @@ Este backend implementa la **Fase 1: Mantenimiento y Operaciones** conforme a la
 - **Arquitectura**: Arquitectura Hexagonal con Kysely + PostgreSQL 16 y validación estricta en el transporte.`,
     )
     .setVersion('1.0.0')
+    .addBearerAuth()
     .setContact(
       'Equipo de Ingeniería GAFER',
       'https://gafer.pe',
