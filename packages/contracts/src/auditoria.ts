@@ -36,13 +36,13 @@ export type EventoAuditoria = z.infer<typeof EventoAuditoriaSchema>;
 
 /** Filtros de consulta para la bitácora de auditoría (exclusivo Administrador - Decisión C6) */
 export const ConsultaAuditoriaFiltrosSchema = z.object({
-  modulo: ModuloAuditoriaSchema.optional(),
-  entidad: z.string().optional(),
-  entidadId: z.string().optional(),
-  actorUsuario: z.string().optional(),
-  desde: FechaSchema.optional(),
-  hasta: FechaSchema.optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-  offset: z.coerce.number().int().min(0).default(0),
+  modulo: ModuloAuditoriaSchema.optional().describe('Filtrar por módulo funcional (MANTENIMIENTO, OPERACIONES, etc.)'),
+  entidad: z.string().optional().describe('Filtrar por tipo de entidad afectada (ej. cliente, insumo, configuracion)'),
+  entidadId: z.string().optional().describe('Filtrar por ID de la entidad afectada'),
+  actorUsuario: z.string().optional().describe('Filtrar por nombre de usuario del actor'),
+  desde: FechaSchema.optional().describe('Fecha inicial de búsqueda (AAAA-MM-DD)'),
+  hasta: FechaSchema.optional().describe('Fecha final de búsqueda (AAAA-MM-DD)'),
+  limit: z.coerce.number().int().min(1).max(100).default(20).describe('Cantidad máxima de eventos por página'),
+  offset: z.coerce.number().int().min(0).default(0).describe('Desplazamiento para paginación'),
 });
 export type ConsultaAuditoriaFiltros = z.infer<typeof ConsultaAuditoriaFiltrosSchema>;

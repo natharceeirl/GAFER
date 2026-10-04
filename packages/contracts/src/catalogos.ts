@@ -142,8 +142,8 @@ export const ConfiguracionSistemaSchema = z.object({
 export type ConfiguracionSistema = z.infer<typeof ConfiguracionSistemaSchema>;
 
 export const ConfiguracionSistemaActualizacionSchema = z.object({
-  director: DirectorTecnicoSchema.optional(),
-  resolucionSanitaria: z.string().min(1).optional(),
-  parametros: z.record(z.unknown()).optional(),
+  director: DirectorTecnicoSchema.optional().describe('Datos actualizados del Director Técnico'),
+  resolucionSanitaria: z.string().min(1).optional().describe('Resolución sanitaria oficial vigente'),
+  parametros: z.record(z.unknown()).optional().describe('Parámetros globales del sistema en formato clave-valor'),
 });
 export type ConfiguracionSistemaActualizacion = z.infer<typeof ConfiguracionSistemaActualizacionSchema>;

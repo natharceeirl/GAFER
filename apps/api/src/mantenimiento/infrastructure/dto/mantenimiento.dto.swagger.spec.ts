@@ -1,7 +1,11 @@
 import {
+  ActualizarCatalogoTextoDto,
   ActualizarClienteDto,
+  ActualizarConfiguracionDto,
   ActualizarInsumoDto,
+  AgregarItemCatalogoTextoDto,
   CambiarEstadoEquipoDto,
+  ConsultaAuditoriaDto,
   CrearClienteDto,
   CrearEquipoDto,
   CrearInsumoDto,
@@ -79,6 +83,21 @@ const documentados: [string, Parameters<typeof metadatosOpenApi>[0], { obligator
   ],
   ['GenerarUploadUrlDto', GenerarUploadUrlDto, { obligatorios: ['key'], opcionales: ['contentType'] }],
   ['GenerarDownloadUrlDto', GenerarDownloadUrlDto, { obligatorios: ['key'], opcionales: [] }],
+  ['ActualizarCatalogoTextoDto', ActualizarCatalogoTextoDto, { obligatorios: ['items'], opcionales: [] }],
+  ['AgregarItemCatalogoTextoDto', AgregarItemCatalogoTextoDto, { obligatorios: ['item'], opcionales: [] }],
+  [
+    'ActualizarConfiguracionDto',
+    ActualizarConfiguracionDto,
+    { obligatorios: [], opcionales: ['director', 'resolucionSanitaria', 'parametros'] },
+  ],
+  [
+    'ConsultaAuditoriaDto',
+    ConsultaAuditoriaDto,
+    {
+      obligatorios: [],
+      opcionales: ['modulo', 'entidad', 'entidadId', 'actorUsuario', 'desde', 'hasta', 'limit', 'offset'],
+    },
+  ],
 ];
 
 describe.each(documentados)('Swagger de %s', (_nombre, dto, { obligatorios, opcionales }) => {
