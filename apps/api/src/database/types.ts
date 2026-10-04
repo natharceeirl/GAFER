@@ -145,6 +145,41 @@ export interface InspeccionesAuditoriaTable {
   server_received_at: Generated<Date>;
 }
 
+export interface CatalogosTextoTable {
+  id: string;
+  titulo: string;
+  items: ColumnType<string[], string, string>;
+  solo_administrador: Generated<boolean>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface ConfiguracionSistemaTable {
+  id: Generated<string>;
+  director_nombre: Generated<string>;
+  director_cip: Generated<string>;
+  director_firma: string | null;
+  resolucion_sanitaria: Generated<string>;
+  parametros: ColumnType<Record<string, unknown>, string, string>;
+  actualizado_por: string | null;
+  updated_at: Generated<Date>;
+}
+
+export interface AuditoriaEventosTable {
+  id: Generated<string>;
+  actor_id: string | null;
+  actor_usuario: string;
+  actor_rol: string;
+  modulo: string;
+  accion: string;
+  entidad: string;
+  entidad_id: string;
+  payload_anterior: ColumnType<Record<string, unknown> | null, string | null, string | null>;
+  payload_nuevo: ColumnType<Record<string, unknown> | null, string | null, string | null>;
+  detalles: ColumnType<Record<string, unknown>, string, string>;
+  created_at: Generated<Date>;
+}
+
 export interface GaferDatabase {
   clientes: ClientesTable;
   proyectos: ProyectosTable;
@@ -154,4 +189,7 @@ export interface GaferDatabase {
   personal: PersonalTable;
   inspecciones: InspeccionesTable;
   inspecciones_auditoria: InspeccionesAuditoriaTable;
+  catalogos_texto: CatalogosTextoTable;
+  configuracion_sistema: ConfiguracionSistemaTable;
+  auditoria_eventos: AuditoriaEventosTable;
 }

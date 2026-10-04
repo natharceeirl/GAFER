@@ -19,6 +19,9 @@ describe('Database Migration and Schema Configuration (T2.1)', () => {
     expect(content).toContain('CREATE TABLE IF NOT EXISTS inspecciones_auditoria');
     expect(content).toContain('CREATE TABLE IF NOT EXISTS correlativos');
     expect(content).toContain('CREATE TABLE IF NOT EXISTS documentos');
+    expect(content).toContain('CREATE TABLE IF NOT EXISTS catalogos_texto');
+    expect(content).toContain('CREATE TABLE IF NOT EXISTS configuracion_sistema');
+    expect(content).toContain('CREATE TABLE IF NOT EXISTS auditoria_eventos');
     expect(content).toContain('fn_siguiente_correlativo');
     expect(content).toContain('snapshot_catalogos JSONB');
     expect(content).toContain('chk_ruc_format');
@@ -29,6 +32,9 @@ describe('Database Migration and Schema Configuration (T2.1)', () => {
     expect(fs.existsSync(downPath)).toBe(true);
 
     const content = fs.readFileSync(downPath, 'utf-8');
+    expect(content).toContain('DROP TABLE IF EXISTS auditoria_eventos CASCADE;');
+    expect(content).toContain('DROP TABLE IF EXISTS configuracion_sistema CASCADE;');
+    expect(content).toContain('DROP TABLE IF EXISTS catalogos_texto CASCADE;');
     expect(content).toContain('DROP TABLE IF EXISTS documentos CASCADE;');
     expect(content).toContain('DROP TABLE IF EXISTS correlativos CASCADE;');
     expect(content).toContain('DROP TABLE IF EXISTS inspecciones_auditoria CASCADE;');
