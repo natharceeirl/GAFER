@@ -1,8 +1,8 @@
 import { createTestApp, TestApp } from '../support/app';
-import { resetDb } from '../support/db';
+import { resetDb, leerSnapshotCrudo, sembrarInspeccionCerrada } from '../support/db';
 import { api, Api } from '../support/fixtures';
 
-describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21)', () => {
+describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)', () => {
   let t: TestApp;
   let http: Api;
 
@@ -652,6 +652,301 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21)', () => {
         usuario: 'PGOMEZ',
       });
       expect(dupUserRes.status).toBe(409);
+    });
+  });
+
+  describe('Catálogos de Texto, Configuración y Bitácora de Auditoría (GAF-23)', () => {
+    it('lista catálogos de texto filtrando los restringidos si no es ADMINISTRADOR', async () => {
+      // 1. Sin rol o como SUPERVISOR
+      const resPublico = await http.get('/mantenimiento/catalogos-texto');
+      expect(resPublico.status).toBe(200);
+      expect(Array.isArray(resPublico.body)).toBe(true);
+      expect(resPublico.body.length).toBe(5);
+      const idsPublicos = resPublico.body.map((c: any) => c.id);
+      expect(idsPublicos).toContain('hallazgos');
+      expect(idsPublicos).toContain('acciones-correctivas');
+      expect(idsPublicos).not.toContain('motivos-modificacion');
+
+      // 2. Con rol ADMINISTRADOR
+      const resAdmin = await http.get('/mantenimiento/catalogos-texto', {
+        'x-actor-rol': 'ADMINISTRADOR',
+      });
+      expect(resAdmin.status).toBe(200);
+      expect(resAdmin.body.length).toBe(6);
+      const idsAdmin = resAdmin.body.map((c: any) => c.id);
+      expect(idsAdmin).toContain('motivos-modificacion');
+    });
+
+    it('controla acceso por ID a catálogos restringidos', async () => {
+      // Acceso a catálogo estándar permitido a cualquiera
+      const resHallazgos = await http.get('/mantenimiento/catalogos-texto/hallazgos');
+      expect(resHallazgos.status).toBe(200);
+      expect(resHallazgos.body.id).toBe('hallazgos');
+      expect(resHallazgos.body.items).toContain('Roedores vivos');
+
+      // Acceso a motivos-modificacion denegado sin rol ADMINISTRADOR
+      const resMotivosBloqueado = await http.get('/mantenimiento/catalogos-texto/motivos-modificacion', {
+        'x-actor-rol': 'SUPERVISOR',
+      });
+      expect(resMotivosBloqueado.status).toBe(403);
+
+      // Acceso a motivos-modificacion permitido a ADMINISTRADOR
+      const resMotivosOk = await http.get('/mantenimiento/catalogos-texto/motivos-modificacion', {
+        'x-actor-rol': 'ADMINISTRADOR',
+      });
+      expect(resMotivosOk.status).toBe(200);
+      expect(resMotivosOk.body.id).toBe('motivos-modificacion');
+      expect(resMotivosOk.body.items).toContain('Error de digitación en campo');
+    });
+
+    it('actualiza lista de items y registra evento inmutable en auditoría', async () => {
+      const resPut = await http.put(
+        '/mantenimiento/catalogos-texto/hallazgos',
+        {
+          items: [
+            'CUCARACHA AMERICANA (Periplaneta americana)',
+            'MOSCA DOMESTICA (Musca domestica)',
+          ],
+        },
+        {
+          'x-actor-usuario': 'R.AGARATE',
+          'x-actor-rol': 'ADMINISTRADOR',
+        },
+      );
+      expect(resPut.status).toBe(200);
+      expect(resPut.body.items).toEqual([
+        'CUCARACHA AMERICANA (Periplaneta americana)',
+        'MOSCA DOMESTICA (Musca domestica)',
+      ]);
+
+      // Verificar persistencia
+      const resGet = await http.get('/mantenimiento/catalogos-texto/hallazgos');
+      expect(resGet.status).toBe(200);
+      expect(resGet.body.items).toHaveLength(2);
+
+      // Agregar item individual sin duplicados
+      const resPostItem = await http.post(
+        '/mantenimiento/catalogos-texto/hallazgos/items',
+        { item: 'ROEDOR DE TECHO (Rattus rattus)' },
+        {
+          'x-actor-usuario': 'R.AGARATE',
+          'x-actor-rol': 'ADMINISTRADOR',
+        },
+      );
+      expect(resPostItem.status).toBe(201);
+      expect(resPostItem.body.items).toHaveLength(3);
+      expect(resPostItem.body.items).toContain('ROEDOR DE TECHO (Rattus rattus)');
+    });
+
+    it('rechaza modificación de catálogos restringidos por usuarios no administradores', async () => {
+      const resPut = await http.put(
+        '/mantenimiento/catalogos-texto/motivos-modificacion',
+        { items: ['Nuevo motivo no autorizado'] },
+        { 'x-actor-rol': 'SUPERVISOR' },
+      );
+      expect(resPut.status).toBe(403);
+
+      const resPost = await http.post(
+        '/mantenimiento/catalogos-texto/motivos-modificacion/items',
+        { item: 'Otro motivo no autorizado' },
+        { 'x-actor-rol': 'SUPERVISOR' },
+      );
+      expect(resPost.status).toBe(403);
+    });
+
+    it('gestiona la configuración global del sistema y firma digital para PDFs (Decisión C7)', async () => {
+      // 1. Obtener configuración inicial
+      const resGet = await http.get('/mantenimiento/configuracion');
+      expect(resGet.status).toBe(200);
+      expect(resGet.body.id).toBe('global');
+      expect(resGet.body.director.nombre).toBe('Ing. Carlos Medina Ruiz');
+      expect(resGet.body.director.cip).toBe('84512');
+      expect(resGet.body.resolucionSanitaria).toBe('0023-2024-DESA/MINSA');
+
+      // 2. Rechaza actualización por no administrador
+      const resPatchBloqueado = await http.patch(
+        '/mantenimiento/configuracion',
+        {
+          director: { nombre: 'Ing. Intruso', cip: '11111' },
+        },
+        { 'x-actor-rol': 'SUPERVISOR' },
+      );
+      expect(resPatchBloqueado.status).toBe(403);
+
+      // 3. Permite actualización a ADMINISTRADOR
+      const firmaMock =
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY44YAAAAASUVORK5CYII=';
+      const resPatchOk = await http.patch(
+        '/mantenimiento/configuracion',
+        {
+          director: {
+            nombre: 'Ing. Carlos Medina Ruiz',
+            cip: '84512',
+            firma: firmaMock,
+          },
+          resolucionSanitaria: '0023-2024-DESA/MINSA',
+          parametros: { diasVigenciaCertificado: 30, versionPlantilla: '2.0' },
+        },
+        {
+          'x-actor-usuario': 'R.AGARATE',
+          'x-actor-rol': 'ADMINISTRADOR',
+        },
+      );
+      expect(resPatchOk.status).toBe(200);
+      expect(resPatchOk.body.director.firma).toBe(firmaMock);
+      expect(resPatchOk.body.parametros).toEqual({
+        diasVigenciaCertificado: 30,
+        versionPlantilla: '2.0',
+      });
+
+      // 4. Comprobar que lectura refleja los cambios
+      const resGetActualizado = await http.get('/mantenimiento/configuracion');
+      expect(resGetActualizado.body.director.firma).toBe(firmaMock);
+      expect(resGetActualizado.body.parametros.diasVigenciaCertificado).toBe(30);
+    });
+
+    it('permite consulta de auditoría exclusivamente a ADMINISTRADOR y registra trazabilidad', async () => {
+      // 1. Bloquea si no es ADMINISTRADOR
+      const resAuditoriaBloqueada = await http.get('/mantenimiento/auditoria', {
+        'x-actor-rol': 'SUPERVISOR',
+      });
+      expect(resAuditoriaBloqueada.status).toBe(403);
+
+      // 2. Ejecutar acción de mantenimiento que genera auditoría
+      await http.put(
+        '/mantenimiento/catalogos-texto/observaciones',
+        { items: ['Observación de prueba auditada'] },
+        {
+          'x-actor-usuario': 'ADMIN_AUDIT',
+          'x-actor-rol': 'ADMINISTRADOR',
+        },
+      );
+
+      // 3. Consultar bitácora como ADMINISTRADOR
+      const resAuditoria = await http.get(
+        '/mantenimiento/auditoria?modulo=MANTENIMIENTO&limit=10',
+        {
+          'x-actor-rol': 'ADMINISTRADOR',
+        },
+      );
+      expect(resAuditoria.status).toBe(200);
+      expect(resAuditoria.body.total).toBeGreaterThanOrEqual(1);
+      expect(resAuditoria.body.items.length).toBeGreaterThanOrEqual(1);
+
+      const eventoObservaciones = resAuditoria.body.items.find(
+        (e: any) => e.entidadId === 'observaciones',
+      );
+      expect(eventoObservaciones).toBeDefined();
+      expect(eventoObservaciones.accion).toBe('ACTUALIZAR_CATALOGO_TEXTO');
+      expect(eventoObservaciones.actorUsuario).toBe('ADMIN_AUDIT');
+      expect(eventoObservaciones.payloadNuevo.items).toEqual([
+        'Observación de prueba auditada',
+      ]);
+    });
+
+    it('Garantía de Inmutabilidad (§13): editar catálogo o configuración no altera inspecciones pasadas', async () => {
+      const clienteRes = await http.post('/mantenimiento/clientes', {
+        razonSocial: 'Empresa Inmutable S.A.C.',
+        ruc: '20999888771',
+        codigoCorto: 'INMUTAB',
+        direccionFiscal: 'Mollendo',
+        giroNegocio: 'Industrial',
+        contactoNombre: 'Contacto',
+        contactoCargo: 'Jefe',
+        contactoTelefono: '958000111',
+        contactoCorreo: 'contacto@inmutable.pe',
+      });
+      const proyectoRes = await http.post('/mantenimiento/proyectos', {
+        clienteId: clienteRes.body.id,
+        nombre: 'SEDE_INMUTABLE',
+        direccionSede: 'Sede Principal',
+        distrito: 'Mollendo',
+        provincia: 'Islay',
+        departamento: 'Arequipa',
+        contactoNombre: 'Contacto Sede',
+        contactoCargo: 'Administrador Sede',
+        contactoTelefono: '958000222',
+      });
+      expect(clienteRes.status).toBe(201);
+      expect(proyectoRes.status).toBe(201);
+      const insumoRes = await http.post('/mantenimiento/insumos', {
+        nombreComercial: 'Insumo Inmutable',
+        principioActivo: 'Principio',
+        presentacion: 'LIQUIDO',
+        unidadMedida: 'L',
+        registroDigesa: 'RD-9999-2025/DIGESA/SA',
+        concentracion: '1%',
+        dosisEstandar: '5 ml/L',
+        fichaTecnicaKey: 'insumos/fichas/inmutable.pdf',
+        hojaMsdsKey: 'insumos/msds/inmutable.pdf',
+      });
+      const equipoRes = await http.post('/mantenimiento/equipos', {
+        codigoInterno: 'EQ-INM-01',
+        nombre: 'Equipo Inmutable',
+        tipo: 'NEBULIZACION',
+        marcaModelo: 'Model X',
+        estadoOperativo: 'OPERATIVO',
+      });
+      const servicioRes = await http.post('/mantenimiento/servicios-contratados', {
+        proyectoId: proyectoRes.body.id,
+        tipoServicio: 'DSF',
+        frecuencia: 'MENSUAL',
+        areaTotalM2: 500,
+        areaTratarM2: 400,
+        insumosAutorizados: [insumoRes.body.id],
+        equiposAutorizados: [equipoRes.body.id],
+        dosisReferencial: { [insumoRes.body.id]: '5 ml / Litro' },
+        requiereCertificado: true,
+        vigenciaDias: 30,
+      });
+      expect(insumoRes.status).toBe(201);
+      expect(equipoRes.status).toBe(201);
+      expect(servicioRes.status).toBe(201);
+      expect(servicioRes.body.id).toBeDefined();
+
+      const snapshotHistorico = {
+        catalogos: {
+          hallazgos: ['CUCARACHA HISTORICA', 'MOSCA HISTORICA'],
+          directorTecnico: {
+            nombre: 'Ing. Carlos Medina Ruiz (Histórico)',
+            cip: '84512',
+          },
+        },
+      };
+
+      const inspeccionId = '88888888-8888-4888-8888-888888888888';
+      await sembrarInspeccionCerrada(t.db, {
+        id: inspeccionId,
+        servicioId: servicioRes.body.id,
+        codigo: 'INSP-INMUTABLE-01',
+        snapshot: snapshotHistorico,
+      });
+
+      // Modificamos catálogo y configuración
+      await http.put(
+        '/mantenimiento/catalogos-texto/hallazgos',
+        { items: ['VECTOR MODERNO 2026'] },
+        { 'x-actor-usuario': 'ADMIN', 'x-actor-rol': 'ADMINISTRADOR' },
+      );
+      await http.patch(
+        '/mantenimiento/configuracion',
+        { director: { nombre: 'Ing. Nuevo Director 2027', cip: '99999' } },
+        { 'x-actor-usuario': 'ADMIN', 'x-actor-rol': 'ADMINISTRADOR' },
+      );
+
+      // Verificamos que el snapshot de la inspección cerrada permanece 100% INTACTO
+      const snapshotEnBd = await leerSnapshotCrudo(t.db, inspeccionId);
+      const snapshotParseado = JSON.parse(snapshotEnBd);
+
+      expect(snapshotParseado.catalogos.hallazgos).toEqual([
+        'CUCARACHA HISTORICA',
+        'MOSCA HISTORICA',
+      ]);
+      expect(snapshotParseado.catalogos.directorTecnico.nombre).toBe(
+        'Ing. Carlos Medina Ruiz (Histórico)',
+      );
+      expect(snapshotEnBd).not.toContain('VECTOR MODERNO 2026');
+      expect(snapshotEnBd).not.toContain('Ing. Nuevo Director 2027');
     });
   });
 });

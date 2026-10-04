@@ -1,7 +1,11 @@
 import {
+  AgregarItemCatalogoTextoSchema,
   CambioEstadoEquipoSchema,
+  CatalogoTextoActualizacionSchema,
   ClienteActualizacionSchema,
   ClienteRegistroSchema,
+  ConfiguracionSistemaActualizacionSchema,
+  ConsultaAuditoriaFiltrosSchema,
   EquipoActualizacionSchema,
   EquipoRegistroSchema,
   GenerarDownloadUrlSchema,
@@ -165,3 +169,33 @@ export class GenerarUploadUrlDto extends createZodDtoDocumentado(GenerarUploadUr
 export class GenerarDownloadUrlDto extends createZodDtoDocumentado(GenerarDownloadUrlSchema, {
   key: 'insumos/fichas/ficha-cipermetrina.pdf',
 }) {}
+
+export class ActualizarCatalogoTextoDto extends createZodDtoDocumentado(CatalogoTextoActualizacionSchema, {
+  items: ['CUCARACHA AMERICANA (Periplaneta americana)', 'MOSCA DOMESTICA (Musca domestica)'],
+}) {}
+
+export class AgregarItemCatalogoTextoDto extends createZodDtoDocumentado(AgregarItemCatalogoTextoSchema, {
+  item: 'ROEDOR DE TECHO (Rattus rattus)',
+}) {}
+
+export class ActualizarConfiguracionDto extends createZodDtoDocumentado(ConfiguracionSistemaActualizacionSchema, {
+  director: {
+    nombre: 'Ing. Carlos Medina Ruiz',
+    cip: '84512',
+    firma: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY44YAAAAASUVORK5CYII=',
+  },
+  resolucionSanitaria: '0023-2024-DESA/MINSA',
+  parametros: {},
+}) {}
+
+export class ConsultaAuditoriaDto extends createZodDtoDocumentado(ConsultaAuditoriaFiltrosSchema, {
+  modulo: 'MANTENIMIENTO',
+  entidad: 'catalogo_texto',
+  entidadId: 'hallazgos',
+  actorUsuario: 'ADMIN',
+  desde: '2026-01-01',
+  hasta: '2026-12-31',
+  limit: 20,
+  offset: 0,
+}) {}
+

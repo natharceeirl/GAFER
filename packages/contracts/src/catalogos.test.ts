@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   CambioEstadoEquipoSchema,
   CatalogoTextoSchema,
+  CatalogoTextoActualizacionSchema,
+  AgregarItemCatalogoTextoSchema,
+  DirectorTecnicoSchema,
+  ConfiguracionSistemaSchema,
+  ConfiguracionSistemaActualizacionSchema,
   EquipoActualizacionSchema,
   EquipoRegistroSchema,
   EquipoSchema,
@@ -203,6 +208,61 @@ describe('PersonalActualizacionSchema', () => {
     esperarFallaEn(PersonalActualizacionSchema, { dni: '123' }, 'dni');
     esperarFallaEn(PersonalActualizacionSchema, { cargo: 'GERENTE' }, 'cargo');
     esperarFallaEn(PersonalActualizacionSchema, { nombres: '' }, 'nombres');
+  });
+});
+
+describe('CatalogoTextoActualizacionSchema y AgregarItemCatalogoTextoSchema (GAF-23)', () => {
+  it('valida actualización completa de items', () => {
+    expect(
+      CatalogoTextoActualizacionSchema.safeParse({
+        items: ['Roedores vivos', 'Excretas frescas'],
+      }).success,
+    ).toBe(true);
+
+    esperarFallaEn(CatalogoTextoActualizacionSchema, { items: 'invalido' }, 'items');
+    esperarFallaEn(CatalogoTextoActualizacionSchema, { items: [''] }, 'items.0');
+  });
+
+  it('valida agregar un item de texto al catálogo', () => {
+    expect(
+      AgregarItemCatalogoTextoSchema.safeParse({
+        item: 'Nuevo hallazgo observado',
+      }).success,
+    ).toBe(true);
+
+    esperarFallaEn(AgregarItemCatalogoTextoSchema, { item: '' }, 'item');
+  });
+});
+
+describe('DirectorTecnicoSchema y ConfiguracionSistemaSchema (Spec §6.1, C7 / GAF-23)', () => {
+  it('valida Director Técnico con CIP numérico de 4 a 7 dígitos', () => {
+    expect(
+      DirectorTecnicoSchema.safeParse({
+        nombre: 'Ing. Carlos Medina Ruiz',
+        cip: '84512',
+        firma: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAE...',
+      }).success,
+    ).toBe(true);
+
+    esperarFallaEn(DirectorTecnicoSchema, { nombre: '', cip: '84512' }, 'nombre');
+    esperarFallaEn(DirectorTecnicoSchema, { nombre: 'Ing.', cip: '12' }, 'cip');
+    esperarFallaEn(DirectorTecnicoSchema, { nombre: 'Ing.', cip: 'ABCDE' }, 'cip');
+  });
+
+  it('valida configuración global con valores por defecto', () => {
+    const config = ConfiguracionSistemaSchema.parse({});
+    expect(config.id).toBe('global');
+    expect(config.resolucionSanitaria).toBe('0023-2024-DESA/MINSA');
+    expect(config.parametros).toEqual({});
+  });
+
+  it('valida actualización parcial de configuración del sistema', () => {
+    expect(
+      ConfiguracionSistemaActualizacionSchema.safeParse({
+        resolucionSanitaria: '0045-2026-DIGESA',
+        parametros: { diasAnticipacionAlertaCertificado: 45 },
+      }).success,
+    ).toBe(true);
   });
 });
 

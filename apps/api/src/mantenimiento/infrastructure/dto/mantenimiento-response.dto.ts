@@ -304,3 +304,110 @@ export class EstadoSimpleResponseDto {
   @ApiProperty({ example: 'INACTIVO' })
   estado!: string;
 }
+
+export class CatalogoTextoResponseDto {
+  @ApiProperty({ example: 'hallazgos', description: 'Identificador único del catálogo' })
+  id!: string;
+
+  @ApiProperty({ example: 'Hallazgos frecuentes', description: 'Título descriptivo del catálogo' })
+  titulo!: string;
+
+  @ApiProperty({
+    example: ['CUCARACHA AMERICANA (Periplaneta americana)'],
+    description: 'Lista de items de texto del catálogo',
+    type: [String],
+  })
+  items!: string[];
+
+  @ApiProperty({ example: false, description: 'Indica si es de acceso exclusivo para ADMINISTRADOR' })
+  soloAdministrador?: boolean;
+}
+
+export class DirectorTecnicoResponseDto {
+  @ApiProperty({ example: 'Ing. Carlos Medina Ruiz', description: 'Nombre completo del Director Técnico' })
+  nombre!: string;
+
+  @ApiProperty({ example: '84512', description: 'Número de CIP (Colegio de Ingenieros del Perú)' })
+  cip!: string;
+
+  @ApiProperty({
+    example: 'data:image/png;base64,...',
+    nullable: true,
+    required: false,
+    description: 'Firma gráfica en base64 o URI de almacenamiento para estampado automático en PDFs',
+  })
+  firma?: string | null;
+}
+
+export class ConfiguracionSistemaResponseDto {
+  @ApiProperty({ example: 'global', description: 'Identificador único de configuración' })
+  id!: string;
+
+  @ApiProperty({ type: DirectorTecnicoResponseDto, nullable: true, required: false })
+  director?: DirectorTecnicoResponseDto | null;
+
+  @ApiProperty({ example: '0023-2024-DESA/MINSA', description: 'Resolución Sanitaria oficial' })
+  resolucionSanitaria!: string;
+
+  @ApiProperty({ example: {}, description: 'Parámetros globales del sistema' })
+  parametros!: Record<string, unknown>;
+
+  @ApiProperty({ example: 'ADMIN', nullable: true, required: false })
+  actualizadoPor?: string | null;
+
+  @ApiProperty({ example: '2026-10-04T00:00:00.000Z', required: false })
+  updatedAt?: string;
+}
+
+export class EventoAuditoriaResponseDto {
+  @ApiProperty({ example: 'a1111111-1111-1111-1111-111111111111' })
+  id!: string;
+
+  @ApiProperty({ example: 'u1111111-1111-1111-1111-111111111111', nullable: true, required: false })
+  actorId?: string | null;
+
+  @ApiProperty({ example: 'ADMIN' })
+  actorUsuario!: string;
+
+  @ApiProperty({ example: 'ADMINISTRADOR' })
+  actorRol!: string;
+
+  @ApiProperty({ example: 'MANTENIMIENTO' })
+  modulo!: string;
+
+  @ApiProperty({ example: 'ACTUALIZAR_CATALOGO_TEXTO' })
+  accion!: string;
+
+  @ApiProperty({ example: 'catalogo_texto' })
+  entidad!: string;
+
+  @ApiProperty({ example: 'hallazgos' })
+  entidadId!: string;
+
+  @ApiProperty({ example: { items: [] }, nullable: true, required: false })
+  payloadAnterior?: Record<string, unknown> | null;
+
+  @ApiProperty({ example: { items: ['CUCARACHA'] }, nullable: true, required: false })
+  payloadNuevo?: Record<string, unknown> | null;
+
+  @ApiProperty({ example: {} })
+  detalles!: Record<string, unknown>;
+
+  @ApiProperty({ example: '2026-10-04T00:00:00.000Z' })
+  createdAt!: string;
+}
+
+export class AuditoriaPaginadaResponseDto {
+  @ApiProperty({ example: 42, description: 'Total de eventos registrados' })
+  total!: number;
+
+  @ApiProperty({ example: 20, description: 'Límite de registros' })
+  limit!: number;
+
+  @ApiProperty({ example: 0, description: 'Desplazamiento' })
+  offset!: number;
+
+  @ApiProperty({ type: [EventoAuditoriaResponseDto], description: 'Eventos de auditoría' })
+  items!: EventoAuditoriaResponseDto[];
+}
+

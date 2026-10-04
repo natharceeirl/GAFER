@@ -497,4 +497,210 @@ describe('Mantenimiento Use Cases (T2.2)', () => {
       expect(mockRepo.guardar).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('Catálogos de Texto, Configuración y Auditoría (GAF-23)', () => {
+    let mockAuditoriaService: any;
+
+    beforeEach(() => {
+      mockAuditoriaService = {
+        registrarEvento: jest.fn().mockResolvedValue({ id: 'evt-1' }),
+        consultarEventos: jest.fn().mockResolvedValue({ items: [], total: 0 }),
+      };
+    });
+
+    describe('ListarCatalogosTextoUseCase', () => {
+      it('filtra catálogos de solo administrador si el rol no es ADMINISTRADOR', async () => {
+        const { ListarCatalogosTextoUseCase } = await import('./listar-catalogos-texto.usecase');
+        const { CatalogoTexto } = await import('../domain/catalogo-texto');
+        const catPublico = new CatalogoTexto('hallazgos', 'Hallazgos', ['Item 1'], false);
+        const catAdmin = new CatalogoTexto('motivos-modificacion', 'Motivos', ['Error'], true);
+
+        const mockRepo = {
+          listar: jest.fn().mockResolvedValue([catPublico, catAdmin]),
+          buscarPorId: jest.fn(),
+          guardar: jest.fn(),
+        };
+
+        const useCase = new ListarCatalogosTextoUseCase(mockRepo);
+
+        // Sin rol o con rol SUPERVISOR
+        const resSupervisor = await useCase.execute('SUPERVISOR');
+        expect(resSupervisor).toHaveLength(1);
+        expect(resSupervisor[0].id).toBe('hallazgos');
+
+        // Con rol ADMINISTRADOR
+        const resAdmin = await useCase.execute('ADMINISTRADOR');
+        expect(resAdmin).toHaveLength(2);
+      });
+    });
+
+    describe('ObtenerCatalogoTextoUseCase', () => {
+      it('lanza NotFoundException si el catálogo no existe', async () => {
+        const { ObtenerCatalogoTextoUseCase } = await import('./obtener-catalogo-texto.usecase');
+        const mockRepo = {
+          listar: jest.fn(),
+          buscarPorId: jest.fn().mockResolvedValue(null),
+          guardar: jest.fn(),
+        };
+        const useCase = new ObtenerCatalogoTextoUseCase(mockRepo);
+        await expect(useCase.execute('no-existe')).rejects.toThrow("Catálogo de texto 'no-existe' no encontrado");
+      });
+
+      it('bloquea catálogo soloAdministrador a usuarios que no sean ADMINISTRADOR', async () => {
+        const { ObtenerCatalogoTextoUseCase } = await import('./obtener-catalogo-texto.usecase');
+        const { CatalogoTexto } = await import('../domain/catalogo-texto');
+        const catAdmin = new CatalogoTexto('motivos-modificacion', 'Motivos', ['Error'], true);
+
+        const mockRepo = {
+          listar: jest.fn(),
+          buscarPorId: jest.fn().mockResolvedValue(catAdmin),
+          guardar: jest.fn(),
+        };
+        const useCase = new ObtenerCatalogoTextoUseCase(mockRepo);
+        await expect(useCase.execute('motivos-modificacion', 'SUPERVISOR')).rejects.toThrow(
+          "El catálogo 'motivos-modificacion' es de acceso exclusivo para ADMINISTRADOR",
+        );
+
+        const ok = await useCase.execute('motivos-modificacion', 'ADMINISTRADOR');
+        expect(ok.id).toBe('motivos-modificacion');
+      });
+    });
+
+    describe('ActualizarCatalogoTextoUseCase', () => {
+      it('actualiza items y registra evento de auditoría', async () => {
+        const { ActualizarCatalogoTextoUseCase } = await import('./actualizar-catalogo-texto.usecase');
+        const { CatalogoTexto } = await import('../domain/catalogo-texto');
+        const cat = new CatalogoTexto('hallazgos', 'Hallazgos', ['Item viejo']);
+
+        const mockRepo = {
+          listar: jest.fn(),
+          buscarPorId: jest.fn().mockResolvedValue(cat),
+          guardar: jest.fn().mockResolvedValue(undefined),
+        };
+
+        const useCase = new ActualizarCatalogoTextoUseCase(mockRepo, mockAuditoriaService);
+        const res = await useCase.execute({
+          id: 'hallazgos',
+          items: ['Cucaracha', 'Mosca'],
+          actorUsuario: 'ADMIN',
+          actorRol: 'ADMINISTRADOR',
+        });
+
+        expect(res.items).toEqual(['Cucaracha', 'Mosca']);
+        expect(mockRepo.guardar).toHaveBeenCalled();
+        expect(mockAuditoriaService.registrarEvento).toHaveBeenCalledWith(
+          expect.objectContaining({
+            accion: 'ACTUALIZAR_CATALOGO_TEXTO',
+            entidadId: 'hallazgos',
+            payloadAnterior: { items: ['Item viejo'] },
+            payloadNuevo: { items: ['Cucaracha', 'Mosca'] },
+          }),
+        );
+      });
+
+      it('rechaza modificación de catálogo soloAdministrador por no-admin', async () => {
+        const { ActualizarCatalogoTextoUseCase } = await import('./actualizar-catalogo-texto.usecase');
+        const { CatalogoTexto } = await import('../domain/catalogo-texto');
+        const cat = new CatalogoTexto('motivos-modificacion', 'Motivos', ['Error'], true);
+
+        const mockRepo = {
+          listar: jest.fn(),
+          buscarPorId: jest.fn().mockResolvedValue(cat),
+          guardar: jest.fn(),
+        };
+
+        const useCase = new ActualizarCatalogoTextoUseCase(mockRepo, mockAuditoriaService);
+        await expect(
+          useCase.execute({
+            id: 'motivos-modificacion',
+            items: ['Nuevo motivo'],
+            actorUsuario: 'SUPER',
+            actorRol: 'SUPERVISOR',
+          }),
+        ).rejects.toThrow("El catálogo 'motivos-modificacion' solo puede ser modificado por ADMINISTRADOR");
+      });
+    });
+
+    describe('AgregarItemCatalogoTextoUseCase', () => {
+      it('agrega item único y registra auditoría', async () => {
+        const { AgregarItemCatalogoTextoUseCase } = await import('./agregar-item-catalogo-texto.usecase');
+        const { CatalogoTexto } = await import('../domain/catalogo-texto');
+        const cat = new CatalogoTexto('hallazgos', 'Hallazgos', ['Item 1']);
+
+        const mockRepo = {
+          listar: jest.fn(),
+          buscarPorId: jest.fn().mockResolvedValue(cat),
+          guardar: jest.fn().mockResolvedValue(undefined),
+        };
+
+        const useCase = new AgregarItemCatalogoTextoUseCase(mockRepo, mockAuditoriaService);
+        const res = await useCase.execute({
+          id: 'hallazgos',
+          item: 'Item 2',
+          actorUsuario: 'SUPER',
+          actorRol: 'SUPERVISOR',
+        });
+
+        expect(res.items).toEqual(['Item 1', 'Item 2']);
+        expect(mockAuditoriaService.registrarEvento).toHaveBeenCalledWith(
+          expect.objectContaining({
+            accion: 'AGREGAR_ITEM_CATALOGO_TEXTO',
+            payloadNuevo: { items: ['Item 1', 'Item 2'], itemAgregado: 'Item 2' },
+          }),
+        );
+      });
+    });
+
+    describe('Configuración Global y Auditoría', () => {
+      it('actualizar-configuracion actualiza Director Técnico y registra auditoría solo si es ADMINISTRADOR', async () => {
+        const { ActualizarConfiguracionUseCase } = await import('./actualizar-configuracion.usecase');
+        const { ConfiguracionSistema } = await import('../domain/configuracion-sistema');
+        const config = new ConfiguracionSistema();
+
+        const mockRepo = {
+          obtener: jest.fn().mockResolvedValue(config),
+          guardar: jest.fn().mockResolvedValue(undefined),
+        };
+
+        const useCase = new ActualizarConfiguracionUseCase(mockRepo, mockAuditoriaService);
+
+        // Bloquea no-admin
+        await expect(
+          useCase.execute({
+            director: { nombre: 'Dr. Test', cip: '12345' },
+            actorUsuario: 'SUPER',
+            actorRol: 'SUPERVISOR',
+          }),
+        ).rejects.toThrow('Solo ADMINISTRADOR puede actualizar la configuración del sistema');
+
+        // Permite admin
+        const actualizado = await useCase.execute({
+          director: { nombre: 'Ing. Carlos Medina Ruiz', cip: '84512' },
+          actorUsuario: 'ADMIN',
+          actorRol: 'ADMINISTRADOR',
+        });
+
+        expect(actualizado.directorNombre).toBe('Ing. Carlos Medina Ruiz');
+        expect(mockAuditoriaService.registrarEvento).toHaveBeenCalledWith(
+          expect.objectContaining({
+            modulo: 'CONFIGURACION',
+            accion: 'ACTUALIZAR_CONFIGURACION_SISTEMA',
+          }),
+        );
+      });
+
+      it('consultar-auditoria exige rol ADMINISTRADOR', async () => {
+        const { ConsultarAuditoriaUseCase } = await import('./consultar-auditoria.usecase');
+        const useCase = new ConsultarAuditoriaUseCase(mockAuditoriaService);
+
+        await expect(
+          useCase.execute({ filtros: {}, actorRol: 'TECNICO_OPERADOR' }),
+        ).rejects.toThrow('Solo ADMINISTRADOR puede consultar el registro de auditoría');
+
+        mockAuditoriaService.consultarEventos.mockResolvedValueOnce({ items: [{ id: '1' }], total: 1 });
+        const res = await useCase.execute({ filtros: {}, actorRol: 'ADMINISTRADOR' });
+        expect(res.total).toBe(1);
+      });
+    });
+  });
 });

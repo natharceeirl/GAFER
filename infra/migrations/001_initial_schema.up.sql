@@ -286,3 +286,68 @@ CREATE INDEX IF NOT EXISTS idx_documentos_inspeccion_id ON documentos(inspeccion
 CREATE INDEX IF NOT EXISTS idx_documentos_tipo ON documentos(tipo);
 CREATE INDEX IF NOT EXISTS idx_documentos_estado ON documentos(estado);
 CREATE INDEX IF NOT EXISTS idx_documentos_codigo ON documentos(codigo);
+
+-- 12. Catálogos de Texto Editables (Spec §7, §12 / GAF-23)
+CREATE TABLE IF NOT EXISTS catalogos_texto (
+    id VARCHAR(64) PRIMARY KEY,
+    titulo VARCHAR(120) NOT NULL,
+    items JSONB NOT NULL DEFAULT '[]'::jsonb,
+    solo_administrador BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Semilla de catálogos de texto iniciales
+INSERT INTO catalogos_texto (id, titulo, items, solo_administrador)
+VALUES 
+('hallazgos', 'Tipos de hallazgo', '["Roedores vivos", "Excretas frescas", "Daño en empaques", "Nidos activos", "Sin evidencia"]'::jsonb, false),
+('acciones-correctivas', 'Acciones correctivas', '["Sellado de perforación", "Reubicación de estación", "Retiro de cebo vencido", "Refuerzo de cebado"]'::jsonb, false),
+('observaciones', 'Observaciones técnicas', '["Acceso restringido a zona", "Condiciones de humedad elevada", "Presencia de residuos orgánicos"]'::jsonb, false),
+('recomendaciones', 'Recomendaciones al cliente', '["Retirar cartones acumulados", "Reparar tuberías con fuga", "Mantener orden en almacén"]'::jsonb, false),
+('giros', 'Giros de negocio', '["Energía", "Alimentos", "Transporte", "Construcción", "Salud", "Educación", "Sector público"]'::jsonb, false),
+('motivos-modificacion', 'Motivos de modificación', '["Error de digitación en campo", "Solicitud del cliente", "Corrección de dato de insumo", "Observación de auditoría"]'::jsonb, true)
+ON CONFLICT (id) DO NOTHING;
+
+-- 13. Configuración Global del Sistema (Director Técnico C7, parámetros / GAF-23)
+CREATE TABLE IF NOT EXISTS configuracion_sistema (
+    id VARCHAR(32) PRIMARY KEY DEFAULT 'global',
+    director_nombre VARCHAR(150) NOT NULL DEFAULT '',
+    director_cip VARCHAR(20) NOT NULL DEFAULT '',
+    director_firma TEXT,
+    resolucion_sanitaria VARCHAR(100) NOT NULL DEFAULT '',
+    parametros JSONB NOT NULL DEFAULT '{}'::jsonb,
+    actualizado_por UUID REFERENCES personal(id) ON DELETE SET NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Semilla de configuración global inicial
+INSERT INTO configuracion_sistema (id, director_nombre, director_cip, director_firma, resolucion_sanitaria, parametros)
+VALUES (
+    'global',
+    'Ing. Carlos Medina Ruiz',
+    '84512',
+    NULL,
+    '0023-2024-DESA/MINSA',
+    '{"diasAnticipacionAlertaCertificado": 30}'::jsonb
+) ON CONFLICT (id) DO NOTHING;
+
+-- 14. Bitácora General de Acciones y Auditoría (Spec §8.4 / Decisión C6 / GAF-23)
+CREATE TABLE IF NOT EXISTS auditoria_eventos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    actor_id UUID REFERENCES personal(id) ON DELETE SET NULL,
+    actor_usuario VARCHAR(50) NOT NULL,
+    actor_rol VARCHAR(30) NOT NULL,
+    modulo VARCHAR(50) NOT NULL,
+    accion VARCHAR(100) NOT NULL,
+    entidad VARCHAR(50) NOT NULL,
+    entidad_id VARCHAR(100) NOT NULL,
+    payload_anterior JSONB,
+    payload_nuevo JSONB,
+    detalles JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_auditoria_eventos_created_at ON auditoria_eventos(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_auditoria_eventos_entidad ON auditoria_eventos(entidad, entidad_id);
+CREATE INDEX IF NOT EXISTS idx_auditoria_eventos_actor ON auditoria_eventos(actor_usuario);
+CREATE INDEX IF NOT EXISTS idx_auditoria_eventos_modulo ON auditoria_eventos(modulo);
