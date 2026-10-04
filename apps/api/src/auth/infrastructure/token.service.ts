@@ -18,7 +18,7 @@ export class TokenService implements TokenServicePort {
     if (!secreto) {
       throw new Error(
         'Falta la variable de entorno JWT_SECRET: la API no arranca sin un secreto para firmar los tokens. ' +
-          'Define una cadena aleatoria de al menos 32 caracteres (ver apps/api/.env.example).',
+          'Define una cadena aleatoria de al menos 32 caracteres (ver la sección "Variables obligatorias de la API" del README).',
       );
     }
     if (secreto.length < SECRETO_LARGO_MINIMO) {

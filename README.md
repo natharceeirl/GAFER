@@ -101,7 +101,7 @@ GAFER_CLAVE='<clave de al menos 12 caracteres>' pnpm db:crear-usuario \
 
 ### 6. Variables obligatorias de la API
 
-`JWT_SECRET` (mínimo 32 caracteres) firma los tokens de sesión y **no tiene valor por defecto**: sin él la API no arranca y lo dice en el log. `apps/api/.env.example` trae un valor solo para desarrollo local; en cualquier otro entorno genera uno propio (`openssl rand -base64 48`) e inyéctalo como variable de entorno.
+`JWT_SECRET` (mínimo 32 caracteres) firma los tokens de sesión y **no tiene valor por defecto**: sin él la API no arranca y lo dice en el log. Para desarrollo local agrega a tu `apps/api/.env` una línea como `JWT_SECRET=solo-desarrollo-local-no-usar-en-produccion-0123456789abcdef` (valor solo de desarrollo: no lo reutilices). En cualquier otro entorno genera uno propio (`openssl rand -base64 48`) e inyéctalo como variable de entorno, sin guardarlo en el repositorio.
 
 Toda ruta de la API exige `Authorization: Bearer <token>` y un rol permitido; solo son públicos `POST /api/auth/login` y la documentación (`/docs`, `/docs-json`).
 
