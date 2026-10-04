@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSesion } from '../shared/api/sesion';
 import { LoginPage } from '../features/auth/pages/LoginPage';
 import { LogoGafer } from '../shared/ui/atoms/LogoGafer';
 import { BotonTema } from '../shared/ui/atoms/BotonTema';
@@ -25,11 +26,6 @@ type Pantalla =
   | 'INVENTARIO'
   | 'AUDITORIA';
 
-interface Sesion {
-  rol: Rol;
-  usuario: string;
-}
-
 /**
  * Backoffice web para Administrador y Supervisor (§16). El técnico y el
  * formulario de campo viven solo en la app Android (decisiones C10 y C11);
@@ -50,23 +46,17 @@ const PANTALLAS: Array<{ id: Pantalla; etiqueta: string }> = [
 const SOLO_ADMINISTRADOR: Pantalla[] = ['AUDITORIA'];
 
 export function AppShell() {
-  const [sesion, setSesion] = useState<Sesion | null>(null);
+  const usuarioSesion = useSesion((s) => s.usuario);
+  const cerrarSesion = useSesion((s) => s.cerrar);
   const [pantalla, setPantalla] = useState<Pantalla>('DASHBOARD');
   const [documentoAbierto, setDocumentoAbierto] = useState<string | null>(null);
   const [mapaSeleccion, setMapaSeleccion] = useState<SeleccionMapa | null>(null);
   const { documentos } = useDocumentos();
 
-  if (!sesion) {
-    return (
-      <LoginPage
-        onIngresar={(rol, usuario) => {
-          setSesion({ rol, usuario });
-          setPantalla('DASHBOARD');
-          setDocumentoAbierto(null);
-        }}
-      />
-    );
-  }
+  if (!usuarioSesion) return <LoginPage />;
+
+  /** El rol sale de la sesión del API; la web solo admite Administrador y Supervisor (§16). */
+  const sesion = { rol: usuarioSesion.cargo as Rol, usuario: usuarioSesion.usuario };
 
   const pantallasVisibles = PANTALLAS.filter((p) => sesion.rol === 'ADMINISTRADOR' || !SOLO_ADMINISTRADOR.includes(p.id));
   const detalleAbierto = documentoAbierto ? documentos.find((d) => d.id === documentoAbierto) : undefined;
@@ -105,7 +95,11 @@ export function AppShell() {
             <span className="app-shell__sesion-rol">{NOMBRE_ROL[sesion.rol]}</span>
           </div>
           <BotonTema />
-          <button type="button" className="app-shell__salir" onClick={() => setSesion(null)}>
+          <button type="button" className="app-shell__salir" onClick={() => {
+              cerrarSesion();
+              setPantalla('DASHBOARD');
+              setDocumentoAbierto(null);
+            }}>
             Cerrar sesión
           </button>
         </div>

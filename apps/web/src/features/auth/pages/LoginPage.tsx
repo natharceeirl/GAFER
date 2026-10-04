@@ -1,36 +1,27 @@
 import { useState, type FormEvent } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { Button } from '../../../shared/ui/atoms/Button';
 import { LogoGafer } from '../../../shared/ui/atoms/LogoGafer';
 import { BotonTema } from '../../../shared/ui/atoms/BotonTema';
-import { ROLES_MOCK, type Rol, type RolInfo } from '../model/roles';
+import { mensajeDeError } from '../../../shared/api/errores';
+import { ingresar } from '../model/login';
 import './login-page.css';
 
-interface LoginPageProps {
-  onIngresar: (rol: Rol, usuario: string) => void;
-}
-
 /**
- * El "gate pass" de entrada al sistema — elegís el rol como quien
- * presenta su credencial en la garita, y eso determina qué funciones
- * ves después (spec §12, tabla de roles). Sigue siendo mockup: no hay
- * backend de autenticación, cualquier clave no vacía es válida.
+ * Ingreso al backoffice con usuario y clave (§12). El rol lo define el servidor
+ * y queda en la sesión; el Técnico Operador trabaja desde la app Android y no entra por aquí.
  */
-export function LoginPage({ onIngresar }: LoginPageProps) {
-  const [rolId, setRolId] = useState<Rol | null>(null);
+export function LoginPage() {
   const [usuario, setUsuario] = useState('');
   const [clave, setClave] = useState('');
+  const acceso = useMutation({ mutationFn: ({ usuario, clave }: { usuario: string; clave: string }) => ingresar(usuario, clave) });
 
-  const puedeIngresar = rolId !== null && usuario.trim() !== '' && clave.trim() !== '';
+  const puedeIngresar = usuario.trim() !== '' && clave !== '' && !acceso.isPending;
 
-  function elegirRol(rol: RolInfo) {
-    setRolId(rol.id);
-    setUsuario(rol.usuarioSugerido);
-  }
-
-  function ingresar(e: FormEvent) {
+  function enviar(e: FormEvent) {
     e.preventDefault();
-    if (!rolId || !puedeIngresar) return;
-    onIngresar(rolId, usuario.trim());
+    if (!puedeIngresar) return;
+    acceso.mutate({ usuario: usuario.trim(), clave });
   }
 
   return (
@@ -38,31 +29,16 @@ export function LoginPage({ onIngresar }: LoginPageProps) {
       <div className="login-page__tema">
         <BotonTema />
       </div>
-      <form className="login-card" onSubmit={ingresar}>
+      <form className="login-card" onSubmit={enviar}>
         <LogoGafer ancho={200} />
         <h1 className="login-card__titulo">Ingreso al sistema</h1>
-        <p className="login-card__subtitulo">Elija su rol para ingresar: cada uno ve solo las funciones que le corresponden.</p>
+        <p className="login-card__subtitulo">Ingrese con su usuario y clave. Su rol define las funciones que verá.</p>
 
-        <div className="login-roles" role="radiogroup" aria-label="Rol de acceso">
-          {ROLES_MOCK.map((rol) => (
-            <button
-              type="button"
-              key={rol.id}
-              role="radio"
-              aria-checked={rolId === rol.id}
-              className={rolId === rol.id ? 'login-rol login-rol--activo' : 'login-rol'}
-              onClick={() => elegirRol(rol)}
-            >
-              <span className="login-rol__nombre">{rol.nombre}</span>
-              <span className="login-rol__resumen">{rol.resumen}</span>
-              <ul className="login-rol__funciones">
-                {rol.funciones.map((f) => (
-                  <li key={f}>{f}</li>
-                ))}
-              </ul>
-            </button>
-          ))}
-        </div>
+        {acceso.isError ? (
+          <p className="login-card__error" role="alert">
+            {mensajeDeError(acceso.error)}
+          </p>
+        ) : null}
 
         <div className="login-campos">
           <label className="login-campo">
@@ -88,12 +64,9 @@ export function LoginPage({ onIngresar }: LoginPageProps) {
         </div>
 
         <Button type="submit" variant="primary" disabled={!puedeIngresar}>
-          Ingresar
+          {acceso.isPending ? 'Ingresando…' : 'Ingresar'}
         </Button>
-        <p className="login-card__nota">
-          Los técnicos operadores trabajan desde la app Android. Mockup: cualquier clave no vacía es válida y el rol elegido define la
-          vista.
-        </p>
+        <p className="login-card__nota">Los técnicos operadores trabajan desde la app Android.</p>
       </form>
     </div>
   );
