@@ -90,3 +90,31 @@ export class InspeccionDetalleResponseDto extends InspeccionResponseDto {
   @ApiProperty({ type: SnapshotCatalogosDto, description: 'Copia inmutable de los catálogos al momento del cierre (Sección 13)' })
   snapshotCatalogos!: SnapshotCatalogosDto;
 }
+
+export class ConflictoSyncDto {
+  @ApiProperty({ example: '11111111-1111-4111-8111-111111111111', description: 'ID de la operación que causó el conflicto' })
+  operationId!: string;
+
+  @ApiProperty({ example: 'Colisión en estación 1: prevalece actualización más reciente' })
+  motivo!: string;
+
+  @ApiProperty({ required: false, nullable: true, description: 'Valor que fue reemplazado por la última versión' })
+  valorDesplazado?: unknown;
+}
+
+export class LoteSyncResponseDto {
+  @ApiProperty({ example: '22222222-2222-4222-8222-222222222222' })
+  inspeccionId!: string;
+
+  @ApiProperty({ type: [String], example: ['11111111-1111-4111-8111-111111111111'] })
+  procesadas!: string[];
+
+  @ApiProperty({ type: [String], example: [] })
+  omitidasIdempotentes!: string[];
+
+  @ApiProperty({ type: [ConflictoSyncDto] })
+  conflictos!: ConflictoSyncDto[];
+
+  @ApiProperty({ example: '2026-09-20T18:00:00.000Z' })
+  serverReceivedAt!: string;
+}
