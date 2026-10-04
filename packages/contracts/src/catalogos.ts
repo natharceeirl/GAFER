@@ -110,3 +110,40 @@ export const CatalogoTextoSchema = z.object({
   soloAdministrador: z.boolean().optional(),
 });
 export type CatalogoTexto = z.infer<typeof CatalogoTextoSchema>;
+
+export const CatalogoTextoActualizacionSchema = z.object({
+  items: z.array(z.string().min(1)).describe('Lista completa y ordenada de items de texto del catálogo'),
+});
+export type CatalogoTextoActualizacion = z.infer<typeof CatalogoTextoActualizacionSchema>;
+
+export const AgregarItemCatalogoTextoSchema = z.object({
+  item: z.string().min(1).describe('Item de texto a agregar al catálogo'),
+});
+export type AgregarItemCatalogoTexto = z.infer<typeof AgregarItemCatalogoTextoSchema>;
+
+/** Spec §6.1, §6.2 / Decisión C7 — Director Técnico para estampado automático en PDFs. */
+export const DirectorTecnicoSchema = z.object({
+  nombre: z.string().min(1).describe('Nombre completo del Director Técnico'),
+  cip: z
+    .string()
+    .regex(/^\d{4,7}$/, 'El CIP debe contener entre 4 y 7 dígitos numéricos')
+    .describe('Número de registro CIP (Colegio de Ingenieros del Perú)'),
+  firma: z.string().nullable().optional().describe('Firma gráfica en base64 (data URL) o clave de almacenamiento'),
+});
+export type DirectorTecnico = z.infer<typeof DirectorTecnicoSchema>;
+
+export const ConfiguracionSistemaSchema = z.object({
+  id: z.string().default('global'),
+  director: DirectorTecnicoSchema.nullable().optional(),
+  resolucionSanitaria: z.string().min(1).default('0023-2024-DESA/MINSA'),
+  parametros: z.record(z.unknown()).default({}),
+  updatedAt: z.string().datetime().optional(),
+});
+export type ConfiguracionSistema = z.infer<typeof ConfiguracionSistemaSchema>;
+
+export const ConfiguracionSistemaActualizacionSchema = z.object({
+  director: DirectorTecnicoSchema.optional(),
+  resolucionSanitaria: z.string().min(1).optional(),
+  parametros: z.record(z.unknown()).optional(),
+});
+export type ConfiguracionSistemaActualizacion = z.infer<typeof ConfiguracionSistemaActualizacionSchema>;

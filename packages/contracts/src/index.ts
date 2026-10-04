@@ -23,3 +23,4 @@ export * from './inspeccion';
 export * from './documento';
 export * from './sync.v1';
 export * from './auth';
+export * from './auditoria';
