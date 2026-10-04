@@ -11,3 +11,4 @@ apps/web/dev-dist/
 coverage-e2e/
 .codegraph/
 .claude/
+.atl/
