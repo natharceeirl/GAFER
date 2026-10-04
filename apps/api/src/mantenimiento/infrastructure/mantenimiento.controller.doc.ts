@@ -15,6 +15,9 @@ import {
   UploadUrlResponseDto,
   DownloadUrlResponseDto,
   EstadoSimpleResponseDto,
+  CatalogoTextoResponseDto,
+  ConfiguracionSistemaResponseDto,
+  AuditoriaPaginadaResponseDto,
   BadRequestErrorDto,
   NotFoundErrorDto,
   ConflictErrorDto,
@@ -412,3 +415,101 @@ export function ApiGenerarDownloadUrlDoc() {
     ApiResponse({ status: 400, description: 'Clave de archivo requerida', type: BadRequestErrorDto }),
   );
 }
+
+// ==========================================
+// CATALOGOS DE TEXTO
+// ==========================================
+
+export function ApiListarCatalogosTextoDoc() {
+  return applyDecorators(
+    ApiOperation({
+      summary: 'Listar catálogos de texto editables del sistema',
+      description: 'Devuelve todos los catálogos de texto disponibles. Los catálogos restringidos (ej. motivos-modificacion) se filtran si el usuario no es ADMINISTRADOR.',
+    }),
+    ApiResponse({ status: 200, description: 'Listado de catálogos de texto', type: [CatalogoTextoResponseDto] }),
+  );
+}
+
+export function ApiObtenerCatalogoTextoDoc() {
+  return applyDecorators(
+    ApiOperation({
+      summary: 'Obtener un catálogo de texto por ID',
+      description: 'Devuelve los items de texto del catálogo solicitado. Requiere rol ADMINISTRADOR para catálogos restringidos.',
+    }),
+    ApiParam({ name: 'id', description: 'Identificador del catálogo', example: 'hallazgos' }),
+    ApiResponse({ status: 200, description: 'Catálogo de texto encontrado', type: CatalogoTextoResponseDto }),
+    ApiResponse({ status: 403, description: 'Acceso restringido a rol ADMINISTRADOR' }),
+    ApiResponse({ status: 404, description: 'Catálogo no encontrado', type: NotFoundErrorDto }),
+  );
+}
+
+export function ApiActualizarCatalogoTextoDoc() {
+  return applyDecorators(
+    ApiOperation({
+      summary: 'Actualizar la lista completa de items de un catálogo de texto',
+      description: 'Reemplaza la lista ordenada de items. Registra evento inmutable en la bitácora de auditoría. Garantiza que documentos e inspecciones pasadas permanezcan intactos (§13).',
+    }),
+    ApiParam({ name: 'id', description: 'Identificador del catálogo', example: 'hallazgos' }),
+    ApiResponse({ status: 200, description: 'Catálogo actualizado exitosamente', type: CatalogoTextoResponseDto }),
+    ApiResponse({ status: 400, description: 'Estructura de items inválida', type: BadRequestErrorDto }),
+    ApiResponse({ status: 403, description: 'Permisos insuficientes para modificar el catálogo' }),
+    ApiResponse({ status: 404, description: 'Catálogo no encontrado', type: NotFoundErrorDto }),
+  );
+}
+
+export function ApiAgregarItemCatalogoTextoDoc() {
+  return applyDecorators(
+    ApiOperation({
+      summary: 'Agregar un nuevo item de texto a un catálogo existente',
+      description: 'Agrega un ítem al catálogo sin duplicados y genera registro en auditoría.',
+    }),
+    ApiParam({ name: 'id', description: 'Identificador del catálogo', example: 'hallazgos' }),
+    ApiResponse({ status: 201, description: 'Item agregado exitosamente', type: CatalogoTextoResponseDto }),
+    ApiResponse({ status: 400, description: 'Texto del item inválido', type: BadRequestErrorDto }),
+    ApiResponse({ status: 403, description: 'Permisos insuficientes para modificar el catálogo' }),
+    ApiResponse({ status: 404, description: 'Catálogo no encontrado', type: NotFoundErrorDto }),
+  );
+}
+
+// ==========================================
+// CONFIGURACION GLOBAL DEL SISTEMA
+// ==========================================
+
+export function ApiObtenerConfiguracionDoc() {
+  return applyDecorators(
+    ApiOperation({
+      summary: 'Consultar configuración global del sistema',
+      description: 'Devuelve datos del Director Técnico (nombre, CIP, firma para PDFs), resolución sanitaria y parámetros.',
+    }),
+    ApiResponse({ status: 200, description: 'Configuración global del sistema', type: ConfiguracionSistemaResponseDto }),
+  );
+}
+
+export function ApiActualizarConfiguracionDoc() {
+  return applyDecorators(
+    ApiOperation({
+      summary: 'Actualizar configuración global del sistema (Exclusivo ADMINISTRADOR)',
+      description: 'Permite modificar Director Técnico, CIP, firma digital o resolución sanitaria. Registra evento en auditoría.',
+    }),
+    ApiResponse({ status: 200, description: 'Configuración actualizada', type: ConfiguracionSistemaResponseDto }),
+    ApiResponse({ status: 400, description: 'Datos de configuración inválidos', type: BadRequestErrorDto }),
+    ApiResponse({ status: 403, description: 'Acceso restringido a rol ADMINISTRADOR' }),
+  );
+}
+
+// ==========================================
+// BITÁCORA INMUTABLE DE AUDITORÍA
+// ==========================================
+
+export function ApiConsultarAuditoriaDoc() {
+  return applyDecorators(
+    ApiOperation({
+      summary: 'Consultar registro inmutable de auditoría (Exclusivo ADMINISTRADOR - Decisión C6)',
+      description: 'Permite filtrar el historial de acciones y modificaciones por módulo, entidad, usuario o rango de fechas.',
+    }),
+    ApiResponse({ status: 200, description: 'Listado paginado de eventos de auditoría', type: AuditoriaPaginadaResponseDto }),
+    ApiResponse({ status: 400, description: 'Filtros o paginación inválidos', type: BadRequestErrorDto }),
+    ApiResponse({ status: 403, description: 'Acceso restringido a rol ADMINISTRADOR' }),
+  );
+}
+

@@ -53,6 +53,13 @@ describe('MantenimientoController', () => {
   let mockActualizarPersonalUseCase: jest.Mocked<any>;
   let mockDesactivarPersonalUseCase: jest.Mocked<DesactivarPersonalUseCase>;
   let mockActivarPersonalUseCase: jest.Mocked<any>;
+  let mockListarCatalogosTextoUseCase: jest.Mocked<any>;
+  let mockObtenerCatalogoTextoUseCase: jest.Mocked<any>;
+  let mockActualizarCatalogoTextoUseCase: jest.Mocked<any>;
+  let mockAgregarItemCatalogoTextoUseCase: jest.Mocked<any>;
+  let mockObtenerConfiguracionUseCase: jest.Mocked<any>;
+  let mockActualizarConfiguracionUseCase: jest.Mocked<any>;
+  let mockConsultarAuditoriaUseCase: jest.Mocked<any>;
 
   // Repositories Mocks
   let mockClienteRepo: jest.Mocked<ClienteRepository>;
@@ -87,6 +94,13 @@ describe('MantenimientoController', () => {
     mockActualizarPersonalUseCase = { execute: jest.fn() } as any;
     mockDesactivarPersonalUseCase = { execute: jest.fn() } as any;
     mockActivarPersonalUseCase = { execute: jest.fn() } as any;
+    mockListarCatalogosTextoUseCase = { execute: jest.fn() } as any;
+    mockObtenerCatalogoTextoUseCase = { execute: jest.fn() } as any;
+    mockActualizarCatalogoTextoUseCase = { execute: jest.fn() } as any;
+    mockAgregarItemCatalogoTextoUseCase = { execute: jest.fn() } as any;
+    mockObtenerConfiguracionUseCase = { execute: jest.fn() } as any;
+    mockActualizarConfiguracionUseCase = { execute: jest.fn() } as any;
+    mockConsultarAuditoriaUseCase = { execute: jest.fn() } as any;
 
     mockClienteRepo = {
       guardar: jest.fn(),
@@ -159,6 +173,13 @@ describe('MantenimientoController', () => {
       mockActualizarPersonalUseCase,
       mockDesactivarPersonalUseCase,
       mockActivarPersonalUseCase,
+      mockListarCatalogosTextoUseCase,
+      mockObtenerCatalogoTextoUseCase,
+      mockActualizarCatalogoTextoUseCase,
+      mockAgregarItemCatalogoTextoUseCase,
+      mockObtenerConfiguracionUseCase,
+      mockActualizarConfiguracionUseCase,
+      mockConsultarAuditoriaUseCase,
       mockClienteRepo,
       mockProyectoRepo,
       mockServicioRepo,
@@ -680,6 +701,148 @@ describe('MantenimientoController', () => {
       });
 
       expect(res.downloadUrl).toBe('https://s3.gafer.pe/download?signed=1');
+    });
+  });
+
+  describe('Catálogos de Texto, Configuración y Auditoría Endpoints (GAF-23)', () => {
+    it('debe listar catálogos de texto invocando el use case con el rol resuelto', async () => {
+      mockListarCatalogosTextoUseCase.execute.mockResolvedValue([
+        { id: 'hallazgos', titulo: 'Hallazgos frecuentes', items: ['Item 1'], soloAdministrador: false },
+      ]);
+
+      const req = { headers: { 'x-actor-rol': 'SUPERVISOR' } };
+      const res = await controller.listarCatalogosTexto(req);
+
+      expect(res).toHaveLength(1);
+      expect(res[0].id).toBe('hallazgos');
+      expect(mockListarCatalogosTextoUseCase.execute).toHaveBeenCalledWith('SUPERVISOR');
+    });
+
+    it('debe obtener un catálogo de texto por ID', async () => {
+      mockObtenerCatalogoTextoUseCase.execute.mockResolvedValue({
+        id: 'giros',
+        titulo: 'Giros de negocio',
+        items: ['Minería', 'Agroindustria'],
+        soloAdministrador: false,
+      });
+
+      const req = { headers: {} };
+      const res = await controller.obtenerCatalogoTexto('giros', req);
+
+      expect(res.id).toBe('giros');
+      expect(res.items).toHaveLength(2);
+      expect(mockObtenerCatalogoTextoUseCase.execute).toHaveBeenCalledWith('giros', undefined);
+    });
+
+    it('debe actualizar catálogo de texto', async () => {
+      mockActualizarCatalogoTextoUseCase.execute.mockResolvedValue({
+        id: 'hallazgos',
+        titulo: 'Hallazgos frecuentes',
+        items: ['Nuevo item'],
+        soloAdministrador: false,
+      });
+
+      const req = { headers: { 'x-actor-usuario': 'R.AGARATE', 'x-actor-rol': 'ADMINISTRADOR' } };
+      const res = await controller.actualizarCatalogoTexto('hallazgos', { items: ['Nuevo item'] } as any, req);
+
+      expect(res.items).toEqual(['Nuevo item']);
+      expect(mockActualizarCatalogoTextoUseCase.execute).toHaveBeenCalledWith({
+        id: 'hallazgos',
+        items: ['Nuevo item'],
+        actorId: null,
+        actorUsuario: 'R.AGARATE',
+        actorRol: 'ADMINISTRADOR',
+      });
+    });
+
+    it('debe agregar un item a un catálogo de texto', async () => {
+      mockAgregarItemCatalogoTextoUseCase.execute.mockResolvedValue({
+        id: 'hallazgos',
+        titulo: 'Hallazgos frecuentes',
+        items: ['Item 1', 'Item 2'],
+        soloAdministrador: false,
+      });
+
+      const req = { headers: { 'x-actor-usuario': 'R.AGARATE', 'x-actor-rol': 'ADMINISTRADOR' } };
+      const res = await controller.agregarItemCatalogoTexto('hallazgos', { item: 'Item 2' } as any, req);
+
+      expect(res.items).toHaveLength(2);
+      expect(mockAgregarItemCatalogoTextoUseCase.execute).toHaveBeenCalledWith({
+        id: 'hallazgos',
+        item: 'Item 2',
+        actorId: null,
+        actorUsuario: 'R.AGARATE',
+        actorRol: 'ADMINISTRADOR',
+      });
+    });
+
+    it('debe obtener y actualizar configuración del sistema', async () => {
+      mockObtenerConfiguracionUseCase.execute.mockResolvedValue({
+        id: 'global',
+        directorNombre: 'Ing. Carlos Medina Ruiz',
+        directorCip: '84512',
+        directorFirma: null,
+        resolucionSanitaria: '0023-2024-DESA/MINSA',
+        parametros: {},
+        actualizadoPor: 'ADMIN',
+        updatedAt: new Date('2026-10-04T00:00:00.000Z'),
+      });
+
+      const getRes = await controller.obtenerConfiguracion();
+      expect(getRes.director?.nombre).toBe('Ing. Carlos Medina Ruiz');
+      expect(getRes.resolucionSanitaria).toBe('0023-2024-DESA/MINSA');
+
+      mockActualizarConfiguracionUseCase.execute.mockResolvedValue({
+        id: 'global',
+        directorNombre: 'Ing. Carlos Medina Ruiz',
+        directorCip: '84512',
+        directorFirma: 'data:image/png;base64,abc',
+        resolucionSanitaria: '0023-2024-DESA/MINSA',
+        parametros: {},
+        actualizadoPor: 'ADMIN',
+        updatedAt: new Date('2026-10-04T01:00:00.000Z'),
+      });
+
+      const req = { headers: { 'x-actor-usuario': 'ADMIN', 'x-actor-rol': 'ADMINISTRADOR' } };
+      const patchRes = await controller.actualizarConfiguracion(
+        { director: { nombre: 'Ing. Carlos Medina Ruiz', cip: '84512', firma: 'data:image/png;base64,abc' } } as any,
+        req,
+      );
+      expect(patchRes.director?.firma).toBe('data:image/png;base64,abc');
+    });
+
+    it('debe consultar la bitácora de auditoría', async () => {
+      mockConsultarAuditoriaUseCase.execute.mockResolvedValue({
+        items: [
+          {
+            id: 'evt-1',
+            actorId: null,
+            actorUsuario: 'ADMIN',
+            actorRol: 'ADMINISTRADOR',
+            modulo: 'MANTENIMIENTO',
+            accion: 'ACTUALIZAR_CATALOGO_TEXTO',
+            entidad: 'catalogo_texto',
+            entidadId: 'hallazgos',
+            payloadAnterior: null,
+            payloadNuevo: { items: [] },
+            detalles: {},
+            createdAt: '2026-10-04T00:00:00.000Z',
+          },
+        ],
+        total: 1,
+      });
+
+      const req = { headers: { 'x-actor-rol': 'ADMINISTRADOR' } };
+      const res = await controller.consultarAuditoria({ limit: 10, offset: 0 } as any, req);
+
+      expect(res.total).toBe(1);
+      expect(res.limit).toBe(10);
+      expect(res.offset).toBe(0);
+      expect(res.items).toHaveLength(1);
+      expect(mockConsultarAuditoriaUseCase.execute).toHaveBeenCalledWith({
+        filtros: { limit: 10, offset: 0 },
+        actorRol: 'ADMINISTRADOR',
+      });
     });
   });
 });

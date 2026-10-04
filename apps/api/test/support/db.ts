@@ -12,8 +12,29 @@ import { assertTestDatabase, TEST_DATABASE_URL } from './config';
 export async function resetDb(db: Pool): Promise<void> {
   assertTestDatabase(TEST_DATABASE_URL);
   await db.query(
-    `TRUNCATE inspecciones_auditoria, inspecciones, servicios_contratados, proyectos,
-              clientes, insumos, equipos, personal RESTART IDENTITY CASCADE`,
+    `TRUNCATE auditoria_eventos, inspecciones_auditoria, inspecciones, servicios_contratados, proyectos,
+              clientes, insumos, equipos, personal, catalogos_texto, configuracion_sistema RESTART IDENTITY CASCADE;
+
+     INSERT INTO catalogos_texto (id, titulo, items, solo_administrador)
+     VALUES 
+     ('hallazgos', 'Tipos de hallazgo', '["Roedores vivos", "Excretas frescas", "Daño en empaques", "Nidos activos", "Sin evidencia"]'::jsonb, false),
+     ('acciones-correctivas', 'Acciones correctivas', '["Sellado de perforación", "Reubicación de estación", "Retiro de cebo vencido", "Refuerzo de cebado"]'::jsonb, false),
+     ('observaciones', 'Observaciones técnicas', '["Acceso restringido a zona", "Condiciones de humedad elevada", "Presencia de residuos orgánicos"]'::jsonb, false),
+     ('recomendaciones', 'Recomendaciones al cliente', '["Retirar cartones acumulados", "Reparar tuberías con fuga", "Mantener orden en almacén"]'::jsonb, false),
+     ('giros', 'Giros de negocio', '["Energía", "Alimentos", "Transporte", "Construcción", "Salud", "Educación", "Sector público"]'::jsonb, false),
+     ('motivos-modificacion', 'Motivos de modificación', '["Error de digitación en campo", "Solicitud del cliente", "Corrección de dato de insumo", "Observación de auditoría"]'::jsonb, true)
+     ON CONFLICT (id) DO NOTHING;
+
+     INSERT INTO configuracion_sistema (id, director_nombre, director_cip, director_firma, resolucion_sanitaria, parametros)
+     VALUES (
+         'global',
+         'Ing. Carlos Medina Ruiz',
+         '84512',
+         NULL,
+         '0023-2024-DESA/MINSA',
+         '{}'::jsonb
+     )
+     ON CONFLICT (id) DO NOTHING;`,
   );
 }
 

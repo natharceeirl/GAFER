@@ -24,6 +24,13 @@ export function api(baseUrl: string) {
       }
       return req.send(body ?? {});
     },
+    put: (url: string, body?: object, headers?: Record<string, string>) => {
+      let req = request(baseUrl).put(`/api${url}`);
+      if (headers) {
+        for (const [k, v] of Object.entries(headers)) req = req.set(k, v);
+      }
+      return req.send(body ?? {});
+    },
     patch: (url: string, body?: object, headers?: Record<string, string>) => {
       let req = request(baseUrl).patch(`/api${url}`);
       if (headers) {

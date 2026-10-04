@@ -4,11 +4,14 @@ import {
   Get,
   Inject,
   NotFoundException,
+  Optional,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
+  Req,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 
@@ -38,6 +41,16 @@ import { ActualizarEstadoEquipoUseCase } from '../application/actualizar-estado-
 import { ActualizarPersonalUseCase } from '../application/actualizar-personal.usecase';
 import { DesactivarPersonalUseCase } from '../application/desactivar-personal.usecase';
 import { ActivarPersonalUseCase } from '../application/activar-personal.usecase';
+
+// Use Cases - Catálogos de Texto, Configuración y Auditoría
+import { ListarCatalogosTextoUseCase } from '../application/listar-catalogos-texto.usecase';
+import { ObtenerCatalogoTextoUseCase } from '../application/obtener-catalogo-texto.usecase';
+import { ActualizarCatalogoTextoUseCase } from '../application/actualizar-catalogo-texto.usecase';
+import { AgregarItemCatalogoTextoUseCase } from '../application/agregar-item-catalogo-texto.usecase';
+import { ObtenerConfiguracionUseCase } from '../application/obtener-configuracion.usecase';
+import { ActualizarConfiguracionUseCase } from '../application/actualizar-configuracion.usecase';
+import { ConsultarAuditoriaUseCase } from '../application/consultar-auditoria.usecase';
+import { TOKEN_SERVICE, TokenServicePort } from '../../auth/domain/ports/token.service.port';
 
 // Ports
 import {
@@ -86,6 +99,10 @@ import {
   ActualizarPersonalDto,
   GenerarUploadUrlDto,
   GenerarDownloadUrlDto,
+  ActualizarCatalogoTextoDto,
+  AgregarItemCatalogoTextoDto,
+  ActualizarConfiguracionDto,
+  ConsultaAuditoriaDto,
 } from './dto/mantenimiento.dto';
 import { PaginacionQueryDto } from '../../shared/infrastructure/dto/paginacion.dto';
 
@@ -105,6 +122,9 @@ import {
   UploadUrlResponseDto,
   DownloadUrlResponseDto,
   EstadoSimpleResponseDto,
+  CatalogoTextoResponseDto,
+  ConfiguracionSistemaResponseDto,
+  AuditoriaPaginadaResponseDto,
 } from './dto/mantenimiento-response.dto';
 
 // Documentation Decorators (applyDecorators)
@@ -146,6 +166,13 @@ import {
   ApiActivarPersonalDoc,
   ApiGenerarUploadUrlDoc,
   ApiGenerarDownloadUrlDoc,
+  ApiListarCatalogosTextoDoc,
+  ApiObtenerCatalogoTextoDoc,
+  ApiActualizarCatalogoTextoDoc,
+  ApiAgregarItemCatalogoTextoDoc,
+  ApiObtenerConfiguracionDoc,
+  ApiActualizarConfiguracionDoc,
+  ApiConsultarAuditoriaDoc,
 } from './mantenimiento.controller.doc';
 
 @ApiTags('Mantenimiento')
@@ -175,6 +202,13 @@ export class MantenimientoController {
     private readonly actualizarPersonalUseCase: ActualizarPersonalUseCase,
     private readonly desactivarPersonalUseCase: DesactivarPersonalUseCase,
     private readonly activarPersonalUseCase: ActivarPersonalUseCase,
+    private readonly listarCatalogosTextoUseCase: ListarCatalogosTextoUseCase,
+    private readonly obtenerCatalogoTextoUseCase: ObtenerCatalogoTextoUseCase,
+    private readonly actualizarCatalogoTextoUseCase: ActualizarCatalogoTextoUseCase,
+    private readonly agregarItemCatalogoTextoUseCase: AgregarItemCatalogoTextoUseCase,
+    private readonly obtenerConfiguracionUseCase: ObtenerConfiguracionUseCase,
+    private readonly actualizarConfiguracionUseCase: ActualizarConfiguracionUseCase,
+    private readonly consultarAuditoriaUseCase: ConsultarAuditoriaUseCase,
     @Inject(CLIENTE_REPOSITORY)
     private readonly clienteRepo: ClienteRepository,
     @Inject(PROYECTO_REPOSITORY)
@@ -188,6 +222,9 @@ export class MantenimientoController {
     @Inject(PERSONAL_REPOSITORY)
     private readonly personalRepo: PersonalRepository,
     private readonly storageService: S3StorageService,
+    @Optional()
+    @Inject(TOKEN_SERVICE)
+    private readonly tokenService?: TokenServicePort,
   ) {}
 
   // ==========================================
@@ -909,5 +946,203 @@ export class MantenimientoController {
       downloadUrl,
       expiresInSeconds: 3600,
     };
+  }
+
+  // ==========================================
+  // CATALOGOS DE TEXTO (§7.7)
+  // ==========================================
+
+  @Get('catalogos-texto')
+  @ApiListarCatalogosTextoDoc()
+  async listarCatalogosTexto(@Req() req: any): Promise<CatalogoTextoResponseDto[]> {
+    const rol = this.resolverRol(req);
+    const catalogos = await this.listarCatalogosTextoUseCase.execute(rol);
+    return catalogos.map((c) => ({
+      id: c.id,
+      titulo: c.titulo,
+      items: c.items,
+      soloAdministrador: c.soloAdministrador,
+    }));
+  }
+
+  @Get('catalogos-texto/:id')
+  @ApiObtenerCatalogoTextoDoc()
+  async obtenerCatalogoTexto(
+    @Param('id') id: string,
+    @Req() req: any,
+  ): Promise<CatalogoTextoResponseDto> {
+    const rol = this.resolverRol(req);
+    const catalogo = await this.obtenerCatalogoTextoUseCase.execute(id, rol);
+    return {
+      id: catalogo.id,
+      titulo: catalogo.titulo,
+      items: catalogo.items,
+      soloAdministrador: catalogo.soloAdministrador,
+    };
+  }
+
+  @Put('catalogos-texto/:id')
+  @ApiActualizarCatalogoTextoDoc()
+  async actualizarCatalogoTexto(
+    @Param('id') id: string,
+    @Body() dto: ActualizarCatalogoTextoDto,
+    @Req() req: any,
+  ): Promise<CatalogoTextoResponseDto> {
+    const actor = this.resolverActor(req);
+    const catalogo = await this.actualizarCatalogoTextoUseCase.execute({
+      id,
+      items: dto.items,
+      actorId: actor.actorId,
+      actorUsuario: actor.actorUsuario,
+      actorRol: actor.actorRol,
+    });
+    return {
+      id: catalogo.id,
+      titulo: catalogo.titulo,
+      items: catalogo.items,
+      soloAdministrador: catalogo.soloAdministrador,
+    };
+  }
+
+  @Post('catalogos-texto/:id/items')
+  @ApiAgregarItemCatalogoTextoDoc()
+  async agregarItemCatalogoTexto(
+    @Param('id') id: string,
+    @Body() dto: AgregarItemCatalogoTextoDto,
+    @Req() req: any,
+  ): Promise<CatalogoTextoResponseDto> {
+    const actor = this.resolverActor(req);
+    const catalogo = await this.agregarItemCatalogoTextoUseCase.execute({
+      id,
+      item: dto.item,
+      actorId: actor.actorId,
+      actorUsuario: actor.actorUsuario,
+      actorRol: actor.actorRol,
+    });
+    return {
+      id: catalogo.id,
+      titulo: catalogo.titulo,
+      items: catalogo.items,
+      soloAdministrador: catalogo.soloAdministrador,
+    };
+  }
+
+  // ==========================================
+  // CONFIGURACION GLOBAL DEL SISTEMA (C7)
+  // ==========================================
+
+  @Get('configuracion')
+  @ApiObtenerConfiguracionDoc()
+  async obtenerConfiguracion(): Promise<ConfiguracionSistemaResponseDto> {
+    const config = await this.obtenerConfiguracionUseCase.execute();
+    return {
+      id: config.id,
+      director: {
+        nombre: config.directorNombre,
+        cip: config.directorCip,
+        firma: config.directorFirma,
+      },
+      resolucionSanitaria: config.resolucionSanitaria,
+      parametros: config.parametros,
+      actualizadoPor: config.actualizadoPor,
+      updatedAt: config.updatedAt ? new Date(config.updatedAt).toISOString() : undefined,
+    };
+  }
+
+  @Patch('configuracion')
+  @ApiActualizarConfiguracionDoc()
+  async actualizarConfiguracion(
+    @Body() dto: ActualizarConfiguracionDto,
+    @Req() req: any,
+  ): Promise<ConfiguracionSistemaResponseDto> {
+    const actor = this.resolverActor(req);
+    const config = await this.actualizarConfiguracionUseCase.execute({
+      director: dto.director,
+      resolucionSanitaria: dto.resolucionSanitaria,
+      parametros: dto.parametros,
+      actorId: actor.actorId,
+      actorUsuario: actor.actorUsuario,
+      actorRol: actor.actorRol,
+    });
+    return {
+      id: config.id,
+      director: {
+        nombre: config.directorNombre,
+        cip: config.directorCip,
+        firma: config.directorFirma,
+      },
+      resolucionSanitaria: config.resolucionSanitaria,
+      parametros: config.parametros,
+      actualizadoPor: config.actualizadoPor,
+      updatedAt: config.updatedAt ? new Date(config.updatedAt).toISOString() : undefined,
+    };
+  }
+
+  // ==========================================
+  // BITÁCORA INMUTABLE DE AUDITORÍA (C6)
+  // ==========================================
+
+  @Get('auditoria')
+  @ApiConsultarAuditoriaDoc()
+  async consultarAuditoria(
+    @Query() query: ConsultaAuditoriaDto,
+    @Req() req: any,
+  ): Promise<AuditoriaPaginadaResponseDto> {
+    const rol = this.resolverRol(req);
+    const resultado = await this.consultarAuditoriaUseCase.execute({
+      filtros: query,
+      actorRol: rol ?? '',
+    });
+    return {
+      total: resultado.total,
+      limit: query.limit ?? 20,
+      offset: query.offset ?? 0,
+      items: resultado.items,
+    };
+  }
+
+  // ==========================================
+  // HELPERS DE RESOLUCIÓN DE ACTOR Y ROL
+  // ==========================================
+
+  private resolverActor(req: any): { actorId: string | null; actorUsuario: string; actorRol: string } {
+    const authHeader = req?.headers?.['authorization'];
+    if (authHeader && typeof authHeader === 'string' && this.tokenService) {
+      const [tipo, token] = authHeader.split(' ');
+      if (tipo === 'Bearer' && token) {
+        try {
+          const payload = this.tokenService.verificarToken(token);
+          return {
+            actorId: payload.id,
+            actorUsuario: payload.usuario,
+            actorRol: payload.cargo,
+          };
+        } catch {
+          // Token inválido o expirado
+        }
+      }
+    }
+
+    const actorUsuario = (req?.headers?.['x-actor-usuario'] || req?.headers?.['x-actor'] || req?.user?.usuario || 'ADMIN') as string;
+    const actorRol = (req?.headers?.['x-actor-rol'] || req?.user?.cargo || 'ADMINISTRADOR') as string;
+    const actorId = (req?.headers?.['x-actor-id'] || req?.user?.id || null) as string | null;
+
+    return { actorId, actorUsuario, actorRol };
+  }
+
+  private resolverRol(req: any): string | undefined {
+    const authHeader = req?.headers?.['authorization'];
+    if (authHeader && typeof authHeader === 'string' && this.tokenService) {
+      const [tipo, token] = authHeader.split(' ');
+      if (tipo === 'Bearer' && token) {
+        try {
+          const payload = this.tokenService.verificarToken(token);
+          return payload.cargo;
+        } catch {
+          return undefined;
+        }
+      }
+    }
+    return (req?.headers?.['x-actor-rol'] || req?.user?.cargo) as string | undefined;
   }
 }

@@ -36,6 +36,17 @@ import { SERVICIO_CONTRATADO_REPOSITORY } from './domain/ports/servicio-contrata
 import { INSUMO_REPOSITORY } from './domain/ports/insumo.repository';
 import { EQUIPO_REPOSITORY } from './domain/ports/equipo.repository';
 import { PERSONAL_REPOSITORY } from './domain/ports/personal.repository';
+import { CATALOGO_TEXTO_REPOSITORY } from './domain/ports/catalogo-texto.repository';
+import { CONFIGURACION_REPOSITORY } from './domain/ports/configuracion.repository';
+
+// Use Cases - Catálogos de Texto, Configuración y Auditoría
+import { ListarCatalogosTextoUseCase } from './application/listar-catalogos-texto.usecase';
+import { ObtenerCatalogoTextoUseCase } from './application/obtener-catalogo-texto.usecase';
+import { ActualizarCatalogoTextoUseCase } from './application/actualizar-catalogo-texto.usecase';
+import { AgregarItemCatalogoTextoUseCase } from './application/agregar-item-catalogo-texto.usecase';
+import { ObtenerConfiguracionUseCase } from './application/obtener-configuracion.usecase';
+import { ActualizarConfiguracionUseCase } from './application/actualizar-configuracion.usecase';
+import { ConsultarAuditoriaUseCase } from './application/consultar-auditoria.usecase';
 
 // Adapters
 import { KyselyClienteRepository } from './infrastructure/adapters/kysely-cliente.repository';
@@ -44,9 +55,12 @@ import { KyselyServicioContratadoRepository } from './infrastructure/adapters/ky
 import { KyselyInsumoRepository } from './infrastructure/adapters/kysely-insumo.repository';
 import { KyselyEquipoRepository } from './infrastructure/adapters/kysely-equipo.repository';
 import { KyselyPersonalRepository } from './infrastructure/adapters/kysely-personal.repository';
+import { KyselyCatalogoTextoRepository } from './infrastructure/adapters/kysely-catalogo-texto.repository';
+import { KyselyConfiguracionRepository } from './infrastructure/adapters/kysely-configuracion.repository';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [StorageModule],
+  imports: [StorageModule, AuthModule],
   controllers: [MantenimientoController],
   providers: [
     // Casos de Uso
@@ -74,6 +88,15 @@ import { KyselyPersonalRepository } from './infrastructure/adapters/kysely-perso
     DesactivarPersonalUseCase,
     ActivarPersonalUseCase,
 
+    // Casos de Uso - Catálogos de Texto, Configuración y Auditoría
+    ListarCatalogosTextoUseCase,
+    ObtenerCatalogoTextoUseCase,
+    ActualizarCatalogoTextoUseCase,
+    AgregarItemCatalogoTextoUseCase,
+    ObtenerConfiguracionUseCase,
+    ActualizarConfiguracionUseCase,
+    ConsultarAuditoriaUseCase,
+
     // Adaptadores Kysely enlazados a sus Puertos
     { provide: CLIENTE_REPOSITORY, useClass: KyselyClienteRepository },
     { provide: PROYECTO_REPOSITORY, useClass: KyselyProyectoRepository },
@@ -84,6 +107,8 @@ import { KyselyPersonalRepository } from './infrastructure/adapters/kysely-perso
     { provide: INSUMO_REPOSITORY, useClass: KyselyInsumoRepository },
     { provide: EQUIPO_REPOSITORY, useClass: KyselyEquipoRepository },
     { provide: PERSONAL_REPOSITORY, useClass: KyselyPersonalRepository },
+    { provide: CATALOGO_TEXTO_REPOSITORY, useClass: KyselyCatalogoTextoRepository },
+    { provide: CONFIGURACION_REPOSITORY, useClass: KyselyConfiguracionRepository },
   ],
   exports: [
     RegistrarClienteUseCase,
@@ -109,12 +134,21 @@ import { KyselyPersonalRepository } from './infrastructure/adapters/kysely-perso
     ActualizarPersonalUseCase,
     DesactivarPersonalUseCase,
     ActivarPersonalUseCase,
+    ListarCatalogosTextoUseCase,
+    ObtenerCatalogoTextoUseCase,
+    ActualizarCatalogoTextoUseCase,
+    AgregarItemCatalogoTextoUseCase,
+    ObtenerConfiguracionUseCase,
+    ActualizarConfiguracionUseCase,
+    ConsultarAuditoriaUseCase,
     CLIENTE_REPOSITORY,
     PROYECTO_REPOSITORY,
     SERVICIO_CONTRATADO_REPOSITORY,
     INSUMO_REPOSITORY,
     EQUIPO_REPOSITORY,
     PERSONAL_REPOSITORY,
+    CATALOGO_TEXTO_REPOSITORY,
+    CONFIGURACION_REPOSITORY,
   ],
 })
 export class MantenimientoModule {}
