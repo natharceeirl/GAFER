@@ -4,6 +4,9 @@
 -- Base de Datos: PostgreSQL 16
 -- =============================================================================
 
+DROP TABLE IF EXISTS auditoria_eventos CASCADE;
+DROP TABLE IF EXISTS configuracion_sistema CASCADE;
+DROP TABLE IF EXISTS catalogos_texto CASCADE;
 DROP TABLE IF EXISTS documentos CASCADE;
 DROP FUNCTION IF EXISTS fn_siguiente_correlativo(UUID, VARCHAR);
 DROP TABLE IF EXISTS correlativos CASCADE;

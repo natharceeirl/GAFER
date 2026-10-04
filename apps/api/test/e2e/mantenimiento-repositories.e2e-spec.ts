@@ -9,6 +9,14 @@ import {
 import { INSUMO_REPOSITORY, InsumoRepository } from '../../src/mantenimiento/domain/ports/insumo.repository';
 import { EQUIPO_REPOSITORY, EquipoRepository } from '../../src/mantenimiento/domain/ports/equipo.repository';
 import { PERSONAL_REPOSITORY, PersonalRepository } from '../../src/mantenimiento/domain/ports/personal.repository';
+import {
+  CATALOGO_TEXTO_REPOSITORY,
+  CatalogoTextoRepository,
+} from '../../src/mantenimiento/domain/ports/catalogo-texto.repository';
+import {
+  CONFIGURACION_REPOSITORY,
+  ConfiguracionRepository,
+} from '../../src/mantenimiento/domain/ports/configuracion.repository';
 import { Cliente } from '../../src/mantenimiento/domain/cliente';
 import { Proyecto } from '../../src/mantenimiento/domain/proyecto';
 import { ServicioContratado } from '../../src/mantenimiento/domain/servicio-contratado';
@@ -16,7 +24,7 @@ import { Insumo } from '../../src/mantenimiento/domain/insumo';
 import { Equipo } from '../../src/mantenimiento/domain/equipo';
 import { Personal } from '../../src/mantenimiento/domain/personal';
 
-describe('Kysely Repositories contra PostgreSQL real (GAF-21 & GAF-22)', () => {
+describe('Kysely Repositories contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)', () => {
   let t: TestApp;
   let clienteRepo: ClienteRepository;
   let proyectoRepo: ProyectoRepository;
@@ -24,6 +32,8 @@ describe('Kysely Repositories contra PostgreSQL real (GAF-21 & GAF-22)', () => {
   let insumoRepo: InsumoRepository;
   let equipoRepo: EquipoRepository;
   let personalRepo: PersonalRepository;
+  let catalogoRepo: CatalogoTextoRepository;
+  let configRepo: ConfiguracionRepository;
 
   beforeAll(async () => {
     t = await createTestApp();
@@ -33,6 +43,8 @@ describe('Kysely Repositories contra PostgreSQL real (GAF-21 & GAF-22)', () => {
     insumoRepo = t.app.get<InsumoRepository>(INSUMO_REPOSITORY);
     equipoRepo = t.app.get<EquipoRepository>(EQUIPO_REPOSITORY);
     personalRepo = t.app.get<PersonalRepository>(PERSONAL_REPOSITORY);
+    catalogoRepo = t.app.get<CatalogoTextoRepository>(CATALOGO_TEXTO_REPOSITORY);
+    configRepo = t.app.get<ConfiguracionRepository>(CONFIGURACION_REPOSITORY);
   });
 
   beforeEach(async () => {
@@ -430,6 +442,59 @@ describe('Kysely Repositories contra PostgreSQL real (GAF-21 & GAF-22)', () => {
       const p2Actualizado = await personalRepo.buscarPorId(p2.id);
       expect(p2Actualizado?.estado).toBe('ACTIVO');
       expect(p2Actualizado?.telefono).toBe('958999000');
+    });
+  });
+
+  describe('KyselyCatalogoTextoRepository (GAF-23)', () => {
+    it('lee catálogo sembrado por migración, agrega items y persiste en PostgreSQL', async () => {
+      const hallazgos = await catalogoRepo.buscarPorId('hallazgos');
+      expect(hallazgos).not.toBeNull();
+      expect(hallazgos?.id).toBe('hallazgos');
+      expect(hallazgos?.items.length).toBeGreaterThan(0);
+
+      const itemsOriginales = [...(hallazgos?.items ?? [])];
+      hallazgos?.agregarItem('NUEVO VECTOR DETECTADO (Aedes aegypti)');
+      await catalogoRepo.guardar(hallazgos!);
+
+      const persistido = await catalogoRepo.buscarPorId('hallazgos');
+      expect(persistido?.items).toContain('NUEVO VECTOR DETECTADO (Aedes aegypti)');
+      expect(persistido?.items.length).toBe(itemsOriginales.length + 1);
+
+      const todos = await catalogoRepo.listar();
+      expect(todos.length).toBe(6);
+    });
+  });
+
+  describe('KyselyConfiguracionRepository (GAF-23)', () => {
+    it('obtiene configuración global por defecto y actualiza Director Técnico y parámetros', async () => {
+      const config = await configRepo.obtener();
+      expect(config.id).toBe('global');
+      expect(config.directorNombre).toBe('Ing. Carlos Medina Ruiz');
+      expect(config.directorCip).toBe('84512');
+
+      config.actualizarDirector('Ing. Roberto Mendoza', '99881', 'data:image/png;base64,firmaprueba');
+      config.actualizarResolucionSanitaria('0099-2026-DESA/MINSA');
+      config.actualizarParametros({ diasVigenciaCertificado: 30 });
+
+      const adminUser = new Personal({
+        dni: '99887766',
+        nombres: 'Admin',
+        apellidos: 'Principal',
+        cargo: 'ADMINISTRADOR',
+        telefono: '999888777',
+      });
+      await personalRepo.guardar(adminUser);
+      config.actualizadoPor = adminUser.id;
+
+      await configRepo.guardar(config);
+
+      const recuperado = await configRepo.obtener();
+      expect(recuperado.directorNombre).toBe('Ing. Roberto Mendoza');
+      expect(recuperado.directorCip).toBe('99881');
+      expect(recuperado.directorFirma).toBe('data:image/png;base64,firmaprueba');
+      expect(recuperado.resolucionSanitaria).toBe('0099-2026-DESA/MINSA');
+      expect(recuperado.parametros).toEqual({ diasVigenciaCertificado: 30 });
+      expect(recuperado.actualizadoPor).toBe(adminUser.id);
     });
   });
 });

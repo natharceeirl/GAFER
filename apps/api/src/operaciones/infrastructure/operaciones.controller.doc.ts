@@ -3,6 +3,7 @@ import { ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
 import {
   InspeccionResponseDto,
   InspeccionCerradaResponseDto,
+  LoteSyncResponseDto,
 } from './dto/operaciones-response.dto';
 import {
   BadRequestErrorDto,
@@ -154,8 +155,9 @@ export function ApiSincronizarInspeccionDoc() {
       example: 'insp-1111111-1111-1111-1111-111111111111',
     }),
     ApiResponse({
-      status: 200,
+      status: 201,
       description: 'Lote de sincronización procesado exitosamente',
+      type: LoteSyncResponseDto,
     }),
     ApiResponse({
       status: 400,

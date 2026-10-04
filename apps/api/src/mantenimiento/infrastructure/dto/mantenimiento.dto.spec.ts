@@ -1,7 +1,11 @@
 import {
+  ActualizarCatalogoTextoDto,
   ActualizarClienteDto,
+  ActualizarConfiguracionDto,
   ActualizarInsumoDto,
+  AgregarItemCatalogoTextoDto,
   CambiarEstadoEquipoDto,
+  ConsultaAuditoriaDto,
   CrearClienteDto,
   CrearEquipoDto,
   CrearInsumoDto,
@@ -227,5 +231,68 @@ describe('GenerarUploadUrlDto y GenerarDownloadUrlDto', () => {
   it('rechazan una clave vacía', () => {
     expect(rutasRechazadas(GenerarUploadUrlDto, { key: '' })).toEqual(['key']);
     expect(rutasRechazadas(GenerarDownloadUrlDto, { key: '' })).toEqual(['key']);
+  });
+});
+
+describe('ActualizarCatalogoTextoDto y AgregarItemCatalogoTextoDto', () => {
+  it('valida actualización de catálogo con lista de items válidos', () => {
+    expect(validarDto(ActualizarCatalogoTextoDto, { items: ['CUCARACHA', 'MOSCA'] })).toEqual({
+      items: ['CUCARACHA', 'MOSCA'],
+    });
+  });
+
+  it('rechaza catálogo con items vacíos', () => {
+    expect(rutasRechazadas(ActualizarCatalogoTextoDto, { items: [''] })).toEqual(['items.0']);
+  });
+
+  it('valida agregar item individual', () => {
+    expect(validarDto(AgregarItemCatalogoTextoDto, { item: 'ROEDOR' })).toEqual({ item: 'ROEDOR' });
+  });
+
+  it('rechaza agregar item vacío', () => {
+    expect(rutasRechazadas(AgregarItemCatalogoTextoDto, { item: '' })).toEqual(['item']);
+  });
+});
+
+describe('ActualizarConfiguracionDto', () => {
+  it('acepta actualización de director y resolución', () => {
+    expect(
+      validarDto(ActualizarConfiguracionDto, {
+        director: { nombre: 'Ing. Carlos Medina', cip: '84512' },
+        resolucionSanitaria: '0023-2024-DESA/MINSA',
+      }),
+    ).toEqual({
+      director: { nombre: 'Ing. Carlos Medina', cip: '84512' },
+      resolucionSanitaria: '0023-2024-DESA/MINSA',
+    });
+  });
+
+  it('rechaza CIP con formato inválido', () => {
+    expect(
+      rutasRechazadas(ActualizarConfiguracionDto, {
+        director: { nombre: 'Carlos', cip: '12' },
+      }),
+    ).toEqual(['director.cip']);
+  });
+});
+
+describe('ConsultaAuditoriaDto', () => {
+  it('acepta filtros de auditoría válidos y aplica defaults de paginación', () => {
+    expect(
+      validarDto(ConsultaAuditoriaDto, {
+        modulo: 'MANTENIMIENTO',
+        actorUsuario: 'ADMIN',
+      }),
+    ).toEqual({
+      modulo: 'MANTENIMIENTO',
+      actorUsuario: 'ADMIN',
+      limit: 20,
+      offset: 0,
+    });
+  });
+
+  it('rechaza módulo desconocido o límite fuera de rango', () => {
+    expect(rutasRechazadas(ConsultaAuditoriaDto, { modulo: 'MODULO_FALSO' })).toEqual(['modulo']);
+    expect(rutasRechazadas(ConsultaAuditoriaDto, { limit: 200 })).toEqual(['limit']);
   });
 });
