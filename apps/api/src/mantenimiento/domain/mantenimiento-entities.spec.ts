@@ -149,6 +149,33 @@ describe('Mantenimiento Domain Entities — Business Rules (T2.2)', () => {
           }),
       ).toThrow('El DNI debe contener exactamente 8 dígitos numéricos');
     });
+
+    it('should allow updating personal data and toggling active status', () => {
+      const personal = new Personal({
+        id: 'u1111111-1111-1111-1111-111111111111',
+        dni: '45892312',
+        nombres: 'Juan',
+        apellidos: 'Perez Gomez',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '987654321',
+        usuario: 'JPEREZ',
+      });
+
+      personal.actualizarDatos({
+        nombres: 'Juan Carlos',
+        cargo: 'SUPERVISOR',
+        telefono: '958000111',
+      });
+      expect(personal.nombres).toBe('Juan Carlos');
+      expect(personal.cargo).toBe('SUPERVISOR');
+      expect(personal.telefono).toBe('958000111');
+      expect(personal.nombreCompleto).toBe('Juan Carlos Perez Gomez');
+
+      personal.desactivar();
+      expect(personal.getEstado()).toBe('INACTIVO');
+      personal.activar();
+      expect(personal.getEstado()).toBe('ACTIVO');
+    });
   });
 
   describe('Equipo Entity', () => {
@@ -166,6 +193,24 @@ describe('Mantenimiento Domain Entities — Business Rules (T2.2)', () => {
       equipo.cambiarEstadoOperativo('MANTENIMIENTO');
       expect(equipo.estaOperativo()).toBe(false);
       expect(equipo.getEstadoOperativo()).toBe('MANTENIMIENTO');
+    });
+
+    it('should allow updating equipment details', () => {
+      const equipo = new Equipo({
+        id: 'e1111111-1111-1111-1111-111111111111',
+        codigoInterno: 'EQ-NEB-01',
+        nombre: 'Nebulizadora ULV Vector Fog',
+        tipo: 'NEBULIZACION',
+      });
+
+      equipo.actualizarDatos({
+        nombre: 'Nebulizadora ULV Actualizada',
+        marcaModelo: 'VectorFog H200',
+        ultimoMantenimiento: '2026-09-01',
+      });
+      expect(equipo.nombre).toBe('Nebulizadora ULV Actualizada');
+      expect(equipo.marcaModelo).toBe('VectorFog H200');
+      expect(equipo.ultimoMantenimiento).toBe('2026-09-01');
     });
   });
 });

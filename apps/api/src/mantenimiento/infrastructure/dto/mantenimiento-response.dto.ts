@@ -165,6 +165,9 @@ export class InsumoResponseDto {
   @ApiProperty({ example: 'insumos/msds/cipermetrina-25.pdf' })
   hojaMsdsKey!: string;
 
+  @ApiProperty({ example: 'insumos/resoluciones/rd-1425.pdf', nullable: true })
+  resolucionKey?: string | null;
+
   @ApiProperty({ example: 'Bayer S.A.', nullable: true })
   proveedor?: string | null;
 
@@ -204,6 +207,15 @@ export class EquipoResponseDto {
 
   @ApiProperty({ example: 'OPERATIVO', enum: ['OPERATIVO', 'MANTENIMIENTO', 'FUERA_SERVICIO'] })
   estadoOperativo!: 'OPERATIVO' | 'MANTENIMIENTO' | 'FUERA_SERVICIO';
+
+  @ApiProperty({ example: '2026-01-15', nullable: true })
+  fechaAdquisicion?: string | null;
+
+  @ApiProperty({ example: '2026-06-01', nullable: true })
+  ultimoMantenimiento?: string | null;
+
+  @ApiProperty({ example: '2026-12-01', nullable: true })
+  proximoMantenimiento?: string | null;
 }
 
 export class EquipoPaginadoResponseDto {

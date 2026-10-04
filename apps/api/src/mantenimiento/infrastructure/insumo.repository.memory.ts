@@ -27,4 +27,8 @@ export class InsumoRepositoryMemory implements InsumoRepository {
       (i) => i.getEstado() === 'ACTIVO',
     );
   }
+
+  async listarTodos(): Promise<Insumo[]> {
+    return Array.from(this.store.values());
+  }
 }

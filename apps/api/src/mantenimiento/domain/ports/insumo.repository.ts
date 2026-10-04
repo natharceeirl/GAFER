@@ -7,4 +7,5 @@ export interface InsumoRepository {
   buscarPorId(id: string): Promise<Insumo | null>;
   buscarPorDigesa(registroDigesa: string): Promise<Insumo | null>;
   listarActivos(): Promise<Insumo[]>;
+  listarTodos(): Promise<Insumo[]>;
 }

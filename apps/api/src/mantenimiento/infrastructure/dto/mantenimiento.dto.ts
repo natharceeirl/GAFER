@@ -2,11 +2,13 @@ import {
   CambioEstadoEquipoSchema,
   ClienteActualizacionSchema,
   ClienteRegistroSchema,
+  EquipoActualizacionSchema,
   EquipoRegistroSchema,
   GenerarDownloadUrlSchema,
   GenerarUploadUrlSchema,
   InsumoActualizacionSchema,
   InsumoRegistroSchema,
+  PersonalActualizacionSchema,
   PersonalRegistroSchema,
   ProyectoActualizacionSchema,
   ProyectoRegistroSchema,
@@ -131,6 +133,14 @@ export class CambiarEstadoEquipoDto extends createZodDtoDocumentado(CambioEstado
   estadoOperativo: 'MANTENIMIENTO',
 }) {}
 
+export class ActualizarEquipoDto extends createZodDtoDocumentado(EquipoActualizacionSchema, {
+  nombre: 'Nebulizadora ULV Vector Fog C-150 Plus',
+  marcaModelo: 'Vector Fog C-150+',
+  estadoOperativo: 'MANTENIMIENTO',
+  ultimoMantenimiento: '2026-09-01',
+  proximoMantenimiento: '2027-03-01',
+}) {}
+
 export class CrearPersonalDto extends createZodDtoDocumentado(PersonalRegistroSchema, {
   dni: '45892312',
   nombres: 'Juan',
@@ -138,6 +148,13 @@ export class CrearPersonalDto extends createZodDtoDocumentado(PersonalRegistroSc
   cargo: 'TECNICO_OPERADOR',
   telefono: '958123456',
   usuario: 'JPEREZ',
+}) {}
+
+export class ActualizarPersonalDto extends createZodDtoDocumentado(PersonalActualizacionSchema, {
+  nombres: 'Juan Carlos',
+  apellidos: 'Perez Gomez',
+  cargo: 'SUPERVISOR',
+  telefono: '958999111',
 }) {}
 
 export class GenerarUploadUrlDto extends createZodDtoDocumentado(GenerarUploadUrlSchema, {

@@ -24,6 +24,7 @@ import { Proyecto } from '../domain/proyecto';
 import { ServicioContratado } from '../domain/servicio-contratado';
 import { Insumo } from '../domain/insumo';
 import { Equipo } from '../domain/equipo';
+import { Personal } from '../domain/personal';
 
 describe('MantenimientoController', () => {
   let controller: MantenimientoController;
@@ -44,10 +45,14 @@ describe('MantenimientoController', () => {
   let mockInsumoUseCase: jest.Mocked<RegistrarInsumoUseCase>;
   let mockActualizarInsumoUseCase: jest.Mocked<any>;
   let mockDesactivarInsumoUseCase: jest.Mocked<DesactivarInsumoUseCase>;
+  let mockActivarInsumoUseCase: jest.Mocked<any>;
   let mockEquipoUseCase: jest.Mocked<RegistrarEquipoUseCase>;
+  let mockActualizarEquipoUseCase: jest.Mocked<any>;
   let mockActualizarEstadoEquipoUseCase: jest.Mocked<ActualizarEstadoEquipoUseCase>;
   let mockPersonalUseCase: jest.Mocked<RegistrarPersonalUseCase>;
+  let mockActualizarPersonalUseCase: jest.Mocked<any>;
   let mockDesactivarPersonalUseCase: jest.Mocked<DesactivarPersonalUseCase>;
+  let mockActivarPersonalUseCase: jest.Mocked<any>;
 
   // Repositories Mocks
   let mockClienteRepo: jest.Mocked<ClienteRepository>;
@@ -74,10 +79,14 @@ describe('MantenimientoController', () => {
     mockInsumoUseCase = { execute: jest.fn() } as any;
     mockActualizarInsumoUseCase = { execute: jest.fn() } as any;
     mockDesactivarInsumoUseCase = { execute: jest.fn() } as any;
+    mockActivarInsumoUseCase = { execute: jest.fn() } as any;
     mockEquipoUseCase = { execute: jest.fn() } as any;
+    mockActualizarEquipoUseCase = { execute: jest.fn() } as any;
     mockActualizarEstadoEquipoUseCase = { execute: jest.fn() } as any;
     mockPersonalUseCase = { execute: jest.fn() } as any;
+    mockActualizarPersonalUseCase = { execute: jest.fn() } as any;
     mockDesactivarPersonalUseCase = { execute: jest.fn() } as any;
+    mockActivarPersonalUseCase = { execute: jest.fn() } as any;
 
     mockClienteRepo = {
       guardar: jest.fn(),
@@ -102,6 +111,7 @@ describe('MantenimientoController', () => {
       buscarPorId: jest.fn(),
       buscarPorDigesa: jest.fn(),
       listarActivos: jest.fn().mockResolvedValue([]),
+      listarTodos: jest.fn().mockResolvedValue([]),
     };
     mockEquipoRepo = {
       guardar: jest.fn(),
@@ -116,6 +126,7 @@ describe('MantenimientoController', () => {
       buscarPorDni: jest.fn(),
       buscarPorUsuario: jest.fn(),
       listarActivos: jest.fn().mockResolvedValue([]),
+      listarTodos: jest.fn().mockResolvedValue([]),
     };
     mockStorageService = {
       getBucketName: jest.fn().mockReturnValue('gafer-test-bucket'),
@@ -140,10 +151,14 @@ describe('MantenimientoController', () => {
       mockInsumoUseCase,
       mockActualizarInsumoUseCase,
       mockDesactivarInsumoUseCase,
+      mockActivarInsumoUseCase,
       mockEquipoUseCase,
+      mockActualizarEquipoUseCase,
       mockActualizarEstadoEquipoUseCase,
       mockPersonalUseCase,
+      mockActualizarPersonalUseCase,
       mockDesactivarPersonalUseCase,
+      mockActivarPersonalUseCase,
       mockClienteRepo,
       mockProyectoRepo,
       mockServicioRepo,
@@ -409,11 +424,11 @@ describe('MantenimientoController', () => {
       expect(res.registroDigesa).toBe('RD-1425');
     });
 
-    it('debe listar insumos activos', async () => {
-      mockInsumoRepo.listarActivos.mockResolvedValue([]);
+    it('debe listar insumos con paginación', async () => {
+      mockInsumoRepo.listarTodos.mockResolvedValue([]);
       const res = await controller.listarInsumos({ limit: 10, offset: 0 });
       expect(res.items).toEqual([]);
-      expect(mockInsumoRepo.listarActivos).toHaveBeenCalledTimes(1);
+      expect(mockInsumoRepo.listarTodos).toHaveBeenCalledTimes(1);
     });
 
     it('debe actualizar un insumo a través del use case', async () => {
@@ -445,6 +460,27 @@ describe('MantenimientoController', () => {
       });
     });
 
+    it('debe obtener un insumo por ID', async () => {
+      const insumo = new Insumo({
+        id: 'ins-1',
+        nombreComercial: 'Cipermetrina 25%',
+        principioActivo: 'Cipermetrina',
+        presentacion: 'LIQUIDO',
+        unidadMedida: 'L',
+        registroDigesa: 'RD-1425',
+        concentracion: '25%',
+        dosisEstandar: '5 ml/L',
+        fichaTecnicaKey: 'fichas/ciper.pdf',
+        hojaMsdsKey: 'msds/ciper.pdf',
+        estado: 'ACTIVO',
+      });
+      mockInsumoRepo.buscarPorId.mockResolvedValue(insumo);
+
+      const res = await controller.obtenerInsumo('ins-1');
+      expect(res.id).toBe('ins-1');
+      expect(res.nombreComercial).toBe('Cipermetrina 25%');
+    });
+
     it('debe desactivar un insumo', async () => {
       const insumoInactivo = new Insumo({
         id: 'ins-1',
@@ -464,9 +500,60 @@ describe('MantenimientoController', () => {
       const res = await controller.desactivarInsumo('ins-1');
       expect(res.estado).toBe('INACTIVO');
     });
+
+    it('debe activar un insumo', async () => {
+      const insumoActivo = new Insumo({
+        id: 'ins-1',
+        nombreComercial: 'Cipermetrina 25%',
+        principioActivo: 'Cipermetrina',
+        presentacion: 'LIQUIDO',
+        unidadMedida: 'L',
+        registroDigesa: 'RD-1425',
+        concentracion: '25%',
+        dosisEstandar: '5 ml/L',
+        fichaTecnicaKey: 'fichas/ciper.pdf',
+        hojaMsdsKey: 'msds/ciper.pdf',
+        estado: 'ACTIVO',
+      });
+      mockActivarInsumoUseCase.execute.mockResolvedValue(insumoActivo);
+
+      const res = await controller.activarInsumo('ins-1');
+      expect(res.estado).toBe('ACTIVO');
+    });
   });
 
   describe('Equipos Endpoints', () => {
+    it('debe obtener un equipo por ID', async () => {
+      const equipo = new Equipo({
+        id: 'eq-1',
+        codigoInterno: 'EQ-01',
+        nombre: 'Nebulizador',
+        tipo: 'NEBULIZACION',
+        estadoOperativo: 'OPERATIVO',
+      });
+      mockEquipoRepo.buscarPorId.mockResolvedValue(equipo);
+
+      const res = await controller.obtenerEquipo('eq-1');
+      expect(res.id).toBe('eq-1');
+      expect(res.codigoInterno).toBe('EQ-01');
+    });
+
+    it('debe actualizar datos de un equipo', async () => {
+      const equipo = new Equipo({
+        id: 'eq-1',
+        codigoInterno: 'EQ-01-REV',
+        nombre: 'Nebulizador Actualizado',
+        tipo: 'NEBULIZACION',
+        estadoOperativo: 'OPERATIVO',
+      });
+      mockActualizarEquipoUseCase.execute.mockResolvedValue(equipo);
+
+      const res = await controller.actualizarEquipo('eq-1', {
+        nombre: 'Nebulizador Actualizado',
+      });
+      expect(res.nombre).toBe('Nebulizador Actualizado');
+    });
+
     it('debe cambiar estado operativo de un equipo', async () => {
       const equipo = new Equipo({
         id: 'eq-1',
@@ -482,6 +569,97 @@ describe('MantenimientoController', () => {
       });
 
       expect(res.estadoOperativo).toBe('MANTENIMIENTO');
+    });
+  });
+
+  describe('Personal Endpoints', () => {
+    it('debe registrar un personal', async () => {
+      const personal = new Personal({
+        id: 'p-1',
+        dni: '45892312',
+        nombres: 'Juan',
+        apellidos: 'Perez',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '958123456',
+        usuario: 'JPEREZ',
+      });
+      mockPersonalUseCase.execute.mockResolvedValue(personal);
+
+      const res = await controller.crearPersonal({
+        dni: '45892312',
+        nombres: 'Juan',
+        apellidos: 'Perez',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '958123456',
+        usuario: 'JPEREZ',
+      });
+      expect(res.id).toBe('p-1');
+      expect(res.dni).toBe('45892312');
+    });
+
+    it('debe obtener un personal por ID', async () => {
+      const personal = new Personal({
+        id: 'p-1',
+        dni: '45892312',
+        nombres: 'Juan',
+        apellidos: 'Perez',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '958123456',
+      });
+      mockPersonalRepo.buscarPorId.mockResolvedValue(personal);
+
+      const res = await controller.obtenerPersonal('p-1');
+      expect(res.id).toBe('p-1');
+      expect(res.nombres).toBe('Juan');
+    });
+
+    it('debe actualizar datos de un personal', async () => {
+      const personal = new Personal({
+        id: 'p-1',
+        dni: '45892312',
+        nombres: 'Juan Carlos',
+        apellidos: 'Perez',
+        cargo: 'SUPERVISOR',
+        telefono: '958999888',
+      });
+      mockActualizarPersonalUseCase.execute.mockResolvedValue(personal);
+
+      const res = await controller.actualizarPersonal('p-1', {
+        nombres: 'Juan Carlos',
+        cargo: 'SUPERVISOR',
+      });
+      expect(res.nombres).toBe('Juan Carlos');
+      expect(res.cargo).toBe('SUPERVISOR');
+    });
+
+    it('debe desactivar y activar personal', async () => {
+      const personalInactivo = new Personal({
+        id: 'p-1',
+        dni: '45892312',
+        nombres: 'Juan',
+        apellidos: 'Perez',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '958123456',
+        estado: 'INACTIVO',
+      });
+      mockDesactivarPersonalUseCase.execute.mockResolvedValue(personalInactivo);
+
+      const desactRes = await controller.desactivarPersonal('p-1');
+      expect(desactRes.estado).toBe('INACTIVO');
+
+      const personalActivo = new Personal({
+        id: 'p-1',
+        dni: '45892312',
+        nombres: 'Juan',
+        apellidos: 'Perez',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '958123456',
+        estado: 'ACTIVO',
+      });
+      mockActivarPersonalUseCase.execute.mockResolvedValue(personalActivo);
+
+      const actRes = await controller.activarPersonal('p-1');
+      expect(actRes.estado).toBe('ACTIVO');
     });
   });
 

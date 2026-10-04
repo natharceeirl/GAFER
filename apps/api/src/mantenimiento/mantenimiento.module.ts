@@ -22,8 +22,12 @@ import { ActivarServicioContratadoUseCase } from './application/activar-servicio
 import { DesactivarServicioContratadoUseCase } from './application/desactivar-servicio-contratado.usecase';
 import { ActualizarInsumoUseCase } from './application/actualizar-insumo.usecase';
 import { DesactivarInsumoUseCase } from './application/desactivar-insumo.usecase';
+import { ActivarInsumoUseCase } from './application/activar-insumo.usecase';
+import { ActualizarEquipoUseCase } from './application/actualizar-equipo.usecase';
 import { ActualizarEstadoEquipoUseCase } from './application/actualizar-estado-equipo.usecase';
+import { ActualizarPersonalUseCase } from './application/actualizar-personal.usecase';
 import { DesactivarPersonalUseCase } from './application/desactivar-personal.usecase';
+import { ActivarPersonalUseCase } from './application/activar-personal.usecase';
 
 // Ports
 import { CLIENTE_REPOSITORY } from './domain/ports/cliente.repository';
@@ -61,10 +65,14 @@ import { KyselyPersonalRepository } from './infrastructure/adapters/kysely-perso
     RegistrarInsumoUseCase,
     ActualizarInsumoUseCase,
     DesactivarInsumoUseCase,
+    ActivarInsumoUseCase,
     RegistrarEquipoUseCase,
+    ActualizarEquipoUseCase,
     ActualizarEstadoEquipoUseCase,
     RegistrarPersonalUseCase,
+    ActualizarPersonalUseCase,
     DesactivarPersonalUseCase,
+    ActivarPersonalUseCase,
 
     // Adaptadores Kysely enlazados a sus Puertos
     { provide: CLIENTE_REPOSITORY, useClass: KyselyClienteRepository },
@@ -93,10 +101,14 @@ import { KyselyPersonalRepository } from './infrastructure/adapters/kysely-perso
     RegistrarInsumoUseCase,
     ActualizarInsumoUseCase,
     DesactivarInsumoUseCase,
+    ActivarInsumoUseCase,
     RegistrarEquipoUseCase,
+    ActualizarEquipoUseCase,
     ActualizarEstadoEquipoUseCase,
     RegistrarPersonalUseCase,
+    ActualizarPersonalUseCase,
     DesactivarPersonalUseCase,
+    ActivarPersonalUseCase,
     CLIENTE_REPOSITORY,
     PROYECTO_REPOSITORY,
     SERVICIO_CONTRATADO_REPOSITORY,

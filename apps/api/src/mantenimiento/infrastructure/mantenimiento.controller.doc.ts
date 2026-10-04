@@ -240,6 +240,15 @@ export function ApiListarInsumosDoc() {
   );
 }
 
+export function ApiObtenerInsumoDoc() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Obtener detalle de un insumo por ID' }),
+    ApiParam({ name: 'id', description: 'UUID del insumo' }),
+    ApiResponse({ status: 200, description: 'Insumo encontrado', type: InsumoResponseDto }),
+    ApiResponse({ status: 404, description: 'Insumo no encontrado', type: NotFoundErrorDto }),
+  );
+}
+
 export function ApiActualizarInsumoDoc() {
   return applyDecorators(
     ApiOperation({ summary: 'Actualizar parcialmente un insumo del catálogo' }),
@@ -255,6 +264,15 @@ export function ApiDesactivarInsumoDoc() {
     ApiOperation({ summary: 'Desactivar un insumo del catálogo' }),
     ApiParam({ name: 'id', description: 'UUID del insumo' }),
     ApiResponse({ status: 200, description: 'Insumo desactivado', type: EstadoSimpleResponseDto }),
+    ApiResponse({ status: 404, description: 'Insumo no encontrado', type: NotFoundErrorDto }),
+  );
+}
+
+export function ApiActivarInsumoDoc() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Reactivar un insumo del catálogo previamente desactivado' }),
+    ApiParam({ name: 'id', description: 'UUID del insumo' }),
+    ApiResponse({ status: 200, description: 'Insumo reactivado', type: EstadoSimpleResponseDto }),
     ApiResponse({ status: 404, description: 'Insumo no encontrado', type: NotFoundErrorDto }),
   );
 }
@@ -277,6 +295,26 @@ export function ApiListarEquiposDoc() {
     ApiOperation({ summary: 'Listar catálogo de equipos operativos con paginación' }),
     ApiResponse({ status: 200, description: 'Catálogo paginado de equipos', type: EquipoPaginadoResponseDto }),
     ApiResponse({ status: 400, description: 'Parámetros inválidos', type: BadRequestErrorDto }),
+  );
+}
+
+export function ApiObtenerEquipoDoc() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Obtener detalle de un equipo por ID' }),
+    ApiParam({ name: 'id', description: 'UUID del equipo' }),
+    ApiResponse({ status: 200, description: 'Equipo encontrado', type: EquipoResponseDto }),
+    ApiResponse({ status: 404, description: 'Equipo no encontrado', type: NotFoundErrorDto }),
+  );
+}
+
+export function ApiActualizarEquipoDoc() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Actualizar datos de un equipo operativo' }),
+    ApiParam({ name: 'id', description: 'UUID del equipo' }),
+    ApiResponse({ status: 200, description: 'Equipo actualizado exitosamente', type: EquipoResponseDto }),
+    ApiResponse({ status: 400, description: 'Datos inválidos', type: BadRequestErrorDto }),
+    ApiResponse({ status: 404, description: 'Equipo no encontrado', type: NotFoundErrorDto }),
+    ApiResponse({ status: 409, description: 'Código interno ya registrado', type: ConflictErrorDto }),
   );
 }
 
@@ -311,11 +349,40 @@ export function ApiListarPersonalDoc() {
   );
 }
 
+export function ApiObtenerPersonalDoc() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Obtener detalle de un colaborador/personal por ID' }),
+    ApiParam({ name: 'id', description: 'UUID del colaborador' }),
+    ApiResponse({ status: 200, description: 'Personal encontrado', type: PersonalResponseDto }),
+    ApiResponse({ status: 404, description: 'Personal no encontrado', type: NotFoundErrorDto }),
+  );
+}
+
+export function ApiActualizarPersonalDoc() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Actualizar datos de un colaborador' }),
+    ApiParam({ name: 'id', description: 'UUID del colaborador' }),
+    ApiResponse({ status: 200, description: 'Personal actualizado exitosamente', type: PersonalResponseDto }),
+    ApiResponse({ status: 400, description: 'Datos inválidos', type: BadRequestErrorDto }),
+    ApiResponse({ status: 404, description: 'Personal no encontrado', type: NotFoundErrorDto }),
+    ApiResponse({ status: 409, description: 'DNI o usuario ya registrado', type: ConflictErrorDto }),
+  );
+}
+
 export function ApiDesactivarPersonalDoc() {
   return applyDecorators(
     ApiOperation({ summary: 'Desactivar personal o colaborador (baja lógica)' }),
     ApiParam({ name: 'id', description: 'UUID del colaborador' }),
     ApiResponse({ status: 200, description: 'Personal desactivado', type: EstadoSimpleResponseDto }),
+    ApiResponse({ status: 404, description: 'Personal no encontrado', type: NotFoundErrorDto }),
+  );
+}
+
+export function ApiActivarPersonalDoc() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Reactivar un colaborador previamente desactivado' }),
+    ApiParam({ name: 'id', description: 'UUID del colaborador' }),
+    ApiResponse({ status: 200, description: 'Personal reactivado', type: EstadoSimpleResponseDto }),
     ApiResponse({ status: 404, description: 'Personal no encontrado', type: NotFoundErrorDto }),
   );
 }

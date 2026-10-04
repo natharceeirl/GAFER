@@ -76,6 +76,16 @@ export class KyselyPersonalRepository implements PersonalRepository {
     return rows.map((r) => this.mapToDomain(r));
   }
 
+  async listarTodos(): Promise<Personal[]> {
+    const rows = await this.db
+      .selectFrom('personal')
+      .selectAll()
+      .orderBy('apellidos', 'asc')
+      .execute();
+
+    return rows.map((r) => this.mapToDomain(r));
+  }
+
   private mapToDomain(row: any): Personal {
     return new Personal({
       id: row.id,

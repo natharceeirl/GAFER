@@ -32,8 +32,12 @@ import { ActivarServicioContratadoUseCase } from '../application/activar-servici
 import { DesactivarServicioContratadoUseCase } from '../application/desactivar-servicio-contratado.usecase';
 import { ActualizarInsumoUseCase } from '../application/actualizar-insumo.usecase';
 import { DesactivarInsumoUseCase } from '../application/desactivar-insumo.usecase';
+import { ActivarInsumoUseCase } from '../application/activar-insumo.usecase';
+import { ActualizarEquipoUseCase } from '../application/actualizar-equipo.usecase';
 import { ActualizarEstadoEquipoUseCase } from '../application/actualizar-estado-equipo.usecase';
+import { ActualizarPersonalUseCase } from '../application/actualizar-personal.usecase';
 import { DesactivarPersonalUseCase } from '../application/desactivar-personal.usecase';
+import { ActivarPersonalUseCase } from '../application/activar-personal.usecase';
 
 // Ports
 import {
@@ -76,8 +80,10 @@ import {
   CrearInsumoDto,
   ActualizarInsumoDto,
   CrearEquipoDto,
+  ActualizarEquipoDto,
   CambiarEstadoEquipoDto,
   CrearPersonalDto,
+  ActualizarPersonalDto,
   GenerarUploadUrlDto,
   GenerarDownloadUrlDto,
 } from './dto/mantenimiento.dto';
@@ -123,14 +129,21 @@ import {
   ApiActivarServicioContratadoDoc,
   ApiCrearInsumoDoc,
   ApiListarInsumosDoc,
+  ApiObtenerInsumoDoc,
   ApiActualizarInsumoDoc,
   ApiDesactivarInsumoDoc,
+  ApiActivarInsumoDoc,
   ApiCrearEquipoDoc,
   ApiListarEquiposDoc,
+  ApiObtenerEquipoDoc,
+  ApiActualizarEquipoDoc,
   ApiCambiarEstadoEquipoDoc,
   ApiCrearPersonalDoc,
   ApiListarPersonalDoc,
+  ApiObtenerPersonalDoc,
+  ApiActualizarPersonalDoc,
   ApiDesactivarPersonalDoc,
+  ApiActivarPersonalDoc,
   ApiGenerarUploadUrlDoc,
   ApiGenerarDownloadUrlDoc,
 } from './mantenimiento.controller.doc';
@@ -154,10 +167,14 @@ export class MantenimientoController {
     private readonly registrarInsumoUseCase: RegistrarInsumoUseCase,
     private readonly actualizarInsumoUseCase: ActualizarInsumoUseCase,
     private readonly desactivarInsumoUseCase: DesactivarInsumoUseCase,
+    private readonly activarInsumoUseCase: ActivarInsumoUseCase,
     private readonly registrarEquipoUseCase: RegistrarEquipoUseCase,
+    private readonly actualizarEquipoUseCase: ActualizarEquipoUseCase,
     private readonly actualizarEstadoEquipoUseCase: ActualizarEstadoEquipoUseCase,
     private readonly registrarPersonalUseCase: RegistrarPersonalUseCase,
+    private readonly actualizarPersonalUseCase: ActualizarPersonalUseCase,
     private readonly desactivarPersonalUseCase: DesactivarPersonalUseCase,
+    private readonly activarPersonalUseCase: ActivarPersonalUseCase,
     @Inject(CLIENTE_REPOSITORY)
     private readonly clienteRepo: ClienteRepository,
     @Inject(PROYECTO_REPOSITORY)
@@ -507,7 +524,7 @@ export class MantenimientoController {
     @Query() query?: PaginacionQueryDto,
   ): Promise<InsumoPaginadoResponseDto> {
     const { limit = 20, offset = 0, busqueda } = query ?? {};
-    let insumos = await this.insumoRepo.listarActivos();
+    let insumos = await this.insumoRepo.listarTodos();
 
     if (busqueda && busqueda.trim()) {
       const q = busqueda.trim().toLowerCase();
@@ -537,9 +554,36 @@ export class MantenimientoController {
         dosisEstandar: i.dosisEstandar,
         fichaTecnicaKey: i.fichaTecnicaKey,
         hojaMsdsKey: i.hojaMsdsKey,
+        resolucionKey: i.resolucionKey,
         proveedor: i.proveedor,
         estado: i.getEstado(),
       })),
+    };
+  }
+
+  @Get('insumos/:id')
+  @ApiObtenerInsumoDoc()
+  async obtenerInsumo(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<InsumoResponseDto> {
+    const insumo = await this.insumoRepo.buscarPorId(id);
+    if (!insumo) {
+      throw new NotFoundException(`Insumo con ID ${id} no encontrado`);
+    }
+    return {
+      id: insumo.id,
+      nombreComercial: insumo.nombreComercial,
+      registroDigesa: insumo.registroDigesa,
+      principioActivo: insumo.principioActivo,
+      presentacion: insumo.presentacion,
+      unidadMedida: insumo.unidadMedida,
+      concentracion: insumo.concentracion,
+      dosisEstandar: insumo.dosisEstandar,
+      fichaTecnicaKey: insumo.fichaTecnicaKey,
+      hojaMsdsKey: insumo.hojaMsdsKey,
+      resolucionKey: insumo.resolucionKey,
+      proveedor: insumo.proveedor,
+      estado: insumo.getEstado(),
     };
   }
 
@@ -564,6 +608,7 @@ export class MantenimientoController {
       dosisEstandar: insumo.dosisEstandar,
       fichaTecnicaKey: insumo.fichaTecnicaKey,
       hojaMsdsKey: insumo.hojaMsdsKey,
+      resolucionKey: insumo.resolucionKey,
       proveedor: insumo.proveedor,
       estado: insumo.getEstado(),
     };
@@ -575,6 +620,15 @@ export class MantenimientoController {
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ): Promise<EstadoSimpleResponseDto> {
     const insumo = await this.desactivarInsumoUseCase.execute(id);
+    return { id: insumo.id, estado: insumo.getEstado() };
+  }
+
+  @Patch('insumos/:id/activar')
+  @ApiActivarInsumoDoc()
+  async activarInsumo(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<EstadoSimpleResponseDto> {
+    const insumo = await this.activarInsumoUseCase.execute(id);
     return { id: insumo.id, estado: insumo.getEstado() };
   }
 
@@ -593,6 +647,9 @@ export class MantenimientoController {
       tipo: equipo.tipo,
       marcaModelo: equipo.marcaModelo,
       estadoOperativo: equipo.getEstadoOperativo(),
+      fechaAdquisicion: equipo.fechaAdquisicion,
+      ultimoMantenimiento: equipo.ultimoMantenimiento,
+      proximoMantenimiento: equipo.proximoMantenimiento,
     };
   }
 
@@ -602,7 +659,7 @@ export class MantenimientoController {
     @Query() query?: PaginacionQueryDto,
   ): Promise<EquipoPaginadoResponseDto> {
     const { limit = 20, offset = 0, busqueda } = query ?? {};
-    let equipos = await this.equipoRepo.listarOperativos();
+    let equipos = await this.equipoRepo.listarTodos();
 
     if (busqueda && busqueda.trim()) {
       const q = busqueda.trim().toLowerCase();
@@ -628,7 +685,55 @@ export class MantenimientoController {
         tipo: e.tipo,
         marcaModelo: e.marcaModelo,
         estadoOperativo: e.getEstadoOperativo(),
+        fechaAdquisicion: e.fechaAdquisicion,
+        ultimoMantenimiento: e.ultimoMantenimiento,
+        proximoMantenimiento: e.proximoMantenimiento,
       })),
+    };
+  }
+
+  @Get('equipos/:id')
+  @ApiObtenerEquipoDoc()
+  async obtenerEquipo(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<EquipoResponseDto> {
+    const equipo = await this.equipoRepo.buscarPorId(id);
+    if (!equipo) {
+      throw new NotFoundException(`Equipo con ID ${id} no encontrado`);
+    }
+    return {
+      id: equipo.id,
+      codigoInterno: equipo.codigoInterno,
+      nombre: equipo.nombre,
+      tipo: equipo.tipo,
+      marcaModelo: equipo.marcaModelo,
+      estadoOperativo: equipo.getEstadoOperativo(),
+      fechaAdquisicion: equipo.fechaAdquisicion,
+      ultimoMantenimiento: equipo.ultimoMantenimiento,
+      proximoMantenimiento: equipo.proximoMantenimiento,
+    };
+  }
+
+  @Patch('equipos/:id')
+  @ApiActualizarEquipoDoc()
+  async actualizarEquipo(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: ActualizarEquipoDto,
+  ): Promise<EquipoResponseDto> {
+    const equipo = await this.actualizarEquipoUseCase.execute({
+      id,
+      ...dto,
+    });
+    return {
+      id: equipo.id,
+      codigoInterno: equipo.codigoInterno,
+      nombre: equipo.nombre,
+      tipo: equipo.tipo,
+      marcaModelo: equipo.marcaModelo,
+      estadoOperativo: equipo.getEstadoOperativo(),
+      fechaAdquisicion: equipo.fechaAdquisicion,
+      ultimoMantenimiento: equipo.ultimoMantenimiento,
+      proximoMantenimiento: equipo.proximoMantenimiento,
     };
   }
 
@@ -649,6 +754,9 @@ export class MantenimientoController {
       tipo: equipo.tipo,
       marcaModelo: equipo.marcaModelo,
       estadoOperativo: equipo.getEstadoOperativo(),
+      fechaAdquisicion: equipo.fechaAdquisicion,
+      ultimoMantenimiento: equipo.ultimoMantenimiento,
+      proximoMantenimiento: equipo.proximoMantenimiento,
     };
   }
 
@@ -678,7 +786,7 @@ export class MantenimientoController {
     @Query() query?: PaginacionQueryDto,
   ): Promise<PersonalPaginadoResponseDto> {
     const { limit = 20, offset = 0, busqueda } = query ?? {};
-    let lista = await this.personalRepo.listarActivos();
+    let lista = await this.personalRepo.listarTodos();
 
     if (busqueda && busqueda.trim()) {
       const q = busqueda.trim().toLowerCase();
@@ -710,12 +818,64 @@ export class MantenimientoController {
     };
   }
 
+  @Get('personal/:id')
+  @ApiObtenerPersonalDoc()
+  async obtenerPersonal(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<PersonalResponseDto> {
+    const personal = await this.personalRepo.buscarPorId(id);
+    if (!personal) {
+      throw new NotFoundException(`Personal con ID ${id} no encontrado`);
+    }
+    return {
+      id: personal.id,
+      dni: personal.dni,
+      nombres: personal.nombres,
+      apellidos: personal.apellidos,
+      cargo: personal.cargo,
+      telefono: personal.telefono,
+      usuario: personal.usuario,
+      estado: personal.getEstado(),
+    };
+  }
+
+  @Patch('personal/:id')
+  @ApiActualizarPersonalDoc()
+  async actualizarPersonal(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: ActualizarPersonalDto,
+  ): Promise<PersonalResponseDto> {
+    const personal = await this.actualizarPersonalUseCase.execute({
+      id,
+      ...dto,
+    });
+    return {
+      id: personal.id,
+      dni: personal.dni,
+      nombres: personal.nombres,
+      apellidos: personal.apellidos,
+      cargo: personal.cargo,
+      telefono: personal.telefono,
+      usuario: personal.usuario,
+      estado: personal.getEstado(),
+    };
+  }
+
   @Patch('personal/:id/desactivar')
   @ApiDesactivarPersonalDoc()
   async desactivarPersonal(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ): Promise<EstadoSimpleResponseDto> {
     const personal = await this.desactivarPersonalUseCase.execute(id);
+    return { id: personal.id, estado: personal.getEstado() };
+  }
+
+  @Patch('personal/:id/activar')
+  @ApiActivarPersonalDoc()
+  async activarPersonal(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<EstadoSimpleResponseDto> {
+    const personal = await this.activarPersonalUseCase.execute(id);
     return { id: personal.id, estado: personal.getEstado() };
   }
 

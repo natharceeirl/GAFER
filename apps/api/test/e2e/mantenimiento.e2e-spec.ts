@@ -405,4 +405,253 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21)', () => {
       expect(badAreaRes.status).toBe(400);
     });
   });
+
+  describe('Flujo de Catálogo de Insumos (GAF-22)', () => {
+    it('crea, consulta, lista, actualiza y gestiona ciclo de vida de un insumo', async () => {
+      // 1. Crear insumo
+      const crearRes = await http.post('/mantenimiento/insumos', {
+        nombreComercial: 'Cipermetrina 25% EC',
+        principioActivo: 'Cipermetrina',
+        presentacion: 'LIQUIDO',
+        unidadMedida: 'L',
+        registroDigesa: 'RD-001-2026/DIGESA/SA',
+        concentracion: '25% p/v',
+        dosisEstandar: '5 ml / Litro',
+        fichaTecnicaKey: 'insumos/fichas/cipermetrina.pdf',
+        hojaMsdsKey: 'insumos/msds/cipermetrina.pdf',
+        resolucionKey: 'insumos/resoluciones/rd-001.pdf',
+        proveedor: 'Bayer S.A.',
+      });
+      expect(crearRes.status).toBe(201);
+      const insumoId = crearRes.body.id;
+      expect(insumoId).toBeDefined();
+      expect(crearRes.body.estado).toBe('ACTIVO');
+
+      // 2. Obtener por ID
+      const porIdRes = await http.get(`/mantenimiento/insumos/${insumoId}`);
+      expect(porIdRes.status).toBe(200);
+      expect(porIdRes.body.nombreComercial).toBe('Cipermetrina 25% EC');
+      expect(porIdRes.body.resolucionKey).toBe('insumos/resoluciones/rd-001.pdf');
+
+      // 3. Listar con paginación y búsqueda
+      const listaRes = await http.get('/mantenimiento/insumos?limit=10&offset=0&busqueda=Cipermetrina');
+      expect(listaRes.status).toBe(200);
+      expect(listaRes.body.total).toBe(1);
+      expect(listaRes.body.items[0].id).toBe(insumoId);
+
+      // 4. Actualizar insumo
+      const updateRes = await http.patch(`/mantenimiento/insumos/${insumoId}`, {
+        nombreComercial: 'Cipermetrina 50% Ultra',
+        concentracion: '50% p/v',
+        dosisEstandar: '2.5 ml / Litro',
+      });
+      expect(updateRes.status).toBe(200);
+      expect(updateRes.body.nombreComercial).toBe('Cipermetrina 50% Ultra');
+      expect(updateRes.body.concentracion).toBe('50% p/v');
+
+      // 5. Desactivar y activar
+      const desactRes = await http.patch(`/mantenimiento/insumos/${insumoId}/desactivar`);
+      expect(desactRes.status).toBe(200);
+      expect(desactRes.body.estado).toBe('INACTIVO');
+
+      const actRes = await http.patch(`/mantenimiento/insumos/${insumoId}/activar`);
+      expect(actRes.status).toBe(200);
+      expect(actRes.body.estado).toBe('ACTIVO');
+    });
+
+    it('rechaza insumo con código DIGESA duplicado', async () => {
+      await http.post('/mantenimiento/insumos', {
+        nombreComercial: 'Insumo Alfa',
+        principioActivo: 'Principio A',
+        presentacion: 'LIQUIDO',
+        unidadMedida: 'L',
+        registroDigesa: 'RD-DUP-2026',
+        concentracion: '10%',
+        dosisEstandar: '1 ml/L',
+        fichaTecnicaKey: 'fichas/a.pdf',
+        hojaMsdsKey: 'msds/a.pdf',
+      });
+
+      const dupRes = await http.post('/mantenimiento/insumos', {
+        nombreComercial: 'Insumo Beta',
+        principioActivo: 'Principio B',
+        presentacion: 'POLVO',
+        unidadMedida: 'KG',
+        registroDigesa: 'RD-DUP-2026',
+        concentracion: '20%',
+        dosisEstandar: '2 g/L',
+        fichaTecnicaKey: 'fichas/b.pdf',
+        hojaMsdsKey: 'msds/b.pdf',
+      });
+      expect(dupRes.status).toBe(409);
+    });
+  });
+
+  describe('Flujo de Catálogo de Equipos (GAF-22)', () => {
+    it('crea, consulta, lista, actualiza y gestiona estado operativo de un equipo', async () => {
+      // 1. Crear equipo
+      const crearRes = await http.post('/mantenimiento/equipos', {
+        codigoInterno: 'EQ-NEB-05',
+        nombre: 'Nebulizadora ULV Vector Fog C-150',
+        tipo: 'NEBULIZACION',
+        marcaModelo: 'Vector Fog C-150',
+        fechaAdquisicion: '2026-02-01',
+        ultimoMantenimiento: '2026-06-01',
+        proximoMantenimiento: '2026-12-01',
+      });
+      expect(crearRes.status).toBe(201);
+      const equipoId = crearRes.body.id;
+      expect(equipoId).toBeDefined();
+      expect(crearRes.body.codigoInterno).toBe('EQ-NEB-05');
+      expect(crearRes.body.estadoOperativo).toBe('OPERATIVO');
+
+      // 2. Obtener por ID
+      const porIdRes = await http.get(`/mantenimiento/equipos/${equipoId}`);
+      expect(porIdRes.status).toBe(200);
+      expect(porIdRes.body.nombre).toBe('Nebulizadora ULV Vector Fog C-150');
+      expect(porIdRes.body.fechaAdquisicion).toBe('2026-02-01');
+
+      // 3. Listar con búsqueda
+      const listaRes = await http.get('/mantenimiento/equipos?busqueda=NEB-05');
+      expect(listaRes.status).toBe(200);
+      expect(listaRes.body.total).toBe(1);
+      expect(listaRes.body.items[0].id).toBe(equipoId);
+
+      // 4. Actualizar datos de equipo
+      const updateRes = await http.patch(`/mantenimiento/equipos/${equipoId}`, {
+        nombre: 'Nebulizadora ULV Vector Fog C-150 Plus',
+        marcaModelo: 'Vector Fog C-150 Plus',
+        ultimoMantenimiento: '2026-09-15',
+      });
+      expect(updateRes.status).toBe(200);
+      expect(updateRes.body.nombre).toBe('Nebulizadora ULV Vector Fog C-150 Plus');
+      expect(updateRes.body.ultimoMantenimiento).toBe('2026-09-15');
+
+      // 5. Cambiar estado operativo a MANTENIMIENTO y FUERA_SERVICIO
+      const mantRes = await http.patch(`/mantenimiento/equipos/${equipoId}/estado`, {
+        estadoOperativo: 'MANTENIMIENTO',
+      });
+      expect(mantRes.status).toBe(200);
+      expect(mantRes.body.estadoOperativo).toBe('MANTENIMIENTO');
+
+      const operRes = await http.patch(`/mantenimiento/equipos/${equipoId}/estado`, {
+        estadoOperativo: 'OPERATIVO',
+      });
+      expect(operRes.status).toBe(200);
+      expect(operRes.body.estadoOperativo).toBe('OPERATIVO');
+    });
+
+    it('rechaza equipo con código interno duplicado', async () => {
+      await http.post('/mantenimiento/equipos', {
+        codigoInterno: 'EQ-ASP-99',
+        nombre: 'Aspersora 1',
+        tipo: 'ASPERSION',
+      });
+
+      const dupRes = await http.post('/mantenimiento/equipos', {
+        codigoInterno: 'EQ-ASP-99',
+        nombre: 'Aspersora 2',
+        tipo: 'ASPERSION',
+      });
+      expect(dupRes.status).toBe(409);
+    });
+  });
+
+  describe('Flujo de Personal y Usuarios con Roles (GAF-22)', () => {
+    it('crea personal técnico y supervisor, actualiza datos, gestiona estado y autentica', async () => {
+      // 1. Crear supervisor con usuario
+      const crearSupRes = await http.post('/mantenimiento/personal', {
+        dni: '45892312',
+        nombres: 'Daniel',
+        apellidos: 'Amamani Cruz',
+        cargo: 'SUPERVISOR',
+        telefono: '958111222',
+        usuario: 'DAMAMANI_NEW',
+      });
+      expect(crearSupRes.status).toBe(201);
+      const supervisorId = crearSupRes.body.id;
+      expect(supervisorId).toBeDefined();
+      expect(crearSupRes.body.cargo).toBe('SUPERVISOR');
+      expect(crearSupRes.body.estado).toBe('ACTIVO');
+
+      // 2. Obtener por ID
+      const porIdRes = await http.get(`/mantenimiento/personal/${supervisorId}`);
+      expect(porIdRes.status).toBe(200);
+      expect(porIdRes.body.dni).toBe('45892312');
+      expect(porIdRes.body.usuario).toBe('DAMAMANI_NEW');
+
+      // 3. Listar personal
+      const listaRes = await http.get('/mantenimiento/personal?busqueda=Amamani');
+      expect(listaRes.status).toBe(200);
+      expect(listaRes.body.total).toBe(1);
+      expect(listaRes.body.items[0].id).toBe(supervisorId);
+
+      // 4. Actualizar datos de personal
+      const updateRes = await http.patch(`/mantenimiento/personal/${supervisorId}`, {
+        nombres: 'Daniel Alberto',
+        telefono: '958999000',
+      });
+      expect(updateRes.status).toBe(200);
+      expect(updateRes.body.nombres).toBe('Daniel Alberto');
+      expect(updateRes.body.telefono).toBe('958999000');
+
+      // 5. Iniciar sesión con el nuevo usuario creado en PostgreSQL
+      const loginRes = await http.post('/auth/login', {
+        usuario: 'DAMAMANI_NEW',
+        clave: 'Gafer2026!',
+        cliente: 'web',
+      });
+      expect(loginRes.status).toBe(200);
+      expect(loginRes.body.token).toBeDefined();
+      expect(loginRes.body.usuario.cargo).toBe('SUPERVISOR');
+
+      // 6. Desactivar personal y verificar que login sea rechazado
+      const desactRes = await http.patch(`/mantenimiento/personal/${supervisorId}/desactivar`);
+      expect(desactRes.status).toBe(200);
+      expect(desactRes.body.estado).toBe('INACTIVO');
+
+      const loginInactivoRes = await http.post('/auth/login', {
+        usuario: 'DAMAMANI_NEW',
+        clave: 'Gafer2026!',
+        cliente: 'web',
+      });
+      expect(loginInactivoRes.status).toBe(403);
+      expect(loginInactivoRes.body.message).toContain('inactivo');
+
+      // 7. Reactivar personal
+      const actRes = await http.patch(`/mantenimiento/personal/${supervisorId}/activar`);
+      expect(actRes.status).toBe(200);
+      expect(actRes.body.estado).toBe('ACTIVO');
+    });
+
+    it('rechaza personal con DNI o usuario duplicado', async () => {
+      await http.post('/mantenimiento/personal', {
+        dni: '12345678',
+        nombres: 'Pedro',
+        apellidos: 'Gomez',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '958000111',
+        usuario: 'PGOMEZ',
+      });
+
+      const dupDniRes = await http.post('/mantenimiento/personal', {
+        dni: '12345678',
+        nombres: 'Otro',
+        apellidos: 'Usuario',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '958000222',
+      });
+      expect(dupDniRes.status).toBe(409);
+
+      const dupUserRes = await http.post('/mantenimiento/personal', {
+        dni: '87654321',
+        nombres: 'Tercero',
+        apellidos: 'Usuario',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '958000333',
+        usuario: 'PGOMEZ',
+      });
+      expect(dupUserRes.status).toBe(409);
+    });
+  });
 });
