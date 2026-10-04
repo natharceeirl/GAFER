@@ -2,6 +2,7 @@ import {
   OperacionSync,
   LoteSyncRequest,
   LoteSyncResponse,
+  LoteSyncResponseSchema,
 } from '@gafer/contracts';
 
 export interface OutboxStorage {
@@ -119,7 +120,7 @@ export class OutboxQueue {
         return null;
       }
 
-      const resBody: LoteSyncResponse = await response.json();
+      const resBody = LoteSyncResponseSchema.parse(await response.json());
       const exitosos = [...resBody.procesadas, ...resBody.omitidasIdempotentes];
       await this.marcarSincronizadas(exitosos);
       await this.limpiarSincronizados();
