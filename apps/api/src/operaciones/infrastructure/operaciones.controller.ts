@@ -7,7 +7,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { RegistrarInspeccionUseCase } from '../application/registrar-inspeccion.usecase';
 import { CerrarInspeccionUseCase } from '../application/cerrar-inspeccion.usecase';
 import { ObtenerInspeccionUseCase } from '../application/obtener-inspeccion.usecase';
@@ -23,8 +23,10 @@ import { SincronizarInspeccionUseCase } from '../application/sincronizar-inspecc
 import { AuditoriaService } from '../../shared/auditoria/auditoria.service';
 import { Optional } from '@nestjs/common';
 import { CerrarInspeccionDto, CrearInspeccionDto, SincronizarLoteDto } from './dto/operaciones.dto';
+import { Roles } from '../../auth/infrastructure/decorators/roles.decorator';
 
 @ApiTags('Operaciones')
+@ApiBearerAuth()
 @Controller('operaciones/inspecciones')
 export class OperacionesController {
   constructor(
@@ -38,6 +40,7 @@ export class OperacionesController {
   ) {}
 
   @Post()
+  @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiCrearInspeccionDoc()
   async crear(@Body() dto: CrearInspeccionDto) {
     const inspeccion = await this.registrarInspeccion.ejecutar(dto.servicioId);
@@ -51,6 +54,7 @@ export class OperacionesController {
   }
 
   @Get()
+  @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiConsultarInspeccionDoc()
   async consultar(@Query('servicioId') servicioId?: string) {
     if (!servicioId) {
@@ -75,6 +79,7 @@ export class OperacionesController {
   }
 
   @Get(':id')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiObtenerInspeccionPorIdDoc()
   async obtenerPorId(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -95,6 +100,7 @@ export class OperacionesController {
   }
 
   @Post(':id/cerrar')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiCerrarInspeccionDoc()
   async cerrar(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -116,6 +122,7 @@ export class OperacionesController {
   }
 
   @Get(':id/auditoria')
+  @Roles('ADMINISTRADOR')
   @ApiConsultarAuditoriaDoc()
   async consultarAuditoria(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -125,6 +132,7 @@ export class OperacionesController {
   }
 
   @Post(':id/sincronizar')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiSincronizarInspeccionDoc()
   async sincronizar(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,

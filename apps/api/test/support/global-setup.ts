@@ -5,16 +5,15 @@
  * Historial de versiones
  *   v1.0  2026-09-20  ahilacondo  Creación del archivo.
  */
-import * as fs from 'fs';
-import * as path from 'path';
 import { Client } from 'pg';
+import { leerMigraciones } from '../../src/database/migrator';
 import { assertTestDatabase, TEST_DATABASE_URL } from './config';
 
 /**
  * Se ejecuta una vez antes de toda la suite:
  *  1. Verifica que la base sea de pruebas (`*_test`).
  *  2. La crea si no existe.
- *  3. Aplica la migración inicial (es idempotente: usa CREATE ... IF NOT EXISTS).
+ *  3. Aplica todas las migraciones en orden (son idempotentes: usan IF NOT EXISTS).
  *
  * No usa `pnpm db:migrate` a propósito: ese script termina con exit code 1 aunque funcione (BUG-05).
  */
@@ -23,13 +22,14 @@ export default async function globalSetup(): Promise<void> {
 
   await crearBaseSiNoExiste(dbName);
 
-  const migracion = path.resolve(__dirname, '../../../../infra/migrations/001_initial_schema.up.sql');
-  const sql = fs.readFileSync(migracion, 'utf-8');
+  const migraciones = await leerMigraciones('up');
 
   const client = new Client({ connectionString: TEST_DATABASE_URL });
   await client.connect();
   try {
-    await client.query(sql);
+    for (const migracion of migraciones) {
+      await client.query(migracion.sql);
+    }
   } finally {
     await client.end();
   }

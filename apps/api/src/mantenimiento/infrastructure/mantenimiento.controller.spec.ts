@@ -1,3 +1,5 @@
+import { CargoPersonal } from '@gafer/contracts';
+import { TokenPayload } from '../../auth/domain/ports/token.service.port';
 import { MantenimientoController } from './mantenimiento.controller';
 import { RegistrarClienteUseCase } from '../application/registrar-cliente.usecase';
 import { ActualizarClienteUseCase } from '../application/actualizar-cliente.usecase';
@@ -705,13 +707,23 @@ describe('MantenimientoController', () => {
   });
 
   describe('Catálogos de Texto, Configuración y Auditoría Endpoints (GAF-23)', () => {
+    // El actor sale siempre de la sesión validada (token); ningún encabezado puede suplantarlo.
+    const usuarioSesion = (cargo: CargoPersonal): TokenPayload => ({
+      id: 'u-sesion',
+      dni: '12345678',
+      usuario: 'R.PRUEBA',
+      cargo,
+      nombreCompleto: 'Rosa Prueba',
+      exp: 0,
+    });
+
     it('debe listar catálogos de texto invocando el use case con el rol resuelto', async () => {
       mockListarCatalogosTextoUseCase.execute.mockResolvedValue([
         { id: 'hallazgos', titulo: 'Hallazgos frecuentes', items: ['Item 1'], soloAdministrador: false },
       ]);
 
-      const req = { headers: { 'x-actor-rol': 'SUPERVISOR' } };
-      const res = await controller.listarCatalogosTexto(req);
+      const usuario = usuarioSesion('SUPERVISOR');
+      const res = await controller.listarCatalogosTexto(usuario);
 
       expect(res).toHaveLength(1);
       expect(res[0].id).toBe('hallazgos');
@@ -726,12 +738,12 @@ describe('MantenimientoController', () => {
         soloAdministrador: false,
       });
 
-      const req = { headers: {} };
-      const res = await controller.obtenerCatalogoTexto('giros', req);
+      const usuario = usuarioSesion('TECNICO_OPERADOR');
+      const res = await controller.obtenerCatalogoTexto('giros', usuario);
 
       expect(res.id).toBe('giros');
       expect(res.items).toHaveLength(2);
-      expect(mockObtenerCatalogoTextoUseCase.execute).toHaveBeenCalledWith('giros', undefined);
+      expect(mockObtenerCatalogoTextoUseCase.execute).toHaveBeenCalledWith('giros', 'TECNICO_OPERADOR');
     });
 
     it('debe actualizar catálogo de texto', async () => {
@@ -742,15 +754,15 @@ describe('MantenimientoController', () => {
         soloAdministrador: false,
       });
 
-      const req = { headers: { 'x-actor-usuario': 'R.AGARATE', 'x-actor-rol': 'ADMINISTRADOR' } };
-      const res = await controller.actualizarCatalogoTexto('hallazgos', { items: ['Nuevo item'] } as any, req);
+      const usuario = usuarioSesion('ADMINISTRADOR');
+      const res = await controller.actualizarCatalogoTexto('hallazgos', { items: ['Nuevo item'] } as any, usuario);
 
       expect(res.items).toEqual(['Nuevo item']);
       expect(mockActualizarCatalogoTextoUseCase.execute).toHaveBeenCalledWith({
         id: 'hallazgos',
         items: ['Nuevo item'],
-        actorId: null,
-        actorUsuario: 'R.AGARATE',
+        actorId: 'u-sesion',
+        actorUsuario: 'R.PRUEBA',
         actorRol: 'ADMINISTRADOR',
       });
     });
@@ -763,15 +775,15 @@ describe('MantenimientoController', () => {
         soloAdministrador: false,
       });
 
-      const req = { headers: { 'x-actor-usuario': 'R.AGARATE', 'x-actor-rol': 'ADMINISTRADOR' } };
-      const res = await controller.agregarItemCatalogoTexto('hallazgos', { item: 'Item 2' } as any, req);
+      const usuario = usuarioSesion('ADMINISTRADOR');
+      const res = await controller.agregarItemCatalogoTexto('hallazgos', { item: 'Item 2' } as any, usuario);
 
       expect(res.items).toHaveLength(2);
       expect(mockAgregarItemCatalogoTextoUseCase.execute).toHaveBeenCalledWith({
         id: 'hallazgos',
         item: 'Item 2',
-        actorId: null,
-        actorUsuario: 'R.AGARATE',
+        actorId: 'u-sesion',
+        actorUsuario: 'R.PRUEBA',
         actorRol: 'ADMINISTRADOR',
       });
     });
@@ -803,10 +815,10 @@ describe('MantenimientoController', () => {
         updatedAt: new Date('2026-10-04T01:00:00.000Z'),
       });
 
-      const req = { headers: { 'x-actor-usuario': 'ADMIN', 'x-actor-rol': 'ADMINISTRADOR' } };
+      const usuario = usuarioSesion('ADMINISTRADOR');
       const patchRes = await controller.actualizarConfiguracion(
         { director: { nombre: 'Ing. Carlos Medina Ruiz', cip: '84512', firma: 'data:image/png;base64,abc' } } as any,
-        req,
+        usuario,
       );
       expect(patchRes.director?.firma).toBe('data:image/png;base64,abc');
     });
@@ -832,8 +844,8 @@ describe('MantenimientoController', () => {
         total: 1,
       });
 
-      const req = { headers: { 'x-actor-rol': 'ADMINISTRADOR' } };
-      const res = await controller.consultarAuditoria({ limit: 10, offset: 0 } as any, req);
+      const usuario = usuarioSesion('ADMINISTRADOR');
+      const res = await controller.consultarAuditoria({ limit: 10, offset: 0 } as any, usuario);
 
       expect(res.total).toBe(1);
       expect(res.limit).toBe(10);

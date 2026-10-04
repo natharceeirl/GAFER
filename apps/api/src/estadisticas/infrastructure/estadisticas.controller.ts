@@ -1,13 +1,16 @@
 import { Controller, Get, Param } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { ObtenerResumenClienteUseCase } from '../application/obtener-resumen-cliente.usecase';
+import { Roles } from '../../auth/infrastructure/decorators/roles.decorator';
 
 @ApiTags('Fase 4 - Estadísticas')
+@ApiBearerAuth()
 @Controller('estadisticas')
 export class EstadisticasController {
   constructor(private readonly obtenerResumenCliente: ObtenerResumenClienteUseCase) {}
 
   @Get('clientes/:id/resumen')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR')
   @ApiOperation({
     summary: 'Obtener resumen operativo de cliente (Scaffold Fase 4)',
     description: 'Calcula métricas consolidadas de servicios ejecutados para el expediente del cliente.',

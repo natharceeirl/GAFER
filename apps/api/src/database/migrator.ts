@@ -3,34 +3,49 @@ import * as path from 'path';
 import { sql } from 'kysely';
 import { createKyselyDatabase, createDatabasePool } from './connection';
 
-export async function runMigration(direction: 'up' | 'down'): Promise<void> {
+export type DireccionMigracion = 'up' | 'down';
+
+export interface Migracion {
+  nombre: string;
+  sql: string;
+}
+
+/** Carpeta `infra/migrations` de la raíz del monorepo (este archivo vive en apps/api/{src,dist}/database). */
+export function directorioMigraciones(): string {
+  return path.resolve(__dirname, '../../../../infra/migrations');
+}
+
+/**
+ * Lee las migraciones numeradas (`NNN_nombre.up.sql` / `NNN_nombre.down.sql`).
+ * UP en orden creciente; DOWN en orden inverso, para deshacer primero lo último que se agregó.
+ * Todas las migraciones son idempotentes (`IF NOT EXISTS` / `IF EXISTS`), así que se pueden reaplicar.
+ */
+export async function leerMigraciones(
+  direccion: DireccionMigracion,
+  directorio: string = directorioMigraciones(),
+): Promise<Migracion[]> {
+  const patron = new RegExp(`^\\d{3}_.+\\.${direccion}\\.sql$`);
+  const nombres = (await fs.readdir(directorio)).filter((nombre) => patron.test(nombre)).sort();
+  if (direccion === 'down') nombres.reverse();
+
+  return Promise.all(
+    nombres.map(async (nombre) => ({
+      nombre,
+      sql: await fs.readFile(path.join(directorio, nombre), 'utf-8'),
+    })),
+  );
+}
+
+export async function runMigration(direction: DireccionMigracion): Promise<void> {
   const pool = createDatabasePool();
   const db = createKyselyDatabase(pool);
 
-  const migrationFile =
-    direction === 'up'
-      ? '001_initial_schema.up.sql'
-      : '001_initial_schema.down.sql';
-
-  // Buscar el archivo de migración en infra/migrations
-  const migrationPath = path.resolve(
-    process.cwd(),
-    '../../infra/migrations',
-    migrationFile,
-  );
-
-  // Fallback si se corre desde la raíz del monorepo
-  const resolvedPath = (await fileExists(migrationPath))
-    ? migrationPath
-    : path.resolve(process.cwd(), 'infra/migrations', migrationFile);
-
-  console.log(`[GAFER-MIGRATOR] Ejecutando migración ${direction.toUpperCase()}: ${resolvedPath}`);
-
   try {
-    const sqlContent = await fs.readFile(resolvedPath, 'utf-8');
-
-    // Ejecutar en bloque SQL
-    await sql.raw(sqlContent).execute(db);
+    for (const migracion of await leerMigraciones(direction)) {
+      console.log(`[GAFER-MIGRATOR] Ejecutando migración ${direction.toUpperCase()}: ${migracion.nombre}`);
+      // Ejecutar en bloque SQL
+      await sql.raw(migracion.sql).execute(db);
+    }
 
     console.log(`[GAFER-MIGRATOR] Migración ${direction.toUpperCase()} completada exitosamente.`);
   } catch (error) {
@@ -38,15 +53,6 @@ export async function runMigration(direction: 'up' | 'down'): Promise<void> {
     throw error;
   } finally {
     await db.destroy();
-  }
-}
-
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
   }
 }
 

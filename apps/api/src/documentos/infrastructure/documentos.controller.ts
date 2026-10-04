@@ -1,10 +1,12 @@
 import { BadRequestException, Body, Controller, Param, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { EstadoDocumentoSchema, TipoDocumentoSchema } from '@gafer/contracts';
 import { CrearDocumentoUseCase } from '../application/crear-documento.usecase';
 import { TransicionarDocumentoUseCase } from '../application/transicionar-documento.usecase';
+import { Roles } from '../../auth/infrastructure/decorators/roles.decorator';
 
 @ApiTags('Fase 2 - Documentos')
+@ApiBearerAuth()
 @Controller('documentos')
 export class DocumentosController {
   constructor(
@@ -13,6 +15,7 @@ export class DocumentosController {
   ) {}
 
   @Post()
+  @Roles('ADMINISTRADOR', 'SUPERVISOR')
   @ApiOperation({
     summary: 'Crear documento digital (Scaffold Fase 2)',
     description: 'Endpoint preliminar para creación y numeración de certificados de saneamiento.',
@@ -28,6 +31,7 @@ export class DocumentosController {
   }
 
   @Post(':id/transicion')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR')
   @ApiOperation({
     summary: 'Transicionar estado de documento (Scaffold Fase 2)',
     description: 'Avanza el documento en su máquina de estados (BORRADOR -> EMITIDO -> ANULADO).',

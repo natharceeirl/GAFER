@@ -5,14 +5,12 @@ import {
   HttpCode,
   HttpStatus,
   Post,
-  UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { LoginResponse } from '@gafer/contracts';
 import { LoginUseCase } from '../application/login.usecase';
 import { LoginDto } from './dto/login.dto';
-import { AuthGuard } from './guards/auth.guard';
-import { RolesGuard } from './guards/roles.guard';
+import { Public } from './decorators/public.decorator';
 import { Roles } from './decorators/roles.decorator';
 import { UsuarioActual } from './decorators/usuario-actual.decorator';
 import { TokenPayload } from '../domain/ports/token.service.port';
@@ -22,6 +20,7 @@ import { TokenPayload } from '../domain/ports/token.service.port';
 export class AuthController {
   constructor(private readonly loginUseCase: LoginUseCase) {}
 
+  @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -40,7 +39,7 @@ export class AuthController {
   }
 
   @Get('perfil')
-  @UseGuards(AuthGuard)
+  @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Obtener perfil del usuario autenticado',
@@ -53,7 +52,6 @@ export class AuthController {
   }
 
   @Get('verificar-admin')
-  @UseGuards(AuthGuard, RolesGuard)
   @Roles('ADMINISTRADOR')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Ruta exclusiva para rol Administrador' })
@@ -62,7 +60,6 @@ export class AuthController {
   }
 
   @Get('verificar-gestion')
-  @UseGuards(AuthGuard, RolesGuard)
   @Roles('ADMINISTRADOR', 'SUPERVISOR')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Ruta exclusiva para Administrador o Supervisor' })

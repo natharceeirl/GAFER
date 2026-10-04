@@ -18,7 +18,7 @@ module.exports = {
   transformIgnorePatterns: ['node_modules/(?!(\\.pnpm|kysely)/)'],
   testEnvironment: 'node',
   globalSetup: '<rootDir>/test/support/global-setup.ts',
-  setupFiles: ['<rootDir>/test/support/env.ts'],
+  setupFiles: ['<rootDir>/test/support/jwt-env.ts', '<rootDir>/test/support/env.ts'],
   setupFilesAfterEnv: ['<rootDir>/test/support/quiet.ts'],
   testTimeout: 60000,
   maxWorkers: 1, // una sola base de datos compartida: los archivos corren en serie

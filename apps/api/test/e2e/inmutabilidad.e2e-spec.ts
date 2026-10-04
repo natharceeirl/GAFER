@@ -17,6 +17,7 @@
  */
 import { randomUUID } from 'crypto';
 import { createTestApp, TestApp } from '../support/app';
+import { autorizacion } from '../support/auth';
 import {
   editarInsumoEnCatalogo,
   eliminarInsumoDelCatalogo,
@@ -553,12 +554,9 @@ describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
     it('persistir evento de creación y cierre en inspecciones_auditoria con técnico verificado (GAP-03)', async () => {
       const esc = await crearEscenario(http);
 
-      // 1. Crear inspección con técnico en header x-actor
-      const creacion = await http.post(
-        '/operaciones/inspecciones',
-        { servicioId: esc.servicioId },
-        { 'x-actor': esc.tecnicoId },
-      );
+      // 1. Crear inspección con la sesión del técnico (el actor sale del token, no de un encabezado)
+      const sesionTecnico = autorizacion('TECNICO_OPERADOR', { id: esc.tecnicoId, usuario: 'JPEREZ' });
+      const creacion = await http.post('/operaciones/inspecciones', { servicioId: esc.servicioId }, sesionTecnico);
       expect(creacion.status).toBe(201);
       const id = creacion.body.id;
 
@@ -570,7 +568,7 @@ describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
           equiposIds: [esc.equipoId],
           personalIds: [esc.tecnicoId],
         },
-        { 'x-actor': esc.tecnicoId },
+        sesionTecnico,
       );
       expect(cierre.status).toBe(201);
 
@@ -599,17 +597,21 @@ describe('Sección 13: inmutabilidad de inspecciones cerradas', () => {
       expect(apiAuditoria.body[0].actor_id).toBe(esc.tecnicoId);
     });
 
-    it('rechaza una operación con x-actor que no corresponde a un técnico registrado (GAP-03)', async () => {
+    it('ignora un encabezado x-actor: la auditoría atribuye la operación a la sesión, no a quien diga el encabezado (GAF-93)', async () => {
       const esc = await crearEscenario(http);
+      const otro = await crearEscenario(http);
 
-      const res = await http.post(
+      const creacion = await http.post(
         '/operaciones/inspecciones',
         { servicioId: esc.servicioId },
-        { 'x-actor': 'tecnico-fantasma' },
+        { ...autorizacion('TECNICO_OPERADOR', { id: esc.tecnicoId, usuario: 'JPEREZ' }), 'x-actor': otro.tecnicoId },
       );
+      expect(creacion.status).toBe(201);
 
-      expect(res.status).toBe(400);
-      expect(res.body.message).toContain('no corresponde a un personal técnico registrado');
+      const { rows } = await t.db.query('SELECT actor_id FROM inspecciones_auditoria WHERE inspeccion_id = $1', [
+        creacion.body.id,
+      ]);
+      expect(rows).toEqual([{ actor_id: esc.tecnicoId }]);
     });
   });
 

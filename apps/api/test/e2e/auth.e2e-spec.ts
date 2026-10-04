@@ -1,11 +1,21 @@
 import request = require('supertest');
 import { createTestApp, TestApp } from '../support/app';
+import { crearUsuarioConClave, UsuarioPrueba } from '../support/auth';
+import { resetDb } from '../support/db';
 
 describe('Autenticación y Control de Acceso por Roles E2E (GAF-8 / Spec §12)', () => {
   let app: TestApp;
 
+  let admin: UsuarioPrueba;
+  let supervisor: UsuarioPrueba;
+  let tecnico: UsuarioPrueba;
+
   beforeAll(async () => {
     app = await createTestApp();
+    await resetDb(app.db);
+    admin = await crearUsuarioConClave(app.db, 'ADMINISTRADOR', 'adm.prueba');
+    supervisor = await crearUsuarioConClave(app.db, 'SUPERVISOR', 'sup.prueba');
+    tecnico = await crearUsuarioConClave(app.db, 'TECNICO_OPERADOR', 'tec.prueba');
   });
 
   afterAll(async () => {
@@ -17,23 +27,23 @@ describe('Autenticación y Control de Acceso por Roles E2E (GAF-8 / Spec §12)',
       const res = await request(app.baseUrl)
         .post('/api/auth/login')
         .send({
-          usuario: 'r.agarate',
-          clave: 'Admin123!',
+          usuario: 'adm.prueba',
+          clave: admin.clave,
           cliente: 'web',
         });
 
       expect(res.status).toBe(200);
       expect(res.body.token).toBeDefined();
       expect(res.body.usuario.cargo).toBe('ADMINISTRADOR');
-      expect(res.body.usuario.usuario).toBe('R.AGARATE');
+      expect(res.body.usuario.usuario).toBe('ADM.PRUEBA');
     });
 
     it('inicia sesión exitosamente como Supervisor en la Web', async () => {
       const res = await request(app.baseUrl)
         .post('/api/auth/login')
         .send({
-          usuario: 'd.amamani',
-          clave: 'Super123!',
+          usuario: 'sup.prueba',
+          clave: supervisor.clave,
           cliente: 'web',
         });
 
@@ -46,8 +56,8 @@ describe('Autenticación y Control de Acceso por Roles E2E (GAF-8 / Spec §12)',
       const res = await request(app.baseUrl)
         .post('/api/auth/login')
         .send({
-          usuario: 'j.perez',
-          clave: 'Tecnico123!',
+          usuario: 'tec.prueba',
+          clave: tecnico.clave,
           cliente: 'mobile',
         });
 
@@ -60,8 +70,8 @@ describe('Autenticación y Control de Acceso por Roles E2E (GAF-8 / Spec §12)',
       const res = await request(app.baseUrl)
         .post('/api/auth/login')
         .send({
-          usuario: 'j.perez',
-          clave: 'Tecnico123!',
+          usuario: 'tec.prueba',
+          clave: tecnico.clave,
           cliente: 'web',
         });
 
@@ -73,7 +83,7 @@ describe('Autenticación y Control de Acceso por Roles E2E (GAF-8 / Spec §12)',
       const res = await request(app.baseUrl)
         .post('/api/auth/login')
         .send({
-          usuario: 'r.agarate',
+          usuario: 'adm.prueba',
           clave: 'PasswordIncorrecto',
           cliente: 'web',
         });
@@ -91,17 +101,17 @@ describe('Autenticación y Control de Acceso por Roles E2E (GAF-8 / Spec §12)',
     beforeAll(async () => {
       const adminRes = await request(app.baseUrl)
         .post('/api/auth/login')
-        .send({ usuario: 'r.agarate', clave: 'Admin123!', cliente: 'web' });
+        .send({ usuario: 'adm.prueba', clave: admin.clave, cliente: 'web' });
       adminToken = adminRes.body.token;
 
       const supRes = await request(app.baseUrl)
         .post('/api/auth/login')
-        .send({ usuario: 'd.amamani', clave: 'Super123!', cliente: 'web' });
+        .send({ usuario: 'sup.prueba', clave: supervisor.clave, cliente: 'web' });
       supervisorToken = supRes.body.token;
 
       const tecRes = await request(app.baseUrl)
         .post('/api/auth/login')
-        .send({ usuario: 'j.perez', clave: 'Tecnico123!', cliente: 'mobile' });
+        .send({ usuario: 'tec.prueba', clave: tecnico.clave, cliente: 'mobile' });
       tecnicoToken = tecRes.body.token;
     });
 
@@ -117,7 +127,7 @@ describe('Autenticación y Control de Acceso por Roles E2E (GAF-8 / Spec §12)',
 
       expect(res.status).toBe(200);
       expect(res.body.cargo).toBe('ADMINISTRADOR');
-      expect(res.body.usuario).toBe('R.AGARATE');
+      expect(res.body.usuario).toBe('ADM.PRUEBA');
     });
 
     it('GET /api/auth/verificar-admin solo permite a Administrador (Supervisor recibe 403)', async () => {

@@ -14,6 +14,7 @@
     "infra:down": "docker compose -f infra/docker-compose.yml down",
     "db:migrate": "pnpm --filter @gafer/api db:migrate",
     "db:rollback": "pnpm --filter @gafer/api db:rollback",
+    "db:crear-usuario": "pnpm --filter @gafer/api db:crear-usuario",
     "dev:api": "pnpm --filter @gafer/api start:dev",
     "dev:worker": "pnpm --filter @gafer/worker start:dev",
     "dev:web": "pnpm --filter @gafer/web dev",

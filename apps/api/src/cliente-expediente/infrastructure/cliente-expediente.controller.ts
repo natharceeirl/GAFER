@@ -1,13 +1,16 @@
 import { Body, Controller, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RegistrarClienteUseCase } from '../application/registrar-cliente.usecase';
+import { Roles } from '../../auth/infrastructure/decorators/roles.decorator';
 
 @ApiTags('Cliente Expediente (Legacy)')
+@ApiBearerAuth()
 @Controller('cliente-expediente/clientes')
 export class ClienteExpedienteController {
   constructor(private readonly registrarCliente: RegistrarClienteUseCase) {}
 
   @Post()
+  @Roles('ADMINISTRADOR')
   @ApiOperation({
     summary: 'Registrar cliente (Prototipo memoria - Deprecado)',
     description: 'Prototipo en memoria inicial. Usar /mantenimiento/clientes para la persistencia real en PostgreSQL.',

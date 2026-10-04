@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { CargoPersonal } from '@gafer/contracts';
+import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import { TokenPayload } from '../../domain/ports/token.service.port';
 
@@ -14,13 +15,16 @@ export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const rolesRequeridos = this.reflector.getAllAndOverride<CargoPersonal[]>(
-      ROLES_KEY,
-      [context.getHandler(), context.getClass()],
-    );
+    const destinos = [context.getHandler(), context.getClass()];
 
-    if (!rolesRequeridos || rolesRequeridos.length === 0) {
+    if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, destinos)) {
       return true;
+    }
+
+    // Denegar por defecto: una ruta que no es pública y no declara @Roles(...) nunca se atiende.
+    const rolesRequeridos = this.reflector.getAllAndOverride<CargoPersonal[]>(ROLES_KEY, destinos);
+    if (!rolesRequeridos || rolesRequeridos.length === 0) {
+      throw new ForbiddenException('Ruta sin roles declarados: acceso denegado por defecto');
     }
 
     const request = context.switchToHttp().getRequest();

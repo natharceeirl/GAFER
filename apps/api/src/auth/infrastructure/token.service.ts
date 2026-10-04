@@ -3,12 +3,30 @@ import * as crypto from 'crypto';
 import { TokenPayload, TokenServicePort } from '../domain/ports/token.service.port';
 import { Usuario } from '../domain/usuario';
 
+const SECRETO_LARGO_MINIMO = 32;
+
 @Injectable()
 export class TokenService implements TokenServicePort {
   private readonly secretKey: string;
 
   constructor() {
-    this.secretKey = process.env.JWT_SECRET || 'gafer-secret-key-production-change-in-env-2026';
+    this.secretKey = TokenService.leerSecreto();
+  }
+
+  private static leerSecreto(): string {
+    const secreto = process.env.JWT_SECRET;
+    if (!secreto) {
+      throw new Error(
+        'Falta la variable de entorno JWT_SECRET: la API no arranca sin un secreto para firmar los tokens. ' +
+          'Define una cadena aleatoria de al menos 32 caracteres (ver la sección "Variables obligatorias de la API" del README).',
+      );
+    }
+    if (secreto.length < SECRETO_LARGO_MINIMO) {
+      throw new Error(
+        `JWT_SECRET es demasiado corto: debe tener al menos ${SECRETO_LARGO_MINIMO} caracteres.`,
+      );
+    }
+    return secreto;
   }
 
   generarToken(usuario: Usuario): string {
@@ -52,7 +70,10 @@ export class TokenService implements TokenServicePort {
       .update(`${headerB64}.${payloadB64}`)
       .digest('base64url');
 
-    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(signatureEsperada))) {
+    const firmaRecibida = Buffer.from(signature);
+    const firmaEsperada = Buffer.from(signatureEsperada);
+    // timingSafeEqual lanza si las longitudes difieren; una firma de otro largo es simplemente inválida (401, no 500).
+    if (firmaRecibida.length !== firmaEsperada.length || !crypto.timingSafeEqual(firmaRecibida, firmaEsperada)) {
       throw new UnauthorizedException('Firma de token inválida');
     }
 

@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { DatabaseModule } from './database/database.module';
 import { StorageModule } from './shared/infrastructure/storage/storage.module';
 import { AuditoriaModule } from './shared/auditoria/auditoria.module';
 import { AuthModule } from './auth/auth.module';
+import { AuthGuard } from './auth/infrastructure/guards/auth.guard';
+import { RolesGuard } from './auth/infrastructure/guards/roles.guard';
 import { OperacionesModule } from './operaciones/operaciones.module';
 import { DocumentosModule } from './documentos/documentos.module';
 import { MapaMurinoModule } from './mapa-murino/mapa-murino.module';
@@ -31,6 +34,12 @@ import { PROVEEDOR_VALIDACION_ZOD } from './shared/infrastructure/pipes/validaci
     // Fase 5
     InventarioModule,
   ],
-  providers: [PROVEEDOR_VALIDACION_ZOD],
+  providers: [
+    PROVEEDOR_VALIDACION_ZOD,
+    // Denegar por defecto (GAF-93): primero se valida el token y luego el rol. Solo @Public() se salta ambos;
+    // una ruta sin @Roles(...) responde 403.
+    { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
+  ],
 })
 export class AppModule {}

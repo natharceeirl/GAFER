@@ -1,4 +1,5 @@
 import { createTestApp, TestApp } from '../support/app';
+import { asignarClavePrueba, autorizacion, autorizacionDePersonal, CLAVE_PRUEBA } from '../support/auth';
 import { resetDb, leerSnapshotCrudo, sembrarInspeccionCerrada } from '../support/db';
 import { api, Api } from '../support/fixtures';
 
@@ -595,10 +596,18 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
       expect(updateRes.body.nombres).toBe('Daniel Alberto');
       expect(updateRes.body.telefono).toBe('958999000');
 
-      // 5. Iniciar sesión con el nuevo usuario creado en PostgreSQL
+      // 5. Sin clave guardada no hay sesión; con la clave (db:crear-usuario) sí
+      const loginSinClaveRes = await http.post('/auth/login', {
+        usuario: 'DAMAMANI_NEW',
+        clave: CLAVE_PRUEBA,
+        cliente: 'web',
+      });
+      expect(loginSinClaveRes.status).toBe(401);
+
+      await asignarClavePrueba(t.db, 'DAMAMANI_NEW');
       const loginRes = await http.post('/auth/login', {
         usuario: 'DAMAMANI_NEW',
-        clave: 'Gafer2026!',
+        clave: CLAVE_PRUEBA,
         cliente: 'web',
       });
       expect(loginRes.status).toBe(200);
@@ -612,7 +621,7 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
 
       const loginInactivoRes = await http.post('/auth/login', {
         usuario: 'DAMAMANI_NEW',
-        clave: 'Gafer2026!',
+        clave: CLAVE_PRUEBA,
         cliente: 'web',
       });
       expect(loginInactivoRes.status).toBe(403);
@@ -657,8 +666,8 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
 
   describe('Catálogos de Texto, Configuración y Bitácora de Auditoría (GAF-23)', () => {
     it('lista catálogos de texto filtrando los restringidos si no es ADMINISTRADOR', async () => {
-      // 1. Sin rol o como SUPERVISOR
-      const resPublico = await http.get('/mantenimiento/catalogos-texto');
+      // 1. Como SUPERVISOR
+      const resPublico = await http.get('/mantenimiento/catalogos-texto', autorizacion('SUPERVISOR'));
       expect(resPublico.status).toBe(200);
       expect(Array.isArray(resPublico.body)).toBe(true);
       expect(resPublico.body.length).toBe(5);
@@ -668,9 +677,7 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
       expect(idsPublicos).not.toContain('motivos-modificacion');
 
       // 2. Con rol ADMINISTRADOR
-      const resAdmin = await http.get('/mantenimiento/catalogos-texto', {
-        'x-actor-rol': 'ADMINISTRADOR',
-      });
+      const resAdmin = await http.get('/mantenimiento/catalogos-texto', autorizacion('ADMINISTRADOR'));
       expect(resAdmin.status).toBe(200);
       expect(resAdmin.body.length).toBe(6);
       const idsAdmin = resAdmin.body.map((c: any) => c.id);
@@ -678,22 +685,18 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
     });
 
     it('controla acceso por ID a catálogos restringidos', async () => {
-      // Acceso a catálogo estándar permitido a cualquiera
-      const resHallazgos = await http.get('/mantenimiento/catalogos-texto/hallazgos');
+      // Acceso a catálogo estándar permitido a cualquier cargo con sesión
+      const resHallazgos = await http.get('/mantenimiento/catalogos-texto/hallazgos', autorizacion('TECNICO_OPERADOR'));
       expect(resHallazgos.status).toBe(200);
       expect(resHallazgos.body.id).toBe('hallazgos');
       expect(resHallazgos.body.items).toContain('Roedores vivos');
 
       // Acceso a motivos-modificacion denegado sin rol ADMINISTRADOR
-      const resMotivosBloqueado = await http.get('/mantenimiento/catalogos-texto/motivos-modificacion', {
-        'x-actor-rol': 'SUPERVISOR',
-      });
+      const resMotivosBloqueado = await http.get('/mantenimiento/catalogos-texto/motivos-modificacion', autorizacion('SUPERVISOR'));
       expect(resMotivosBloqueado.status).toBe(403);
 
       // Acceso a motivos-modificacion permitido a ADMINISTRADOR
-      const resMotivosOk = await http.get('/mantenimiento/catalogos-texto/motivos-modificacion', {
-        'x-actor-rol': 'ADMINISTRADOR',
-      });
+      const resMotivosOk = await http.get('/mantenimiento/catalogos-texto/motivos-modificacion', autorizacion('ADMINISTRADOR'));
       expect(resMotivosOk.status).toBe(200);
       expect(resMotivosOk.body.id).toBe('motivos-modificacion');
       expect(resMotivosOk.body.items).toContain('Error de digitación en campo');
@@ -708,10 +711,7 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
             'MOSCA DOMESTICA (Musca domestica)',
           ],
         },
-        {
-          'x-actor-usuario': 'R.AGARATE',
-          'x-actor-rol': 'ADMINISTRADOR',
-        },
+        await autorizacionDePersonal(t.db, 'ADMINISTRADOR', 'R.AGARATE'),
       );
       expect(resPut.status).toBe(200);
       expect(resPut.body.items).toEqual([
@@ -728,10 +728,7 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
       const resPostItem = await http.post(
         '/mantenimiento/catalogos-texto/hallazgos/items',
         { item: 'ROEDOR DE TECHO (Rattus rattus)' },
-        {
-          'x-actor-usuario': 'R.AGARATE',
-          'x-actor-rol': 'ADMINISTRADOR',
-        },
+        await autorizacionDePersonal(t.db, 'ADMINISTRADOR', 'R.AGARATE'),
       );
       expect(resPostItem.status).toBe(201);
       expect(resPostItem.body.items).toHaveLength(3);
@@ -742,14 +739,14 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
       const resPut = await http.put(
         '/mantenimiento/catalogos-texto/motivos-modificacion',
         { items: ['Nuevo motivo no autorizado'] },
-        { 'x-actor-rol': 'SUPERVISOR' },
+        autorizacion('SUPERVISOR'),
       );
       expect(resPut.status).toBe(403);
 
       const resPost = await http.post(
         '/mantenimiento/catalogos-texto/motivos-modificacion/items',
         { item: 'Otro motivo no autorizado' },
-        { 'x-actor-rol': 'SUPERVISOR' },
+        autorizacion('SUPERVISOR'),
       );
       expect(resPost.status).toBe(403);
     });
@@ -769,7 +766,7 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
         {
           director: { nombre: 'Ing. Intruso', cip: '11111' },
         },
-        { 'x-actor-rol': 'SUPERVISOR' },
+        autorizacion('SUPERVISOR'),
       );
       expect(resPatchBloqueado.status).toBe(403);
 
@@ -787,10 +784,7 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
           resolucionSanitaria: '0023-2024-DESA/MINSA',
           parametros: { diasVigenciaCertificado: 30, versionPlantilla: '2.0' },
         },
-        {
-          'x-actor-usuario': 'R.AGARATE',
-          'x-actor-rol': 'ADMINISTRADOR',
-        },
+        await autorizacionDePersonal(t.db, 'ADMINISTRADOR', 'R.AGARATE'),
       );
       expect(resPatchOk.status).toBe(200);
       expect(resPatchOk.body.director.firma).toBe(firmaMock);
@@ -807,27 +801,20 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
 
     it('permite consulta de auditoría exclusivamente a ADMINISTRADOR y registra trazabilidad', async () => {
       // 1. Bloquea si no es ADMINISTRADOR
-      const resAuditoriaBloqueada = await http.get('/mantenimiento/auditoria', {
-        'x-actor-rol': 'SUPERVISOR',
-      });
+      const resAuditoriaBloqueada = await http.get('/mantenimiento/auditoria', autorizacion('SUPERVISOR'));
       expect(resAuditoriaBloqueada.status).toBe(403);
 
       // 2. Ejecutar acción de mantenimiento que genera auditoría
       await http.put(
         '/mantenimiento/catalogos-texto/observaciones',
         { items: ['Observación de prueba auditada'] },
-        {
-          'x-actor-usuario': 'ADMIN_AUDIT',
-          'x-actor-rol': 'ADMINISTRADOR',
-        },
+        await autorizacionDePersonal(t.db, 'ADMINISTRADOR', 'ADMIN_AUDIT'),
       );
 
       // 3. Consultar bitácora como ADMINISTRADOR
       const resAuditoria = await http.get(
         '/mantenimiento/auditoria?modulo=MANTENIMIENTO&limit=10',
-        {
-          'x-actor-rol': 'ADMINISTRADOR',
-        },
+        autorizacion('ADMINISTRADOR'),
       );
       expect(resAuditoria.status).toBe(200);
       expect(resAuditoria.body.total).toBeGreaterThanOrEqual(1);
@@ -926,12 +913,12 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
       await http.put(
         '/mantenimiento/catalogos-texto/hallazgos',
         { items: ['VECTOR MODERNO 2026'] },
-        { 'x-actor-usuario': 'ADMIN', 'x-actor-rol': 'ADMINISTRADOR' },
+        await autorizacionDePersonal(t.db, 'ADMINISTRADOR', 'ADMIN'),
       );
       await http.patch(
         '/mantenimiento/configuracion',
         { director: { nombre: 'Ing. Nuevo Director 2027', cip: '99999' } },
-        { 'x-actor-usuario': 'ADMIN', 'x-actor-rol': 'ADMINISTRADOR' },
+        await autorizacionDePersonal(t.db, 'ADMINISTRADOR', 'ADMIN'),
       );
 
       // Verificamos que el snapshot de la inspección cerrada permanece 100% INTACTO
