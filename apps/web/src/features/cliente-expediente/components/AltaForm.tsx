@@ -12,6 +12,10 @@ interface AltaFormLayoutProps {
   mostrarErrores: boolean;
   onSubmit: () => void;
   onCancelar: () => void;
+  /** Con una operación en curso los botones quedan deshabilitados. */
+  enviando?: boolean;
+  /** Error que no corresponde a un campo (red caída, permisos, etc.). */
+  errorGeneral?: string | null;
   children: ReactNode;
 }
 
@@ -25,6 +29,8 @@ export function AltaFormLayout({
   mostrarErrores,
   onSubmit,
   onCancelar,
+  enviando = false,
+  errorGeneral = null,
   children,
 }: AltaFormLayoutProps) {
   function enviar(e: FormEvent) {
@@ -39,7 +45,7 @@ export function AltaFormLayout({
         title={title}
         meta={meta}
         action={
-          <button type="button" className="alta-page__volver" onClick={onCancelar}>
+          <button type="button" className="alta-page__volver" onClick={onCancelar} disabled={enviando}>
             ← Volver sin guardar
           </button>
         }
@@ -50,13 +56,18 @@ export function AltaFormLayout({
             {cantidadErrores === 1 ? 'Hay 1 campo por corregir.' : `Hay ${cantidadErrores} campos por corregir.`} Están marcados abajo.
           </p>
         ) : null}
+        {errorGeneral ? (
+          <p className="alta-form__resumen" role="alert">
+            {errorGeneral}
+          </p>
+        ) : null}
         {children}
         <div className="alta-form__acciones">
-          <Button type="button" variant="secondary" onClick={onCancelar}>
+          <Button type="button" variant="secondary" onClick={onCancelar} disabled={enviando}>
             Cancelar
           </Button>
-          <Button type="submit" variant="primary">
-            {textoConfirmar}
+          <Button type="submit" variant="primary" disabled={enviando}>
+            {enviando ? 'Guardando…' : textoConfirmar}
           </Button>
         </div>
       </form>

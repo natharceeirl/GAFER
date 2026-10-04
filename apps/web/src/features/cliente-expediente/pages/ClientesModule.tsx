@@ -4,10 +4,15 @@ import { ClienteExpedientePage } from './ClienteExpedientePage';
 import { NuevoClientePage } from './NuevoClientePage';
 import { NuevoProyectoPage } from './NuevoProyectoPage';
 import { NuevoServicioPage } from './NuevoServicioPage';
-import { useCartera } from '../model/cartera-context';
-import { actualizarCliente, agregarCliente, agregarProyecto, agregarServicio, esClienteNuevo, proyectosDe } from '../model/cartera';
+import { EstadoCargando, EstadoError } from '../components/EstadoConsulta';
 import type { ClienteFila } from '../model/clientes-mock';
+import { TicketHeader } from '../../../shared/ui/molecules/TicketHeader';
+import { useCartera } from '../model/cartera-context';
+import { agregarProyecto, agregarServicio, esClienteDeEjemplo, proyectosDe } from '../model/cartera';
+import { camposDeError, datosDeFila } from '../model/cliente-mapper';
+import { mensajeDeError } from '../../../shared/api/errores';
 import type { DatosCliente, DatosProyecto, DatosServicio } from '../model/validaciones';
+import { useActivarCliente, useActualizarCliente, useCliente, useClientes, useCrearCliente, useDesactivarCliente } from '../api/use-clientes';
 import { CATALOGOS_TEXTO_MOCK, EQUIPOS_MOCK, INSUMOS_MOCK, PERSONAL_MOCK } from '../../mantenimiento/model/mantenimiento-mock';
 import { useProgramacion } from '../../programacion/model/programacion-context';
 import { vistaTecnico } from '../model/vista-tecnico';
@@ -37,21 +42,6 @@ const TECNICO_DEMO = PERSONAL_MOCK.find((p) => p.cargo === 'Técnico Operador' &
 
 const GIROS = CATALOGOS_TEXTO_MOCK.find((c) => c.id === 'giros')?.items ?? [];
 
-function datosDe(c: ClienteFila): DatosCliente {
-  return {
-    razonSocial: c.razonSocial,
-    ruc: c.ruc,
-    codigoCorto: c.codigoCorto,
-    direccionFiscal: c.direccionFiscal,
-    giro: c.giro,
-    contactoNombre: c.contacto.nombre,
-    contactoCargo: c.contacto.cargo,
-    contactoTelefono: c.contacto.telefono,
-    contactoCorreo: c.contacto.correo,
-    estado: c.estado,
-  };
-}
-
 /** Jerarquía CLIENTE → PROYECTO (sede) → SERVICIO (§7), sobre la cartera compartida de la app. */
 export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModuleProps) {
   const { cartera, setCartera } = useCartera();
@@ -64,22 +54,51 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
   /** Solo el Administrador da de alta clientes, sedes y servicios (§12, decisión C1). */
   const puedeDarDeAlta = rol === 'ADMINISTRADOR';
 
+  const lista = useClientes();
+  const clienteIdAbierto = vista.tipo === 'lista' || vista.tipo === 'nuevo-cliente' ? null : vista.clienteId;
+  const ficha = useCliente(clienteIdAbierto);
+  const crear = useCrearCliente();
+  const actualizar = useActualizarCliente();
+  const activar = useActivarCliente();
+  const desactivar = useDesactivarCliente();
+
+  const erroresAlta = useMemo(() => (crear.error ? camposDeError(crear.error) : null), [crear.error]);
+  const errorEdicion = actualizar.error ?? activar.error ?? desactivar.error;
+  const erroresEdicion = useMemo(() => (errorEdicion ? camposDeError(errorEdicion) : null), [errorEdicion]);
+  const guardandoFicha = actualizar.isPending || activar.isPending || desactivar.isPending;
+
   function auditar(accion: AccionAuditoria, referencia: string, detalle: string) {
     const fechaHora = ahora();
     registrar({ id: `${fechaHora}-${accion}-${referencia}`, fechaHora, usuario, rol, accion, referencia, detalle });
   }
 
-  function registrarCliente(d: DatosCliente, anticipacion: number) {
-    const { estado, clienteId } = agregarCliente(cartera, d, anticipacion);
-    setCartera(() => estado);
-    auditar('Alta de cliente', d.codigoCorto, `${d.razonSocial.trim()} · RUC ${d.ruc}`);
-    setVista({ tipo: 'expediente', clienteId, aviso: `Cliente ${d.codigoCorto} registrado. El siguiente paso es registrar su primera sede.` });
+  function irA(siguiente: Vista) {
+    crear.reset();
+    actualizar.reset();
+    activar.reset();
+    desactivar.reset();
+    setVista(siguiente);
   }
 
-  function guardarFicha(cliente: ClienteFila, d: DatosCliente, anticipacion: number) {
-    setCartera(() => actualizarCliente(cartera, cliente.id, d, anticipacion));
-    auditar('Edición de ficha de cliente', cliente.codigoCorto, d.razonSocial.trim());
-    setVista({ tipo: 'expediente', clienteId: cliente.id, aviso: 'Ficha del cliente actualizada.' });
+  async function registrarCliente(d: DatosCliente, anticipacion: number) {
+    try {
+      const creado = await crear.mutateAsync({ datos: d, anticipacionAlertaDias: anticipacion });
+      auditar('Alta de cliente', d.codigoCorto, `${d.razonSocial.trim()} · RUC ${d.ruc}`);
+      irA({ tipo: 'expediente', clienteId: creado.id, aviso: `Cliente ${d.codigoCorto} registrado. El siguiente paso es registrar su primera sede.` });
+    } catch {
+      // El error queda en la mutación y el formulario lo muestra por campo.
+    }
+  }
+
+  async function guardarFicha(cliente: ClienteFila, d: DatosCliente, anticipacion: number) {
+    try {
+      await actualizar.mutateAsync({ id: cliente.id, datos: d, anticipacionAlertaDias: anticipacion });
+      if (d.estado !== cliente.estado) await (d.estado === 'ACTIVO' ? activar : desactivar).mutateAsync(cliente.id);
+      auditar('Edición de ficha de cliente', cliente.codigoCorto, d.razonSocial.trim());
+      irA({ tipo: 'expediente', clienteId: cliente.id, aviso: 'Ficha del cliente actualizada.' });
+    } catch {
+      // El error queda en la mutación y el formulario lo muestra por campo.
+    }
   }
 
   function registrarProyecto(clienteId: string, d: DatosProyecto) {
@@ -93,56 +112,74 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
     setVista({ tipo: 'expediente', clienteId, aviso: `Servicio ${d.tipo} (${d.frecuencia.toLowerCase()}) registrado en ${nombreSede}.` });
   }
 
-  const clienteDe = (id: string) => cartera.clientes.find((c) => c.id === id);
+  const cliente = ficha.data;
 
   if (vista.tipo === 'nuevo-cliente' && puedeDarDeAlta) {
     return (
       <NuevoClientePage
         giros={GIROS}
-        codigosExistentes={cartera.clientes.map((c) => c.codigoCorto)}
-        rucsExistentes={cartera.clientes.map((c) => c.ruc)}
+        enviando={crear.isPending}
+        erroresServidor={erroresAlta?.campos}
+        errorGeneral={erroresAlta?.general}
         onRegistrar={registrarCliente}
-        onCancelar={() => setVista({ tipo: 'lista' })}
+        onCancelar={() => irA({ tipo: 'lista' })}
       />
     );
   }
 
-  if (vista.tipo === 'editar-cliente' && puedeDarDeAlta) {
-    const cliente = clienteDe(vista.clienteId);
-    if (cliente) {
-      const otros = cartera.clientes.filter((c) => c.id !== cliente.id);
-      return (
-        <NuevoClientePage
-          giros={GIROS}
-          codigosExistentes={otros.map((c) => c.codigoCorto)}
-          rucsExistentes={otros.map((c) => c.ruc)}
-          inicial={datosDe(cliente)}
-          anticipacionInicial={cliente.anticipacionAlertaDias}
-          onRegistrar={(d, anticipacion) => guardarFicha(cliente, d, anticipacion)}
-          onCancelar={() => setVista({ tipo: 'expediente', clienteId: cliente.id, aviso: null })}
+  if (vista.tipo !== 'lista' && vista.tipo !== 'nuevo-cliente' && !cliente) {
+    return (
+      <div className="clientes-page">
+        <TicketHeader
+          code="FICHA DE CLIENTE"
+          title="Cliente"
+          meta="Expediente digital"
+          action={
+            <button type="button" className="expediente-page__volver" onClick={() => irA({ tipo: 'lista' })}>
+              ← Volver a la cartera
+            </button>
+          }
         />
-      );
-    }
+        <div className="clientes-page__body">
+          {ficha.isError ? (
+            <EstadoError mensaje={mensajeDeError(ficha.error)} onReintentar={() => void ficha.refetch()} />
+          ) : (
+            <EstadoCargando mensaje="Cargando la ficha del cliente…" />
+          )}
+        </div>
+      </div>
+    );
   }
 
-  if (vista.tipo === 'nuevo-proyecto' && puedeDarDeAlta) {
-    const cliente = clienteDe(vista.clienteId);
-    if (cliente) {
-      return (
-        <NuevoProyectoPage
-          cliente={cliente}
-          nombresExistentes={proyectosDe(cartera, cliente.id).map((p) => p.nombre)}
-          onRegistrar={(d) => registrarProyecto(cliente.id, d)}
-          onCancelar={() => setVista({ tipo: 'expediente', clienteId: cliente.id, aviso: null })}
-        />
-      );
-    }
+  if (vista.tipo === 'editar-cliente' && puedeDarDeAlta && cliente) {
+    return (
+      <NuevoClientePage
+        giros={GIROS}
+        inicial={datosDeFila(cliente)}
+        anticipacionInicial={cliente.anticipacionAlertaDias}
+        enviando={guardandoFicha}
+        erroresServidor={erroresEdicion?.campos}
+        errorGeneral={erroresEdicion?.general}
+        onRegistrar={(d, anticipacion) => void guardarFicha(cliente, d, anticipacion)}
+        onCancelar={() => irA({ tipo: 'expediente', clienteId: cliente.id, aviso: null })}
+      />
+    );
   }
 
-  if (vista.tipo === 'nuevo-servicio' && puedeDarDeAlta) {
-    const cliente = clienteDe(vista.clienteId);
-    const proyecto = cliente ? proyectosDe(cartera, cliente.id).find((p) => p.id === vista.proyectoId) : undefined;
-    if (cliente && proyecto) {
+  if (vista.tipo === 'nuevo-proyecto' && puedeDarDeAlta && cliente) {
+    return (
+      <NuevoProyectoPage
+        cliente={cliente}
+        nombresExistentes={proyectosDe(cartera, cliente.id).map((p) => p.nombre)}
+        onRegistrar={(d) => registrarProyecto(cliente.id, d)}
+        onCancelar={() => setVista({ tipo: 'expediente', clienteId: cliente.id, aviso: null })}
+      />
+    );
+  }
+
+  if (vista.tipo === 'nuevo-servicio' && puedeDarDeAlta && cliente) {
+    const proyecto = proyectosDe(cartera, cliente.id).find((p) => p.id === vista.proyectoId);
+    if (proyecto) {
       return (
         <NuevoServicioPage
           cliente={cliente}
@@ -156,54 +193,54 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
     }
   }
 
-  if (vista.tipo !== 'lista' && vista.tipo !== 'nuevo-cliente') {
-    const cliente = clienteDe(vista.clienteId);
-    if (cliente) {
-      const proyectos = proyectosDe(cartera, cliente.id);
-      /** Los clientes de ejemplo comparten sedes de muestra: su contrato real sale del historial. */
-      const contrataDesratizacion = esClienteNuevo(cartera, cliente.id)
-        ? proyectos.some((p) => p.servicios.some((s) => s.tipoId === 'DRT'))
-        : tiposContratadosDe(cliente.codigoCorto).includes('DRT');
-      return (
-        <ClienteExpedientePage
-          cliente={cliente}
-          proyectos={proyectos}
-          historial={historial}
-          hoy={hoy}
-          programaRoedores={
-            contrataDesratizacion ? { estacionesRojo: estacionesRojo.filter((e) => e.cliente === cliente.codigoCorto) } : null
-          }
-          vistaApp={{
-            tecnico: TECNICO_DEMO,
-            sedes: vistaTecnico({
-              cliente,
-              proyectos,
-              historial,
-              visitas,
-              hoy,
-              insumos: INSUMOS_MOCK,
-              equipos: EQUIPOS_MOCK,
-              estacionesRojo,
-            }).sedes,
-          }}
-          puedeDarDeAlta={puedeDarDeAlta}
-          aviso={vista.tipo === 'expediente' ? vista.aviso : null}
-          onVolver={() => setVista({ tipo: 'lista' })}
-          onEditarFicha={() => setVista({ tipo: 'editar-cliente', clienteId: cliente.id })}
-          onNuevoProyecto={() => setVista({ tipo: 'nuevo-proyecto', clienteId: cliente.id })}
-          onNuevoServicio={(proyectoId) => setVista({ tipo: 'nuevo-servicio', clienteId: cliente.id, proyectoId })}
-          onAbrirMapaMurino={() => onAbrirMapaMurino(cliente.id)}
-        />
-      );
-    }
+  if (vista.tipo !== 'lista' && vista.tipo !== 'nuevo-cliente' && cliente) {
+    const proyectos = proyectosDe(cartera, cliente.id);
+    /** Los clientes de ejemplo comparten sedes de muestra: su contrato real sale del historial. */
+    const contrataDesratizacion = esClienteDeEjemplo(cartera, cliente.id)
+      ? tiposContratadosDe(cliente.codigoCorto).includes('DRT')
+      : proyectos.some((p) => p.servicios.some((s) => s.tipoId === 'DRT'));
+    return (
+      <ClienteExpedientePage
+        cliente={cliente}
+        proyectos={proyectos}
+        historial={historial}
+        hoy={hoy}
+        programaRoedores={
+          contrataDesratizacion ? { estacionesRojo: estacionesRojo.filter((e) => e.cliente === cliente.codigoCorto) } : null
+        }
+        vistaApp={{
+          tecnico: TECNICO_DEMO,
+          sedes: vistaTecnico({
+            cliente,
+            proyectos,
+            historial,
+            visitas,
+            hoy,
+            insumos: INSUMOS_MOCK,
+            equipos: EQUIPOS_MOCK,
+            estacionesRojo,
+          }).sedes,
+        }}
+        puedeDarDeAlta={puedeDarDeAlta}
+        aviso={vista.tipo === 'expediente' ? vista.aviso : null}
+        onVolver={() => setVista({ tipo: 'lista' })}
+        onEditarFicha={() => setVista({ tipo: 'editar-cliente', clienteId: cliente.id })}
+        onNuevoProyecto={() => setVista({ tipo: 'nuevo-proyecto', clienteId: cliente.id })}
+        onNuevoServicio={(proyectoId) => setVista({ tipo: 'nuevo-servicio', clienteId: cliente.id, proyectoId })}
+        onAbrirMapaMurino={() => onAbrirMapaMurino(cliente.id)}
+      />
+    );
   }
 
   return (
     <ClientesListPage
-      clientes={cartera.clientes}
-      onAbrirCliente={(c) => setVista({ tipo: 'expediente', clienteId: c.id, aviso: null })}
+      clientes={lista.data ?? []}
+      cargando={lista.isPending}
+      error={lista.isError ? mensajeDeError(lista.error) : null}
+      onReintentar={() => void lista.refetch()}
+      onAbrirCliente={(c) => irA({ tipo: 'expediente', clienteId: c.id, aviso: null })}
       puedeCrearCliente={puedeDarDeAlta}
-      onNuevoCliente={() => setVista({ tipo: 'nuevo-cliente' })}
+      onNuevoCliente={() => irA({ tipo: 'nuevo-cliente' })}
     />
   );
 }

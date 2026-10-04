@@ -27,6 +27,22 @@
   border-top: none;
 }
 
+.clientes-page__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-left: 4px solid var(--gf-rojo);
+  border-radius: var(--gf-radius);
+  color: var(--gf-ink);
+}
+.clientes-page__error p {
+  margin: 0;
+}
+
 .clientes-tabla {
   border: 1.5px solid var(--gf-rule-strong);
   border-radius: var(--gf-radius);

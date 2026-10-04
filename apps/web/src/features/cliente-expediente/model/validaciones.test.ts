@@ -22,11 +22,9 @@ const clienteValido: DatosCliente = {
   estado: 'ACTIVO',
 };
 
-const existentes = { codigos: ['KALLPA', 'SAMAY'], rucs: ['20512345678'] };
-
 describe('validarCliente (§7.1)', () => {
   it('acepta un cliente completo', () => {
-    expect(validarCliente(clienteValido, existentes)).toEqual({});
+    expect(validarCliente(clienteValido)).toEqual({});
   });
 
   it('exige todos los campos obligatorios', () => {
@@ -40,40 +38,49 @@ describe('validarCliente (§7.1)', () => {
       contactoTelefono: '',
       contactoCorreo: '',
     };
-    const errores = validarCliente(vacio, existentes);
+    const errores = validarCliente(vacio);
     expect(Object.keys(errores).sort()).toEqual(
       ['contactoCargo', 'contactoCorreo', 'contactoNombre', 'contactoTelefono', 'direccionFiscal', 'giro', 'razonSocial'].sort(),
     );
   });
 
   it('pide un RUC de 11 dígitos', () => {
-    expect(validarCliente({ ...clienteValido, ruc: '2061112223' }, existentes).ruc).toBeDefined();
-    expect(validarCliente({ ...clienteValido, ruc: '2061112223A' }, existentes).ruc).toBeDefined();
+    expect(validarCliente({ ...clienteValido, ruc: '2061112223' }).ruc).toBeDefined();
+    expect(validarCliente({ ...clienteValido, ruc: '2061112223A' }).ruc).toBeDefined();
   });
 
   it('rechaza el código reservado de personas naturales y lo manda a VARIOS', () => {
-    expect(validarCliente({ ...clienteValido, ruc: '12345678910' }, existentes).ruc).toMatch(/VARIOS/);
-  });
-
-  it('rechaza un RUC ya registrado', () => {
-    expect(validarCliente({ ...clienteValido, ruc: '20512345678' }, existentes).ruc).toBeDefined();
+    expect(validarCliente({ ...clienteValido, ruc: '12345678910' }).ruc).toMatch(/VARIOS/);
   });
 
   it('pide un código corto de 4 a 10 mayúsculas o números', () => {
-    expect(validarCliente({ ...clienteValido, codigoCorto: 'MOL' }, existentes).codigoCorto).toBeDefined();
-    expect(validarCliente({ ...clienteValido, codigoCorto: 'MOLINOSDELSUR' }, existentes).codigoCorto).toBeDefined();
-    expect(validarCliente({ ...clienteValido, codigoCorto: 'MOLI_SUR' }, existentes).codigoCorto).toBeDefined();
-    expect(validarCliente({ ...clienteValido, codigoCorto: 'MOLISUR2' }, existentes).codigoCorto).toBeUndefined();
-  });
-
-  it('rechaza un código corto que ya usa otro cliente', () => {
-    expect(validarCliente({ ...clienteValido, codigoCorto: 'KALLPA' }, existentes).codigoCorto).toBeDefined();
+    expect(validarCliente({ ...clienteValido, codigoCorto: 'MOL' }).codigoCorto).toBeDefined();
+    expect(validarCliente({ ...clienteValido, codigoCorto: 'MOLINOSDELSUR' }).codigoCorto).toBeDefined();
+    expect(validarCliente({ ...clienteValido, codigoCorto: 'MOLI_SUR' }).codigoCorto).toBeDefined();
+    expect(validarCliente({ ...clienteValido, codigoCorto: 'MOLISUR2' }).codigoCorto).toBeUndefined();
   });
 
   it('valida el formato del correo y del teléfono', () => {
-    const errores = validarCliente({ ...clienteValido, contactoCorreo: 'cpinto@', contactoTelefono: '12' }, existentes);
+    const errores = validarCliente({ ...clienteValido, contactoCorreo: 'cpinto@', contactoTelefono: '12' });
     expect(errores.contactoCorreo).toBeDefined();
     expect(errores.contactoTelefono).toBeDefined();
+  });
+
+  it('usa los mensajes en español del esquema compartido y "obligatorio" para los vacíos', () => {
+    const errores = validarCliente({ ...clienteValido, ruc: '123', razonSocial: '', contactoCorreo: 'cpinto@' });
+    expect(errores.ruc).toBe('El RUC tiene 11 dígitos, sin letras ni espacios');
+    expect(errores.razonSocial).toBe('Campo obligatorio.');
+    expect(errores.contactoCorreo).toMatch(/correo válido/);
+  });
+
+  it('en edición no exige ni valida el RUC y el código corto, que no cambian', () => {
+    const errores = validarCliente({ ...clienteValido, ruc: '', codigoCorto: '' }, { edicion: true });
+    expect(errores).toEqual({});
+  });
+
+  it('en edición sigue exigiendo el resto de la ficha', () => {
+    const errores = validarCliente({ ...clienteValido, razonSocial: ' ', contactoCorreo: 'x' }, { edicion: true });
+    expect(Object.keys(errores).sort()).toEqual(['contactoCorreo', 'razonSocial']);
   });
 });
 

@@ -1,89 +1,33 @@
 import { CLIENTES_MOCK, type ClienteFila } from './clientes-mock';
 import { PROYECTOS_MOCK, type ProyectoExpediente, type ServicioContratado } from './expediente-mock';
 import { etiquetaTipoServicio } from './catalogos-servicio';
-import type { DatosCliente, DatosProyecto, DatosServicio } from './validaciones';
+import type { DatosProyecto, DatosServicio } from './validaciones';
 
 /**
- * Datos maestros CLIENTE → PROYECTO → SERVICIO (§7). Los clientes de
- * ejemplo comparten PROYECTOS_MOCK; un cliente dado de alta arranca sin sedes.
+ * Sedes y servicios en memoria (todavía sin API) de CLIENTE → PROYECTO → SERVICIO (§7).
+ * Los clientes de ejemplo comparten PROYECTOS_MOCK; un cliente del API arranca sin sedes.
  */
 export interface CarteraEstado {
+  /** Clientes de ejemplo que aún usan las demás pantallas de la maqueta; la cartera real viene del API (`useClientes`). */
   clientes: ClienteFila[];
   proyectosPorCliente: Record<string, ProyectoExpediente[]>;
-  clientesNuevos: string[];
 }
 
 export function estadoInicialCartera(): CarteraEstado {
-  return { clientes: CLIENTES_MOCK, proyectosPorCliente: {}, clientesNuevos: [] };
+  return { clientes: CLIENTES_MOCK, proyectosPorCliente: {} };
+}
+
+/** Los clientes de ejemplo comparten las sedes de muestra; cualquier otro (los del API) arranca sin sedes. */
+export function esClienteDeEjemplo(estado: CarteraEstado, clienteId: string): boolean {
+  return estado.clientes.some((c) => c.id === clienteId);
 }
 
 export function esClienteNuevo(estado: CarteraEstado, clienteId: string): boolean {
-  return estado.clientesNuevos.includes(clienteId);
+  return !esClienteDeEjemplo(estado, clienteId);
 }
 
 export function proyectosDe(estado: CarteraEstado, clienteId: string): ProyectoExpediente[] {
-  return estado.proyectosPorCliente[clienteId] ?? (esClienteNuevo(estado, clienteId) ? [] : PROYECTOS_MOCK);
-}
-
-function contactoDe(d: DatosCliente) {
-  return {
-    nombre: d.contactoNombre.trim(),
-    cargo: d.contactoCargo.trim(),
-    telefono: d.contactoTelefono.trim(),
-    correo: d.contactoCorreo.trim(),
-  };
-}
-
-/**
- * Edita la ficha. Código corto y RUC no cambian: el código corto arma la
- * numeración de todos los documentos del cliente (§2).
- */
-export function actualizarCliente(estado: CarteraEstado, clienteId: string, d: DatosCliente, anticipacionAlertaDias: number): CarteraEstado {
-  return {
-    ...estado,
-    clientes: estado.clientes.map((c) =>
-      c.id === clienteId
-        ? {
-            ...c,
-            razonSocial: d.razonSocial.trim(),
-            giro: d.giro,
-            direccionFiscal: d.direccionFiscal.trim(),
-            contacto: contactoDe(d),
-            estado: d.estado,
-            anticipacionAlertaDias,
-          }
-        : c,
-    ),
-  };
-}
-
-export function agregarCliente(
-  estado: CarteraEstado,
-  d: DatosCliente,
-  anticipacionAlertaDias = 30,
-): { estado: CarteraEstado; clienteId: string } {
-  const clienteId = `nuevo-${d.codigoCorto}`;
-  const cliente: ClienteFila = {
-    id: clienteId,
-    codigoCorto: d.codigoCorto,
-    razonSocial: d.razonSocial.trim(),
-    ruc: d.ruc,
-    giro: d.giro,
-    direccionFiscal: d.direccionFiscal.trim(),
-    contacto: contactoDe(d),
-    ultimoServicio: null,
-    proximoVencimiento: null,
-    anticipacionAlertaDias,
-    estado: d.estado,
-  };
-  return {
-    clienteId,
-    estado: {
-      clientes: [...estado.clientes, cliente],
-      proyectosPorCliente: { ...estado.proyectosPorCliente, [clienteId]: [] },
-      clientesNuevos: [...estado.clientesNuevos, clienteId],
-    },
-  };
+  return estado.proyectosPorCliente[clienteId] ?? (esClienteDeEjemplo(estado, clienteId) ? PROYECTOS_MOCK : []);
 }
 
 export function agregarProyecto(

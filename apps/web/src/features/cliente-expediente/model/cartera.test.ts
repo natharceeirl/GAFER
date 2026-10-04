@@ -1,27 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
-  actualizarCliente,
-  agregarCliente,
   agregarProyecto,
   agregarServicio,
+  esClienteDeEjemplo,
   estadoInicialCartera,
   proyectosDe,
   sedesActivas,
 } from './cartera';
-import type { DatosCliente, DatosProyecto, DatosServicio } from './validaciones';
+import type { DatosProyecto, DatosServicio } from './validaciones';
 
-const cliente: DatosCliente = {
-  razonSocial: 'Molinos del Sur S.A.C.',
-  ruc: '20611122233',
-  codigoCorto: 'MOLISUR',
-  direccionFiscal: 'Av. Ejército 101',
-  giro: 'Alimentos',
-  contactoNombre: 'Carla Pinto',
-  contactoCargo: 'Jefa de Calidad',
-  contactoTelefono: '959123456',
-  contactoCorreo: 'cpinto@molisur.pe',
-  estado: 'ACTIVO',
-};
+/** Un cliente del API: su id no está entre los de ejemplo. */
+const CLIENTE_API = '3f0c6d5e-0d1a-4f43-9d0e-2f3a8f6f9a11';
 
 const proyecto: DatosProyecto = {
   nombre: 'PLANTA_NORTE',
@@ -52,47 +41,20 @@ const servicio: DatosServicio = {
 };
 
 describe('cartera compartida (§7)', () => {
-  it('un cliente de ejemplo trae las sedes de ejemplo; uno nuevo arranca sin sedes', () => {
+  it('un cliente de ejemplo trae las sedes de ejemplo; uno del API arranca sin sedes', () => {
     const inicial = estadoInicialCartera();
+    expect(esClienteDeEjemplo(inicial, inicial.clientes[0].id)).toBe(true);
     expect(proyectosDe(inicial, inicial.clientes[0].id).length).toBeGreaterThan(0);
 
-    const { estado, clienteId } = agregarCliente(inicial, cliente);
-    expect(estado.clientes.at(-1)?.codigoCorto).toBe('MOLISUR');
-    expect(proyectosDe(estado, clienteId)).toEqual([]);
-  });
-
-  it('guarda la ficha completa del alta, para mostrarla en el expediente (§3)', () => {
-    const { estado } = agregarCliente(estadoInicialCartera(), cliente);
-    expect(estado.clientes.at(-1)).toMatchObject({
-      direccionFiscal: 'Av. Ejército 101',
-      contacto: { nombre: 'Carla Pinto', cargo: 'Jefa de Calidad', telefono: '959123456', correo: 'cpinto@molisur.pe' },
-      anticipacionAlertaDias: 30,
-    });
-  });
-
-  it('guarda la anticipación de alerta elegida en el alta', () => {
-    const { estado } = agregarCliente(estadoInicialCartera(), cliente, 45);
-    expect(estado.clientes.at(-1)?.anticipacionAlertaDias).toBe(45);
-  });
-
-  it('actualiza la ficha sin cambiar código corto ni RUC, que sostienen la numeración (§2)', () => {
-    const { estado, clienteId } = agregarCliente(estadoInicialCartera(), cliente);
-    const editado = actualizarCliente(estado, clienteId, { ...cliente, codigoCorto: 'OTRO', ruc: '20999999999', giro: 'Salud', contactoTelefono: '054 111222' }, 60);
-    expect(editado.clientes.at(-1)).toMatchObject({
-      codigoCorto: 'MOLISUR',
-      ruc: '20611122233',
-      giro: 'Salud',
-      anticipacionAlertaDias: 60,
-      contacto: expect.objectContaining({ telefono: '054 111222' }),
-    });
+    expect(esClienteDeEjemplo(inicial, CLIENTE_API)).toBe(false);
+    expect(proyectosDe(inicial, CLIENTE_API)).toEqual([]);
   });
 
   it('agrega una sede y un servicio con lo que el técnico necesita precargado', () => {
-    const paso1 = agregarCliente(estadoInicialCartera(), cliente);
-    const paso2 = agregarProyecto(paso1.estado, paso1.clienteId, proyecto);
-    const estado = agregarServicio(paso2.estado, paso1.clienteId, paso2.proyectoId, servicio);
+    const paso1 = agregarProyecto(estadoInicialCartera(), CLIENTE_API, proyecto);
+    const estado = agregarServicio(paso1.estado, CLIENTE_API, paso1.proyectoId, servicio);
 
-    const [sede] = proyectosDe(estado, paso1.clienteId);
+    const [sede] = proyectosDe(estado, CLIENTE_API);
     expect(sede.nombre).toBe('PLANTA_NORTE');
     expect(sede.servicios).toHaveLength(1);
     expect(sede.servicios[0]).toMatchObject({
@@ -107,8 +69,8 @@ describe('cartera compartida (§7)', () => {
 
   it('no modifica el estado anterior', () => {
     const inicial = estadoInicialCartera();
-    agregarCliente(inicial, cliente);
-    expect(inicial.clientes.some((c) => c.codigoCorto === 'MOLISUR')).toBe(false);
+    agregarProyecto(inicial, CLIENTE_API, proyecto);
+    expect(inicial.proyectosPorCliente[CLIENTE_API]).toBeUndefined();
   });
 
   it('lista solo sedes activas de clientes activos, para que el técnico elija (§3)', () => {

@@ -3,7 +3,8 @@ import { TicketHeader } from '../../../shared/ui/molecules/TicketHeader';
 import { PerforatedDivider } from '../../../shared/ui/molecules/PerforatedDivider';
 import { Badge } from '../../../shared/ui/atoms/Badge';
 import { Button } from '../../../shared/ui/atoms/Button';
-import type { ClienteFila } from '../model/clientes-mock';
+import { EstadoCargando, EstadoError } from '../components/EstadoConsulta';
+import type { ClienteListado } from '../model/cliente-mapper';
 import './clientes-list-page.css';
 
 type Columna = 'razonSocial' | 'proximoVencimiento';
@@ -20,14 +21,18 @@ function formatearFecha(fecha: string | null): string {
 }
 
 interface Props {
-  clientes: ClienteFila[];
-  onAbrirCliente: (cliente: ClienteFila) => void;
+  clientes: ClienteListado[];
+  cargando: boolean;
+  /** Mensaje del error de la consulta; `null` si no falló. */
+  error: string | null;
+  onReintentar: () => void;
+  onAbrirCliente: (cliente: ClienteListado) => void;
   /** Spec §12: solo el Administrador crea clientes (§7.1 lo contradice; se sigue la tabla de roles). */
   puedeCrearCliente: boolean;
   onNuevoCliente: () => void;
 }
 
-export function ClientesListPage({ clientes, onAbrirCliente, puedeCrearCliente, onNuevoCliente }: Props) {
+export function ClientesListPage({ clientes, cargando, error, onReintentar, onAbrirCliente, puedeCrearCliente, onNuevoCliente }: Props) {
   const [busqueda, setBusqueda] = useState('');
   const [columna, setColumna] = useState<Columna>('razonSocial');
   const [direccion, setDireccion] = useState<Direccion>('asc');
@@ -82,49 +87,56 @@ export function ClientesListPage({ clientes, onAbrirCliente, puedeCrearCliente, 
           aria-label="Buscar cliente"
         />
 
-        <div className="clientes-tabla">
-          <div className="clientes-tabla__cabecera" role="row">
-            <button type="button" className="clientes-tabla__th" onClick={() => alternarOrden('razonSocial')}>
-              Cliente {columna === 'razonSocial' ? (direccion === 'asc' ? '↑' : '↓') : ''}
-            </button>
-            <span className="clientes-tabla__th">Giro</span>
-            <span className="clientes-tabla__th">Último servicio</span>
-            <button type="button" className="clientes-tabla__th" onClick={() => alternarOrden('proximoVencimiento')}>
-              Vencimiento {columna === 'proximoVencimiento' ? (direccion === 'asc' ? '↑' : '↓') : ''}
-            </button>
-            <span className="clientes-tabla__th">Estado</span>
-          </div>
+        {cargando ? <EstadoCargando mensaje="Cargando clientes…" /> : null}
+        {error ? <EstadoError mensaje={error} onReintentar={onReintentar} /> : null}
 
-          {filas.length === 0 ? (
-            <p className="clientes-page__vacio">Ningún cliente coincide con “{busqueda}”.</p>
-          ) : (
-            filas.map((c, i) => {
-              const dias = diasHasta(c.proximoVencimiento);
-              const vencVariant = dias !== null && dias < 15 ? 'urgente' : dias !== null && dias < 45 ? 'atencion' : 'normal';
-              return (
-                <div key={c.id}>
-                  <button type="button" className="clientes-tabla__fila" onClick={() => onAbrirCliente(c)}>
-                    <span className="clientes-tabla__cliente">
-                      <span className="clientes-tabla__razon">{c.razonSocial}</span>
-                      <span className="clientes-tabla__codigo tabular">
-                        {c.codigoCorto} · RUC {c.ruc}
+        {!cargando && !error ? (
+          <div className="clientes-tabla">
+            <div className="clientes-tabla__cabecera" role="row">
+              <button type="button" className="clientes-tabla__th" onClick={() => alternarOrden('razonSocial')}>
+                Cliente {columna === 'razonSocial' ? (direccion === 'asc' ? '↑' : '↓') : ''}
+              </button>
+              <span className="clientes-tabla__th">Giro</span>
+              <span className="clientes-tabla__th">Último servicio</span>
+              <button type="button" className="clientes-tabla__th" onClick={() => alternarOrden('proximoVencimiento')}>
+                Vencimiento {columna === 'proximoVencimiento' ? (direccion === 'asc' ? '↑' : '↓') : ''}
+              </button>
+              <span className="clientes-tabla__th">Estado</span>
+            </div>
+
+            {filas.length === 0 ? (
+              <p className="clientes-page__vacio">
+                {clientes.length === 0 ? 'Aún no hay clientes registrados.' : `Ningún cliente coincide con “${busqueda}”.`}
+              </p>
+            ) : (
+              filas.map((c, i) => {
+                const dias = diasHasta(c.proximoVencimiento);
+                const vencVariant = dias !== null && dias < 15 ? 'urgente' : dias !== null && dias < 45 ? 'atencion' : 'normal';
+                return (
+                  <div key={c.id}>
+                    <button type="button" className="clientes-tabla__fila" onClick={() => onAbrirCliente(c)}>
+                      <span className="clientes-tabla__cliente">
+                        <span className="clientes-tabla__razon">{c.razonSocial}</span>
+                        <span className="clientes-tabla__codigo tabular">
+                          {c.codigoCorto} · RUC {c.ruc}
+                        </span>
                       </span>
-                    </span>
-                    <span>{c.giro}</span>
-                    <span className="tabular">{formatearFecha(c.ultimoServicio)}</span>
-                    <span className={`clientes-tabla__venc clientes-tabla__venc--${vencVariant} tabular`}>
-                      {formatearFecha(c.proximoVencimiento)}
-                    </span>
-                    <span className="clientes-tabla__estado">
-                      <Badge color={c.estado === 'ACTIVO' ? 'VERDE' : 'SIN_COLOR'}>{c.estado}</Badge>
-                    </span>
-                  </button>
-                  {i < filas.length - 1 && <PerforatedDivider />}
-                </div>
-              );
-            })
-          )}
-        </div>
+                      <span>{c.giro}</span>
+                      <span className="tabular">{formatearFecha(c.ultimoServicio)}</span>
+                      <span className={`clientes-tabla__venc clientes-tabla__venc--${vencVariant} tabular`}>
+                        {formatearFecha(c.proximoVencimiento)}
+                      </span>
+                      <span className="clientes-tabla__estado">
+                        <Badge color={c.estado === 'ACTIVO' ? 'VERDE' : 'SIN_COLOR'}>{c.estado}</Badge>
+                      </span>
+                    </button>
+                    {i < filas.length - 1 && <PerforatedDivider />}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        ) : null}
       </div>
     </div>
   );

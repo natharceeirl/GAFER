@@ -1,20 +1,26 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AltaFormLayout } from '../components/AltaForm';
 import { Bloque, Campo, Opciones, ariaError } from '../../../shared/ui/molecules/FormFields';
-import { normalizarCodigo, validarCliente, type DatosCliente } from '../model/validaciones';
+import { ANTICIPACION_ALERTA_POR_DEFECTO } from '../model/cliente-mapper';
+import { normalizarCodigo, validarCliente, type DatosCliente, type Errores } from '../model/validaciones';
 
 interface Props {
   giros: string[];
-  codigosExistentes: string[];
-  rucsExistentes: string[];
   /** Con `inicial` el formulario edita la ficha: código corto y RUC quedan fijos (§2). */
   inicial?: DatosCliente;
   anticipacionInicial?: number;
+  /** Operación en curso: se deshabilitan los botones. */
+  enviando?: boolean;
+  /** Errores por campo devueltos por el servidor (400/409). */
+  erroresServidor?: Errores<keyof DatosCliente>;
+  /** Error del servidor que no corresponde a un campo. */
+  errorGeneral?: string | null;
   onRegistrar: (datos: DatosCliente, anticipacionAlertaDias: number) => void;
   onCancelar: () => void;
 }
 
 const ANTICIPACIONES = [15, 30, 45, 60, 90];
+const SIN_ERRORES: Errores<keyof DatosCliente> = {};
 
 const INICIAL: DatosCliente = {
   razonSocial: '',
@@ -32,10 +38,11 @@ const INICIAL: DatosCliente = {
 /** Alta y edición de la ficha del cliente — spec §3 y §7.1. Solo el Administrador llega acá (§12). */
 export function NuevoClientePage({
   giros,
-  codigosExistentes,
-  rucsExistentes,
   inicial,
-  anticipacionInicial = 30,
+  anticipacionInicial = ANTICIPACION_ALERTA_POR_DEFECTO,
+  enviando = false,
+  erroresServidor = SIN_ERRORES,
+  errorGeneral = null,
   onRegistrar,
   onCancelar,
 }: Props) {
@@ -44,16 +51,28 @@ export function NuevoClientePage({
   const [anticipacion, setAnticipacion] = useState(anticipacionInicial);
   const [intentado, setIntentado] = useState(false);
 
-  const errores = validarCliente(datos, { codigos: codigosExistentes, rucs: rucsExistentes });
-  const visibles = intentado ? errores : {};
+  /** Campos que se tocaron después del último error del servidor: su error ya no aplica. */
+  const [corregidos, setCorregidos] = useState<Array<keyof DatosCliente>>([]);
+  useEffect(() => setCorregidos([]), [erroresServidor]);
+
+  const errores = validarCliente(datos, { edicion });
+  const delServidor: Errores<keyof DatosCliente> = {};
+  for (const campo of Object.keys(erroresServidor) as Array<keyof DatosCliente>) {
+    if (!corregidos.includes(campo) && !(edicion && (campo === 'ruc' || campo === 'codigoCorto'))) delServidor[campo] = erroresServidor[campo];
+  }
+  const visibles = { ...(intentado ? errores : {}), ...delServidor };
+
+  const girosOpciones = datos.giro !== '' && !giros.includes(datos.giro) ? [datos.giro, ...giros] : giros;
+  const anticipaciones = ANTICIPACIONES.includes(anticipacion) ? ANTICIPACIONES : [...ANTICIPACIONES, anticipacion].sort((a, b) => a - b);
 
   function set<K extends keyof DatosCliente>(campo: K, valor: DatosCliente[K]) {
     setDatos((prev) => ({ ...prev, [campo]: valor }));
+    setCorregidos((prev) => (prev.includes(campo) ? prev : [...prev, campo]));
   }
 
   function registrar() {
     setIntentado(true);
-    if (Object.keys(errores).length > 0) return;
+    if (enviando || Object.keys(errores).length > 0) return;
     onRegistrar(
       {
         ...datos,
@@ -77,6 +96,8 @@ export function NuevoClientePage({
       textoConfirmar={edicion ? 'Guardar ficha' : 'Registrar cliente'}
       cantidadErrores={Object.keys(errores).length}
       mostrarErrores={intentado}
+      enviando={enviando}
+      errorGeneral={errorGeneral}
       onSubmit={registrar}
       onCancelar={onCancelar}
     >
@@ -144,22 +165,24 @@ export function NuevoClientePage({
         <Campo id="cli-giro" label="Giro del negocio" error={visibles.giro} ayuda="Se edita en Mantenimiento → Catálogos de texto.">
           <select {...ariaError('cli-giro', visibles.giro)} value={datos.giro} onChange={(e) => set('giro', e.target.value)}>
             <option value="">Seleccione un giro…</option>
-            {giros.map((g) => (
+            {girosOpciones.map((g) => (
               <option key={g} value={g}>
                 {g}
               </option>
             ))}
           </select>
         </Campo>
-        <Opciones
-          nombre="Estado"
-          valor={datos.estado}
-          opciones={[
-            { valor: 'ACTIVO', etiqueta: 'Activo' },
-            { valor: 'INACTIVO', etiqueta: 'Inactivo' },
-          ]}
-          onCambiar={(v) => set('estado', v)}
-        />
+        {edicion ? (
+          <Opciones
+            nombre="Estado"
+            valor={datos.estado}
+            opciones={[
+              { valor: 'ACTIVO', etiqueta: 'Activo' },
+              { valor: 'INACTIVO', etiqueta: 'Inactivo' },
+            ]}
+            onCambiar={(v) => set('estado', v)}
+          />
+        ) : null}
       </Bloque>
 
       <Bloque titulo="Contacto principal">
@@ -208,7 +231,7 @@ export function NuevoClientePage({
           ayuda="La alerta aparece en el expediente y en el Panel de control con esta anticipación."
         >
           <select id="cli-anticipacion" value={anticipacion} onChange={(e) => setAnticipacion(Number(e.target.value))}>
-            {ANTICIPACIONES.map((d) => (
+            {anticipaciones.map((d) => (
               <option key={d} value={d}>
                 {d} días de anticipación
               </option>

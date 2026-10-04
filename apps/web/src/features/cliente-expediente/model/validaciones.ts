@@ -1,14 +1,12 @@
-import type { EstadoActivoInactivo, TipoServicio } from '@gafer/contracts';
+import { ClienteActualizacionSchema, ClienteRegistroSchema, type EstadoActivoInactivo, type TipoServicio } from '@gafer/contracts';
+import { actualizacionDeDatos, campoDeRuta, registroDeDatos } from './cliente-mapper';
 
 export type Errores<K extends string> = Partial<Record<K, string>>;
 
 /** Código reservado para personas naturales, que se registran bajo el cliente VARIOS (§7.1). */
 export const RUC_VARIOS = '12345678910';
 
-const RE_RUC = /^\d{11}$/;
-const RE_CODIGO = /^[A-Z0-9]{4,10}$/;
 const RE_NOMBRE_SEDE = /^[A-Z0-9_]{4,20}$/;
-const RE_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RE_TELEFONO = /^[0-9 +()-]+$/;
 
 const OBLIGATORIO = 'Campo obligatorio.';
@@ -38,30 +36,39 @@ export interface DatosCliente {
   estado: EstadoActivoInactivo;
 }
 
-export function validarCliente(d: DatosCliente, existentes: { codigos: string[]; rucs: string[] }): Errores<keyof DatosCliente> {
+type Incidencia = NonNullable<ReturnType<typeof ClienteRegistroSchema.safeParse>['error']>['issues'][number];
+
+const MENSAJE_CORREO = 'Ingrese un correo válido, por ejemplo nombre@empresa.pe.';
+
+/** Los textos de los esquemas compartidos ya vienen en español; solo se completan los genéricos de zod. */
+function mensajeDe(incidencia: Incidencia): string {
+  if (incidencia.code === 'invalid_string' && incidencia.validation === 'email') return MENSAJE_CORREO;
+  if (incidencia.code === 'too_small' || incidencia.code === 'invalid_type') return OBLIGATORIO;
+  return incidencia.message;
+}
+
+/**
+ * Valida la ficha con los esquemas de `@gafer/contracts` (los mismos del API). En edición el RUC y el
+ * código corto no se tocan, por eso se validan contra el esquema de actualización, que no los incluye.
+ * La unicidad del RUC y del código la resuelve el servidor (409).
+ */
+export function validarCliente(d: DatosCliente, { edicion = false }: { edicion?: boolean } = {}): Errores<keyof DatosCliente> {
   const e: Errores<keyof DatosCliente> = {};
+  const resultado = edicion
+    ? ClienteActualizacionSchema.safeParse(actualizacionDeDatos(d, 1))
+    : ClienteRegistroSchema.safeParse(registroDeDatos(d, 1));
 
-  if (vacio(d.razonSocial)) e.razonSocial = OBLIGATORIO;
+  if (!resultado.success) {
+    for (const incidencia of resultado.error.issues) {
+      const campo = campoDeRuta(String(incidencia.path[0]));
+      if (!campo || e[campo]) continue;
+      e[campo] = vacio(d[campo]) ? OBLIGATORIO : mensajeDe(incidencia);
+    }
+  }
 
-  if (vacio(d.ruc)) e.ruc = OBLIGATORIO;
-  else if (d.ruc === RUC_VARIOS) e.ruc = 'Ese código es de personas naturales: regístrelas como sede del cliente VARIOS.';
-  else if (!RE_RUC.test(d.ruc)) e.ruc = 'El RUC tiene 11 dígitos, sin letras ni espacios.';
-  else if (existentes.rucs.includes(d.ruc)) e.ruc = 'Ya hay un cliente registrado con ese RUC.';
-
-  if (vacio(d.codigoCorto)) e.codigoCorto = OBLIGATORIO;
-  else if (!RE_CODIGO.test(d.codigoCorto)) e.codigoCorto = 'De 4 a 10 letras o números en mayúsculas, sin espacios ni símbolos.';
-  else if (existentes.codigos.includes(d.codigoCorto)) e.codigoCorto = 'Ese código ya lo usa otro cliente.';
-
-  if (vacio(d.direccionFiscal)) e.direccionFiscal = OBLIGATORIO;
-  if (vacio(d.giro)) e.giro = OBLIGATORIO;
-  if (vacio(d.contactoNombre)) e.contactoNombre = OBLIGATORIO;
-  if (vacio(d.contactoCargo)) e.contactoCargo = OBLIGATORIO;
-
-  if (vacio(d.contactoTelefono)) e.contactoTelefono = OBLIGATORIO;
-  else if (!telefonoValido(d.contactoTelefono)) e.contactoTelefono = 'Ingrese un teléfono de al menos 6 dígitos.';
-
-  if (vacio(d.contactoCorreo)) e.contactoCorreo = OBLIGATORIO;
-  else if (!RE_CORREO.test(d.contactoCorreo.trim())) e.contactoCorreo = 'Ingrese un correo válido, por ejemplo nombre@empresa.pe.';
+  if (!edicion && !e.ruc && d.ruc === RUC_VARIOS) {
+    e.ruc = 'Ese código es de personas naturales: regístrelas como sede del cliente VARIOS.';
+  }
 
   return e;
 }
