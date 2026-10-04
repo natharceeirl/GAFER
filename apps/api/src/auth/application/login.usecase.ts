@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { LoginRequest, LoginResponse } from '@gafer/contracts';
+import { verificarContraHashFicticio } from '../domain/clave-hash';
 import {
   UsuarioRepository,
   USUARIO_REPOSITORY,
@@ -26,11 +27,13 @@ export class LoginUseCase {
   async ejecutar(dto: LoginRequest): Promise<LoginResponse> {
     const usuario = await this.usuarioRepo.buscarPorUsuario(dto.usuario);
 
-    if (!usuario) {
-      throw new UnauthorizedException('Credenciales inválidas');
-    }
+    // Siempre se calcula un hash (aunque el usuario no exista o no tenga clave) para que el tiempo
+    // de respuesta y el mensaje de error no revelen si el usuario existe.
+    const claveValida = usuario?.tieneClave()
+      ? await usuario.verificarPassword(dto.clave)
+      : await verificarContraHashFicticio(dto.clave);
 
-    if (!usuario.verificarPassword(dto.clave)) {
+    if (!usuario || !claveValida) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 

@@ -1,5 +1,5 @@
-import * as crypto from 'crypto';
 import { CargoPersonal } from '@gafer/contracts';
+import { verificarClave } from './clave-hash';
 
 export class Usuario {
   constructor(
@@ -10,7 +10,7 @@ export class Usuario {
     public readonly cargo: CargoPersonal,
     public readonly telefono: string,
     public readonly usuario: string,
-    public readonly passwordHash: string,
+    public readonly claveHash: string | null,
     public readonly estado: 'ACTIVO' | 'INACTIVO' = 'ACTIVO',
   ) {}
 
@@ -18,25 +18,13 @@ export class Usuario {
     return `${this.nombres} ${this.apellidos}`;
   }
 
-  verificarPassword(clavePlana: string): boolean {
-    if (!this.passwordHash || !clavePlana) return false;
-    
-    // Formato salt:hash
-    const partes = this.passwordHash.split(':');
-    if (partes.length === 2) {
-      const [salt, hashOriginal] = partes;
-      const hashPrueba = crypto
-        .pbkdf2Sync(clavePlana, salt, 10000, 64, 'sha512')
-        .toString('hex');
-      return crypto.timingSafeEqual(
-        Buffer.from(hashPrueba, 'hex'),
-        Buffer.from(hashOriginal, 'hex'),
-      );
-    }
+  /** Una fila sin clave guardada no puede iniciar sesión. */
+  tieneClave(): boolean {
+    return Boolean(this.claveHash);
+  }
 
-    // Fallback para hashes directos de prueba o SHA-256
-    const hashDirecto = crypto.createHash('sha256').update(clavePlana).digest('hex');
-    return this.passwordHash === hashDirecto || this.passwordHash === clavePlana;
+  async verificarPassword(clavePlana: string): Promise<boolean> {
+    return verificarClave(clavePlana, this.claveHash);
   }
 
   puedeAccederAWeb(): boolean {
@@ -47,13 +35,5 @@ export class Usuario {
   puedeAccederAMovil(): boolean {
     // Cualquier personal activo puede acceder a la app móvil
     return this.estado === 'ACTIVO';
-  }
-
-  static generarHashPassword(clavePlana: string): string {
-    const salt = crypto.randomBytes(16).toString('hex');
-    const hash = crypto
-      .pbkdf2Sync(clavePlana, salt, 10000, 64, 'sha512')
-      .toString('hex');
-    return `${salt}:${hash}`;
   }
 }

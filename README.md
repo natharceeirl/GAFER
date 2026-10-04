@@ -82,7 +82,28 @@ pnpm db:migrate
 # Revertir última migración en caso de necesidad (DOWN)
 pnpm db:rollback
 ```
-*Las migraciones SQL residen en `infra/migrations/` y los tipos TypeScript para Kysely en `apps/api/src/database/types.ts`.*
+*Las migraciones SQL residen en `infra/migrations/` (`NNN_nombre.up.sql` / `.down.sql`, todas idempotentes; `db:migrate` las aplica en orden y `db:rollback` las revierte en orden inverso) y los tipos TypeScript para Kysely en `apps/api/src/database/types.ts`.*
+
+### 5. Primer administrador
+
+La API no trae usuarios ni claves en el código: cada persona de `personal` inicia sesión con su `usuario` y la clave que se guarda (solo como hash scrypt con sal) en `personal.clave_hash`. Una fila sin clave no puede iniciar sesión. Tras migrar, crea el primer Administrador:
+
+```bash
+GAFER_CLAVE='<clave de al menos 12 caracteres>' pnpm db:crear-usuario \
+  --usuario m.quispe --cargo ADMINISTRADOR --dni 45892312 \
+  --nombres Maria --apellidos "Quispe Rojas" --telefono 958123456
+```
+
+- Cada dato también se puede dar por variable de entorno (`GAFER_USUARIO`, `GAFER_CARGO`, `GAFER_DNI`, `GAFER_NOMBRES`, `GAFER_APELLIDOS`, `GAFER_TELEFONO`).
+- La clave **no** se acepta por argumento: usa `GAFER_CLAVE` o, si no la defines y estás en una consola interactiva, el comando la pide sin mostrarla.
+- Valida con los esquemas de `@gafer/contracts` (clave de al menos 12 caracteres). Si el usuario ya existe, actualiza sus datos y cambia su clave; sirve también para restablecer una clave olvidada.
+- Con ese Administrador se crea el resto del personal desde Mantenimiento; su clave se asigna con este mismo comando.
+
+### 6. Variables obligatorias de la API
+
+`JWT_SECRET` (mínimo 32 caracteres) firma los tokens de sesión y **no tiene valor por defecto**: sin él la API no arranca y lo dice en el log. `apps/api/.env.example` trae un valor solo para desarrollo local; en cualquier otro entorno genera uno propio (`openssl rand -base64 48`) e inyéctalo como variable de entorno.
+
+Toda ruta de la API exige `Authorization: Bearer <token>` y un rol permitido; solo son públicos `POST /api/auth/login` y la documentación (`/docs`, `/docs-json`).
 
 ### 5. Iniciar Servicios en Desarrollo
 

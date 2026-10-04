@@ -115,6 +115,8 @@ export interface PersonalTable {
   cargo: CargoPersonal;
   telefono: string;
   usuario: string | null;
+  /** Hash scrypt de la clave; nulo mientras la persona no tenga clave y, por tanto, no pueda iniciar sesión. */
+  clave_hash: string | null;
   estado: Generated<EstadoGeneral>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;

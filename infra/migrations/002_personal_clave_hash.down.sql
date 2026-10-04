@@ -1,0 +1,1 @@
+ALTER TABLE personal DROP COLUMN IF EXISTS clave_hash;

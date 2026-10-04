@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { createDatabasePool, createKyselyDatabase } from './connection';
+import { leerMigraciones } from './migrator';
 
 describe('Database Migration and Schema Configuration (T2.1)', () => {
   it('should find 001_initial_schema.up.sql and contain all 11 core tables and schema elements', () => {
@@ -51,5 +53,45 @@ describe('Database Migration and Schema Configuration (T2.1)', () => {
 
     // Clean up pool
     pool.end();
+  });
+
+  describe('Lectura de migraciones numeradas', () => {
+    let directorio: string;
+
+    beforeEach(() => {
+      directorio = fs.mkdtempSync(path.join(os.tmpdir(), 'gafer-migraciones-'));
+      for (const archivo of [
+        '002_segunda.up.sql',
+        '001_primera.up.sql',
+        '001_primera.down.sql',
+        '002_segunda.down.sql',
+        'LEEME.txt',
+      ]) {
+        fs.writeFileSync(path.join(directorio, archivo), `-- ${archivo}`);
+      }
+    });
+
+    afterEach(() => {
+      fs.rmSync(directorio, { recursive: true, force: true });
+    });
+
+    it('aplica todas las migraciones UP en orden numérico', async () => {
+      const migraciones = await leerMigraciones('up', directorio);
+      expect(migraciones.map((m) => m.nombre)).toEqual(['001_primera.up.sql', '002_segunda.up.sql']);
+    });
+
+    it('revierte las migraciones DOWN en orden inverso', async () => {
+      const migraciones = await leerMigraciones('down', directorio);
+      expect(migraciones.map((m) => m.nombre)).toEqual(['002_segunda.down.sql', '001_primera.down.sql']);
+    });
+  });
+
+  it('el repositorio trae 002 con la columna clave_hash de personal y su reversa', async () => {
+    const up = await leerMigraciones('up');
+    const down = await leerMigraciones('down');
+    expect(up.map((m) => m.nombre)).toEqual(['001_initial_schema.up.sql', '002_personal_clave_hash.up.sql']);
+    expect(down.map((m) => m.nombre)).toEqual(['002_personal_clave_hash.down.sql', '001_initial_schema.down.sql']);
+    expect(up[1].sql).toContain('ADD COLUMN IF NOT EXISTS clave_hash');
+    expect(down[0].sql).toContain('DROP COLUMN IF EXISTS clave_hash');
   });
 });

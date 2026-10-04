@@ -1,4 +1,5 @@
 import { createTestApp, TestApp } from '../support/app';
+import { asignarClavePrueba, CLAVE_PRUEBA } from '../support/auth';
 import { resetDb, leerSnapshotCrudo, sembrarInspeccionCerrada } from '../support/db';
 import { api, Api } from '../support/fixtures';
 
@@ -595,10 +596,18 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
       expect(updateRes.body.nombres).toBe('Daniel Alberto');
       expect(updateRes.body.telefono).toBe('958999000');
 
-      // 5. Iniciar sesión con el nuevo usuario creado en PostgreSQL
+      // 5. Sin clave guardada no hay sesión; con la clave (db:crear-usuario) sí
+      const loginSinClaveRes = await http.post('/auth/login', {
+        usuario: 'DAMAMANI_NEW',
+        clave: CLAVE_PRUEBA,
+        cliente: 'web',
+      });
+      expect(loginSinClaveRes.status).toBe(401);
+
+      await asignarClavePrueba(t.db, 'DAMAMANI_NEW');
       const loginRes = await http.post('/auth/login', {
         usuario: 'DAMAMANI_NEW',
-        clave: 'Gafer2026!',
+        clave: CLAVE_PRUEBA,
         cliente: 'web',
       });
       expect(loginRes.status).toBe(200);
@@ -612,7 +621,7 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
 
       const loginInactivoRes = await http.post('/auth/login', {
         usuario: 'DAMAMANI_NEW',
-        clave: 'Gafer2026!',
+        clave: CLAVE_PRUEBA,
         cliente: 'web',
       });
       expect(loginInactivoRes.status).toBe(403);
