@@ -20,7 +20,3 @@ export function reemplazarItem(items: string[], posicion: number, texto: string)
 export function quitarItem(items: string[], posicion: number): string[] {
   return items.filter((_, i) => i !== posicion);
 }
-
-export function agregarAlFinal(items: string[], texto: string): string[] {
-  return [...items, texto.trim()];
-}
