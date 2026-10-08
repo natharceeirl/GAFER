@@ -39,7 +39,10 @@ Cada uno con tres capas internas: `domain/` (sin framework), `application/` (cas
 
 ```bash
 pnpm install
+pnpm --filter @gafer/contracts build
 ```
+
+`@gafer/contracts` se usa ya compilado (`packages/contracts/dist`), que no existe justo después de clonar. Sin la segunda línea fallan al compilar los comandos de la API que lo importan, como `pnpm db:crear-usuario` y `pnpm db:seed:demo`.
 
 ### 2. Configuración de Entorno (12-Factor App)
 
@@ -137,3 +140,38 @@ pnpm test
 ```
 
 La persistencia de la Fase 1 (Mantenimiento y Operaciones) utiliza adaptadores de PostgreSQL 16 con Kysely (`Kysely*Repository`), asegurando la regla de inmutabilidad contractual de la Sección 13 (`snapshot_catalogos`). Las fases subsiguientes cuentan con scaffolds desacoplados listos para su desarrollo en sus respectivos ciclos de SDD.
+
+### Entorno de QA (local)
+
+El entorno de QA corre en tu laptop y se reproduce desde un clon limpio. Todavía no hay un servidor compartido. Necesitas Docker, Node 22 y pnpm.
+
+```bash
+pnpm install
+pnpm --filter @gafer/contracts build
+cp apps/api/.env.example apps/api/.env      # y agrega JWT_SECRET (mínimo 32 caracteres), ver «Variables obligatorias de la API»
+pnpm infra:up
+docker compose -f infra/docker-compose.yml exec postgres createdb -U gafer gafer_test   # base de las pruebas e2e, una sola vez
+pnpm db:migrate
+pnpm db:seed:demo      # datos de ejemplo y un usuario por rol; imprime las claves UNA sola vez
+pnpm dev:api           # terminal 1: http://localhost:3000
+pnpm dev:web           # terminal 2: http://localhost:5173
+```
+
+`pnpm db:seed:demo` llega con el PR #17 (GAF-94). Mientras no esté integrado, crea los usuarios con `pnpm db:crear-usuario` (sección «Primer administrador»).
+
+**Ingreso por rol** (los usuarios no distinguen mayúsculas):
+
+| Rol | Usuario de ejemplo | Dónde entra |
+|---|---|---|
+| Administrador | `demo.admin` | Web y app móvil |
+| Supervisor | `demo.supervisor` | Web y app móvil |
+| Técnico operador | `demo.tecnico1` a `demo.tecnico3` | Solo app móvil; la web responde 403 (decisión C10) |
+
+**Verificación del entorno:**
+
+```bash
+pnpm test        # pruebas unitarias de todo el monorepo
+pnpm test:e2e    # pruebas e2e de la API, contra la base gafer_test
+```
+
+Ambas deben terminar sin fallos. El CI (`qa.yml`) ejecuta además `pnpm lint` y `pnpm typecheck` en cada cambio.
