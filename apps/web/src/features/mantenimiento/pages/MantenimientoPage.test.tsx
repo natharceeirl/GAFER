@@ -138,6 +138,17 @@ describe('MantenimientoPage', () => {
       expect(cambio.cuerpo).toMatchObject({ dosisEstandar: '2 bloques por estación', fichaTecnicaKey: 'insumos/ficha-tecnica/1.pdf' });
     });
 
+    it('al editar no deja repetir el registro DIGESA de otro insumo (el API no lo revisa en la edición)', async () => {
+      montar('ADMINISTRADOR', crearEstadoApi({ insumos: [insumoApi(1), insumoApi(2)] }));
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Editar insumo Insumo 2' }));
+      escribir('Registro DIGESA', 'DIG-1');
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar insumo' }));
+
+      expect(await screen.findByText('Ya existe un insumo con ese registro DIGESA.')).toBeInTheDocument();
+      expect(llamadasA(fetchMock, 'PATCH')).toHaveLength(0);
+    });
+
     it('cancelar el formulario vuelve a la lista sin guardar nada', async () => {
       montar('ADMINISTRADOR', crearEstadoApi({ insumos: [insumoApi(1)] }));
 

@@ -1,5 +1,5 @@
 import type { Insumo } from '@gafer/contracts';
-import { useActualizarInsumo, useCrearInsumo } from '../api/use-insumos';
+import { useActualizarInsumo, useCrearInsumo, useInsumos } from '../api/use-insumos';
 import { camposDeErrorInsumo, datosDeInsumo, type DatosInsumo } from '../model/insumo-mapper';
 import { NuevoInsumoPage } from './NuevoInsumoPage';
 
@@ -12,6 +12,7 @@ interface Props {
 
 /** Conecta el formulario de insumo con el API: guarda, reparte los errores del servidor por campo y vuelve a la lista. */
 export function InsumoFormulario({ insumo, onTerminar, onCancelar }: Props) {
+  const catalogo = useInsumos();
   const crear = useCrearInsumo();
   const actualizar = useActualizarInsumo();
   const mutacion = insumo ? actualizar : crear;
@@ -30,6 +31,7 @@ export function InsumoFormulario({ insumo, onTerminar, onCancelar }: Props) {
   return (
     <NuevoInsumoPage
       inicial={insumo ? datosDeInsumo(insumo) : undefined}
+      registrosExistentes={(catalogo.data ?? []).filter((i) => i.id !== insumo?.id).map((i) => i.registroDigesa)}
       enviando={mutacion.isPending}
       erroresServidor={errores?.campos}
       errorGeneral={errores?.general}

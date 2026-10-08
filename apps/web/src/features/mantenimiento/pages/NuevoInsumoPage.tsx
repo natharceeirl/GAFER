@@ -10,6 +10,8 @@ import { validarInsumo } from '../model/validaciones';
 interface Props {
   /** Con `inicial` el formulario edita un insumo ya registrado. */
   inicial?: DatosInsumo;
+  /** Registros DIGESA de los demás insumos del catálogo (en edición, sin el del insumo que se edita). */
+  registrosExistentes?: string[];
   /** Operación en curso: se deshabilitan los botones. */
   enviando?: boolean;
   /** Errores por campo devueltos por el servidor (400/409). */
@@ -40,7 +42,7 @@ const INICIAL: DatosInsumo = {
  * solas al documento cuando el insumo se consume (decisión C14). El estado no se elige aquí: el insumo nace
  * activo y se activa o desactiva desde la lista.
  */
-export function NuevoInsumoPage({ inicial, enviando = false, erroresServidor = SIN_ERRORES, errorGeneral = null, onRegistrar, onCancelar }: Props) {
+export function NuevoInsumoPage({ inicial, registrosExistentes = [], enviando = false, erroresServidor = SIN_ERRORES, errorGeneral = null, onRegistrar, onCancelar }: Props) {
   const edicion = inicial !== undefined;
   const [datos, setDatos] = useState<DatosInsumo>(inicial ?? INICIAL);
   const [intentado, setIntentado] = useState(false);
@@ -52,7 +54,7 @@ export function NuevoInsumoPage({ inicial, enviando = false, erroresServidor = S
   const [corregidos, setCorregidos] = useState<Array<keyof DatosInsumo>>([]);
   useEffect(() => setCorregidos([]), [erroresServidor]);
 
-  const errores = validarInsumo(datos);
+  const errores = validarInsumo(datos, registrosExistentes);
   const delServidor: Errores<keyof DatosInsumo> = {};
   for (const campo of Object.keys(erroresServidor) as Array<keyof DatosInsumo>) {
     if (!corregidos.includes(campo)) delServidor[campo] = erroresServidor[campo];

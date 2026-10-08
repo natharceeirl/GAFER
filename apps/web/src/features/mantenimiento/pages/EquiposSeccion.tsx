@@ -76,10 +76,12 @@ export function EquiposSeccion({ onNuevo, onEditar }: Props) {
                     ))}
                   </select>
                 </td>
-                <td className="mant-tabla__acciones">
-                  <button type="button" className="mant-enlace" aria-label={`Editar equipo ${e.nombre}`} disabled={cambiarEstado.isPending} onClick={() => onEditar(e)}>
-                    Editar
-                  </button>
+                <td>
+                  <div className="mant-acciones">
+                    <button type="button" className="mant-enlace" aria-label={`Editar equipo ${e.nombre}`} disabled={cambiarEstado.isPending} onClick={() => onEditar(e)}>
+                      Editar
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

@@ -41,6 +41,12 @@ describe('validarInsumo', () => {
     expect(errores.nombreComercial).toBe('Campo obligatorio.');
   });
 
+  it('avisa si el registro DIGESA ya lo tiene otro insumo del catálogo, sin distinguir mayúsculas ni espacios', () => {
+    const errores = validarInsumo({ ...insumo, registroDigesa: ' dig-2451-sa ' }, ['DIG-2451-SA', 'DIG-1']);
+    expect(errores.registroDigesa).toBe('Ya existe un insumo con ese registro DIGESA.');
+    expect(validarInsumo(insumo, ['DIG-1'])).toEqual({});
+  });
+
   it('exige la ficha técnica y la hoja MSDS en PDF', () => {
     const errores = validarInsumo({ ...insumo, fichaTecnicaKey: '', hojaMsdsKey: '' });
     expect(errores.fichaTecnicaKey).toBe('Cargue la ficha técnica en formato PDF.');

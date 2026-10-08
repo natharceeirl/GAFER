@@ -78,20 +78,21 @@ export function InsumosSeccion({ onNuevo, onEditar }: Props) {
                 <td>
                   <span className={`mant-estado mant-estado--${i.estado === 'ACTIVO' ? 'ok' : 'off'}`}>{etiquetaEstadoActivo(i.estado)}</span>
                 </td>
-                <td className="mant-tabla__acciones">
-                  <button type="button" className="mant-enlace" aria-label={`Editar insumo ${i.nombreComercial}`} disabled={ocupado} onClick={() => onEditar(i)}>
-                    Editar
-                  </button>
-                  {' · '}
-                  {i.estado === 'ACTIVO' ? (
-                    <button type="button" className="mant-enlace" aria-label={`Desactivar insumo ${i.nombreComercial}`} disabled={ocupado} onClick={() => desactivar.mutate(i.id)}>
-                      Desactivar
+                <td>
+                  <div className="mant-acciones">
+                    <button type="button" className="mant-enlace" aria-label={`Editar insumo ${i.nombreComercial}`} disabled={ocupado} onClick={() => onEditar(i)}>
+                      Editar
                     </button>
-                  ) : (
-                    <button type="button" className="mant-enlace" aria-label={`Activar insumo ${i.nombreComercial}`} disabled={ocupado} onClick={() => activar.mutate(i.id)}>
-                      Activar
-                    </button>
-                  )}
+                    {i.estado === 'ACTIVO' ? (
+                      <button type="button" className="mant-enlace" aria-label={`Desactivar insumo ${i.nombreComercial}`} disabled={ocupado} onClick={() => desactivar.mutate(i.id)}>
+                        Desactivar
+                      </button>
+                    ) : (
+                      <button type="button" className="mant-enlace" aria-label={`Activar insumo ${i.nombreComercial}`} disabled={ocupado} onClick={() => activar.mutate(i.id)}>
+                        Activar
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

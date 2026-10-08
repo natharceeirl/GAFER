@@ -7,20 +7,28 @@ const OBLIGATORIO = 'Campo obligatorio.';
 
 const vacio = (v: string) => v.trim() === '';
 
+const normalizarRegistro = (v: string) => v.trim().toUpperCase();
+
 /**
  * Valida el insumo con el esquema de alta de `@gafer/contracts` (el mismo del API). Los textos de los esquemas
- * ya vienen en español; solo se completan los genéricos de zod. La unicidad del registro DIGESA la resuelve el
- * servidor (409).
+ * ya vienen en español; solo se completan los genéricos de zod. La unicidad del registro DIGESA se revisa aquí
+ * contra los registros de los demás insumos ya cargados, porque el API solo la comprueba en el alta (409) y no en
+ * la edición.
  */
-export function validarInsumo(d: DatosInsumo): Errores<keyof DatosInsumo> {
+export function validarInsumo(d: DatosInsumo, registrosDeOtrosInsumos: string[] = []): Errores<keyof DatosInsumo> {
   const e: Errores<keyof DatosInsumo> = {};
   const resultado = InsumoRegistroSchema.safeParse(registroDeInsumo(d));
-  if (resultado.success) return e;
 
-  for (const incidencia of resultado.error.issues) {
-    const campo = campoDeRutaInsumo(String(incidencia.path[0]));
-    if (!campo || e[campo]) continue;
-    e[campo] = incidencia.code === 'too_small' || incidencia.code === 'invalid_type' || incidencia.code === 'invalid_enum_value' ? OBLIGATORIO : incidencia.message;
+  if (!resultado.success) {
+    for (const incidencia of resultado.error.issues) {
+      const campo = campoDeRutaInsumo(String(incidencia.path[0]));
+      if (!campo || e[campo]) continue;
+      e[campo] = incidencia.code === 'too_small' || incidencia.code === 'invalid_type' || incidencia.code === 'invalid_enum_value' ? OBLIGATORIO : incidencia.message;
+    }
+  }
+  const registro = normalizarRegistro(d.registroDigesa);
+  if (!e.registroDigesa && registro !== '' && registrosDeOtrosInsumos.some((r) => normalizarRegistro(r) === registro)) {
+    e.registroDigesa = 'Ya existe un insumo con ese registro DIGESA.';
   }
   // El cuerpo se arma con la presentación y la unidad ya elegidas; un valor vacío lo rechaza el esquema como enum inválido.
   if (d.presentacion === '') e.presentacion = OBLIGATORIO;

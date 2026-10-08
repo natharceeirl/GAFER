@@ -238,8 +238,10 @@
   color: var(--gf-naranja-ink);
 }
 
-.mant-tabla__acciones {
-  white-space: nowrap;
+.mant-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
 }
 .mant-fila--inactiva td {
   color: var(--gf-ink-faint);

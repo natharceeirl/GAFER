@@ -147,6 +147,18 @@ describe('NuevoInsumoPage', () => {
     });
   });
 
+  describe('registro DIGESA repetido', () => {
+    it('lo marca antes de enviar si otro insumo del catálogo ya lo tiene', () => {
+      montar({ inicial, registrosExistentes: ['DIG-1980-SA'] });
+      escribir('Registro DIGESA', 'dig-1980-sa');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar insumo' }));
+
+      expect(screen.getByText('Ya existe un insumo con ese registro DIGESA.')).toBeInTheDocument();
+      expect(onRegistrar).not.toHaveBeenCalled();
+    });
+  });
+
   describe('servidor', () => {
     it('muestra los errores del servidor sobre su campo y los quita al corregirlo', () => {
       const { rerender } = montar({ inicial, erroresServidor: { registroDigesa: 'Ya existe un insumo con ese registro DIGESA.' } });
