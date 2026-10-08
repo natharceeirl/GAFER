@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FrecuenciaServicio, TipoServicio } from '@gafer/contracts';
 import { AltaFormLayout } from '../components/AltaForm';
+import { EstadoCargando, EstadoError } from '../components/EstadoConsulta';
 import { Bloque, Campo, Opciones, ariaError } from '../../../shared/ui/molecules/FormFields';
-import { FRECUENCIAS, TIPOS_SERVICIO } from '../model/catalogos-servicio';
-import { validarServicio, type DatosServicio } from '../model/validaciones';
+import { FRECUENCIAS, TIPOS_SERVICIO, etiquetaTipoServicio } from '../model/catalogos-servicio';
+import { validarServicio, type DatosServicio, type Errores } from '../model/validaciones';
 import type { ClienteFila } from '../model/clientes-mock';
 import type { ProyectoExpediente } from '../model/proyecto-mapper';
 import type { Equipo, Insumo } from '../../mantenimiento/model/tipos';
@@ -13,9 +14,24 @@ interface Props {
   proyecto: ProyectoExpediente;
   insumos: Insumo[];
   equipos: Equipo[];
+  /** Con `inicial` el formulario edita un servicio ya contratado: el tipo queda fijo. */
+  inicial?: DatosServicio;
+  /** Los catálogos de insumos y equipos se están leyendo del API. */
+  cargandoCatalogos?: boolean;
+  /** Motivo por el que no se pudieron leer los catálogos (por ejemplo, falta de permiso). */
+  errorCatalogos?: string | null;
+  onReintentarCatalogos?: () => void;
+  /** Operación en curso: se deshabilitan los botones. */
+  enviando?: boolean;
+  /** Errores por campo devueltos por el servidor (400). */
+  erroresServidor?: Errores<keyof DatosServicio>;
+  /** Error del servidor que no corresponde a un campo. */
+  errorGeneral?: string | null;
   onRegistrar: (datos: DatosServicio) => void;
   onCancelar: () => void;
 }
+
+const SIN_ERRORES: Errores<keyof DatosServicio> = {};
 
 const INICIAL: DatosServicio = {
   tipo: '',
@@ -35,35 +51,79 @@ const ESTADO_EQUIPO: Record<Equipo['estadoOperativo'], string> = {
   FUERA_DE_SERVICIO: 'Fuera de servicio — no se puede asignar',
 };
 
+/** Insumo o equipo que se puede marcar; `catalogo` es nulo si el catálogo no lo entregó y solo se conoce su identificador. */
+interface Opcion<T> {
+  id: string;
+  nombre: string;
+  catalogo: T | null;
+}
+
+/** Nombre corto con el que se identifica un insumo o equipo que el catálogo no entregó. */
+const identificador = (id: string) => id.slice(0, 8);
+
 /**
- * Alta de servicio por proyecto — spec §7.3. Define qué se hace, con qué
+ * Alta y edición de servicio por proyecto — spec §7.3. Define qué se hace, con qué
  * frecuencia y con qué insumos y equipos; eso es lo que después se precarga
  * en el formulario de campo del técnico (§8.2).
  */
-export function NuevoServicioPage({ cliente, proyecto, insumos, equipos, onRegistrar, onCancelar }: Props) {
-  const [datos, setDatos] = useState<DatosServicio>(INICIAL);
+export function NuevoServicioPage({
+  cliente,
+  proyecto,
+  insumos,
+  equipos,
+  inicial,
+  cargandoCatalogos = false,
+  errorCatalogos = null,
+  onReintentarCatalogos = () => {},
+  enviando = false,
+  erroresServidor = SIN_ERRORES,
+  errorGeneral = null,
+  onRegistrar,
+  onCancelar,
+}: Props) {
+  const edicion = inicial !== undefined;
+  const [datos, setDatos] = useState<DatosServicio>(inicial ?? INICIAL);
   const [intentado, setIntentado] = useState(false);
 
+  /** Campos que se tocaron después del último error del servidor: su error ya no aplica. */
+  const [corregidos, setCorregidos] = useState<Array<keyof DatosServicio>>([]);
+  useEffect(() => setCorregidos([]), [erroresServidor]);
+
   const errores = validarServicio(datos);
-  const visibles = intentado ? errores : {};
-  const insumosActivos = insumos.filter((i) => i.estado === 'ACTIVO');
+  const delServidor: Errores<keyof DatosServicio> = {};
+  for (const campo of Object.keys(erroresServidor) as Array<keyof DatosServicio>) {
+    if (!corregidos.includes(campo)) delServidor[campo] = erroresServidor[campo];
+  }
+  const visibles = { ...(intentado ? errores : {}), ...delServidor };
+
+  /** Solo se ofrecen insumos activos, más los ya elegidos (aunque se hayan desactivado o el catálogo no los entregue) para poder quitarlos. */
+  const insumosVisibles: Opcion<Insumo>[] = [
+    ...insumos.filter((i) => i.estado === 'ACTIVO' || datos.insumos.includes(i.id)).map((i) => ({ id: i.id, nombre: i.nombre, catalogo: i })),
+    ...datos.insumos
+      .filter((id) => !insumos.some((i) => i.id === id))
+      .map((id) => ({ id, nombre: `Insumo ${identificador(id)}`, catalogo: null })),
+  ];
+  const equiposVisibles: Opcion<Equipo>[] = [
+    ...equipos.map((e) => ({ id: e.id, nombre: e.nombre, catalogo: e })),
+    ...datos.equipos
+      .filter((id) => !equipos.some((e) => e.id === id))
+      .map((id) => ({ id, nombre: `Equipo ${identificador(id)}`, catalogo: null })),
+  ];
 
   function set<K extends keyof DatosServicio>(campo: K, valor: DatosServicio[K]) {
     setDatos((prev) => ({ ...prev, [campo]: valor }));
+    setCorregidos((prev) => (prev.includes(campo) ? prev : [...prev, campo]));
   }
 
-  function alternarInsumo(insumo: Insumo) {
+  function alternarInsumo(id: string, dosisCatalogo: string) {
     setDatos((prev) => {
-      const elegido = prev.insumos.includes(insumo.id);
+      const elegido = prev.insumos.includes(id);
       const dosis = { ...prev.dosis };
-      if (elegido) delete dosis[insumo.id];
-      else dosis[insumo.id] = insumo.dosisReferencial;
-      return {
-        ...prev,
-        insumos: elegido ? prev.insumos.filter((id) => id !== insumo.id) : [...prev.insumos, insumo.id],
-        dosis,
-      };
+      if (elegido) delete dosis[id];
+      else dosis[id] = dosisCatalogo;
+      return { ...prev, insumos: elegido ? prev.insumos.filter((x) => x !== id) : [...prev.insumos, id], dosis };
     });
+    setCorregidos((prev) => prev.filter((c) => c !== 'insumos' && c !== 'dosis'));
   }
 
   function alternarEquipo(id: string) {
@@ -71,22 +131,39 @@ export function NuevoServicioPage({ cliente, proyecto, insumos, equipos, onRegis
       ...prev,
       equipos: prev.equipos.includes(id) ? prev.equipos.filter((e) => e !== id) : [...prev.equipos, id],
     }));
+    setCorregidos((prev) => prev.filter((c) => c !== 'equipos'));
   }
 
   function registrar() {
     setIntentado(true);
-    if (Object.keys(errores).length > 0) return;
+    if (enviando || Object.keys(errores).length > 0) return;
     onRegistrar(datos);
   }
 
+  const catalogos = cargandoCatalogos ? (
+    <EstadoCargando mensaje="Cargando el catálogo de insumos y equipos…" />
+  ) : errorCatalogos ? (
+    <EstadoError mensaje={`No se pudo cargar el catálogo de insumos y equipos. ${errorCatalogos}`} onReintentar={onReintentarCatalogos} />
+  ) : null;
+
   return (
     <AltaFormLayout
-      code={`ALTA DE SERVICIO · ${cliente.codigoCorto} · ${proyecto.nombre} · §7.3`}
-      title="Nuevo servicio"
-      meta={`${cliente.razonSocial} · sede ${proyecto.nombre} · cada servicio lleva su propia numeración de documentos`}
-      textoConfirmar="Registrar servicio"
+      code={
+        edicion
+          ? `SERVICIO · ${cliente.codigoCorto} · ${proyecto.nombre} · ${inicial.tipo} · §7.3`
+          : `ALTA DE SERVICIO · ${cliente.codigoCorto} · ${proyecto.nombre} · §7.3`
+      }
+      title={edicion ? 'Editar servicio' : 'Nuevo servicio'}
+      meta={
+        edicion
+          ? `${cliente.razonSocial} · sede ${proyecto.nombre} · el tipo de servicio no se puede cambiar`
+          : `${cliente.razonSocial} · sede ${proyecto.nombre} · cada servicio lleva su propia numeración de documentos`
+      }
+      textoConfirmar={edicion ? 'Guardar servicio' : 'Registrar servicio'}
       cantidadErrores={Object.keys(errores).length}
       mostrarErrores={intentado}
+      enviando={enviando}
+      errorGeneral={errorGeneral}
       onSubmit={registrar}
       onCancelar={onCancelar}
     >
@@ -95,12 +172,13 @@ export function NuevoServicioPage({ cliente, proyecto, insumos, equipos, onRegis
           <select
             {...ariaError('ser-tipo', visibles.tipo)}
             value={datos.tipo}
+            disabled={edicion}
             onChange={(e) => set('tipo', e.target.value as TipoServicio | '')}
           >
             <option value="">Seleccione un tipo…</option>
             {TIPOS_SERVICIO.map((t) => (
               <option key={t.id} value={t.id}>
-                {t.id} — {t.nombre}
+                {etiquetaTipoServicio(t.id)}
               </option>
             ))}
           </select>
@@ -150,25 +228,25 @@ export function NuevoServicioPage({ cliente, proyecto, insumos, equipos, onRegis
       </Bloque>
 
       <Bloque titulo="Insumos autorizados y dosis">
+        {catalogos}
         <div className={visibles.insumos || visibles.dosis ? 'ff-campo ff-campo--completo ff-campo--error' : 'ff-campo ff-campo--completo'}>
           <span className="ff-campo__label">Insumos del catálogo que el técnico verá precargados</span>
           <ul className="ff-checks">
-            {insumosActivos.map((i) => {
+            {insumosVisibles.map((i) => {
               const elegido = datos.insumos.includes(i.id);
+              const completo = i.catalogo;
               return (
                 <li key={i.id} className="ff-check">
-                  <input
-                    type="checkbox"
-                    id={`ser-insumo-${i.id}`}
-                    checked={elegido}
-                    onChange={() => alternarInsumo(i)}
-                  />
+                  <input type="checkbox" id={`ser-insumo-${i.id}`} checked={elegido} onChange={() => alternarInsumo(i.id, completo?.dosisReferencial ?? '')} />
                   <label htmlFor={`ser-insumo-${i.id}`} className="ff-check__nombre">
                     {i.nombre}
                   </label>
-                  <span className="ff-check__detalle">
-                    {i.principioActivo} · {i.concentracion} · DIGESA {i.registroDigesa}
-                  </span>
+                  {completo ? (
+                    <span className="ff-check__detalle">
+                      {completo.principioActivo} · {completo.concentracion} · DIGESA {completo.registroDigesa}
+                      {completo.estado === 'INACTIVO' ? ' · inactivo' : ''}
+                    </span>
+                  ) : null}
                   {elegido ? (
                     <div className="ff-check__dosis">
                       <label htmlFor={`ser-dosis-${i.id}`}>Dosis referencial para este servicio</label>
@@ -196,23 +274,27 @@ export function NuevoServicioPage({ cliente, proyecto, insumos, equipos, onRegis
         <div className={visibles.equipos ? 'ff-campo ff-campo--completo ff-campo--error' : 'ff-campo ff-campo--completo'}>
           <span className="ff-campo__label">Equipos del catálogo para este servicio</span>
           <ul className="ff-checks">
-            {equipos.map((eq) => {
-              const deshabilitado = eq.estadoOperativo === 'FUERA_DE_SERVICIO';
+            {equiposVisibles.map((eq) => {
+              const elegido = datos.equipos.includes(eq.id);
+              const completo = eq.catalogo;
+              const deshabilitado = completo?.estadoOperativo === 'FUERA_DE_SERVICIO' && !elegido;
               return (
                 <li key={eq.id} className={deshabilitado ? 'ff-check ff-check--deshabilitado' : 'ff-check'}>
                   <input
                     type="checkbox"
                     id={`ser-equipo-${eq.id}`}
-                    checked={datos.equipos.includes(eq.id)}
+                    checked={elegido}
                     disabled={deshabilitado}
                     onChange={() => alternarEquipo(eq.id)}
                   />
                   <label htmlFor={`ser-equipo-${eq.id}`} className="ff-check__nombre">
                     {eq.nombre}
                   </label>
-                  <span className="ff-check__detalle">
-                    {eq.codigoInterno} · {eq.tipo} · {ESTADO_EQUIPO[eq.estadoOperativo]}
-                  </span>
+                  {completo ? (
+                    <span className="ff-check__detalle">
+                      {completo.codigoInterno} · {completo.tipo} · {ESTADO_EQUIPO[completo.estadoOperativo]}
+                    </span>
+                  ) : null}
                 </li>
               );
             })}
@@ -221,7 +303,7 @@ export function NuevoServicioPage({ cliente, proyecto, insumos, equipos, onRegis
         </div>
       </Bloque>
 
-      <Bloque titulo="Certificado y condiciones">
+      <Bloque titulo="Certificado">
         <Opciones
           nombre="¿Requiere certificado?"
           valor={datos.requiereCertificado}
@@ -232,7 +314,6 @@ export function NuevoServicioPage({ cliente, proyecto, insumos, equipos, onRegis
           onCambiar={(v) => set('requiereCertificado', v)}
           error={visibles.requiereCertificado}
         />
-        <div />
         {datos.requiereCertificado ? (
           <Campo
             id="ser-vigencia-dias"
