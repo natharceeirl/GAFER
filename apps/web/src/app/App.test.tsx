@@ -44,4 +44,26 @@ describe('App: acceso según la sesión del API', () => {
 
     expect(screen.getByRole('button', { name: 'Auditoría' })).toBeInTheDocument();
   });
+
+  it('al cambiar de pantalla el contenido vuelve arriba: el contenedor con scroll se reinicia', () => {
+    useSesion.getState().iniciar('jwt', usuario('ADMINISTRADOR'));
+    const { container } = render(<App />);
+    const contenidoAntes = container.querySelector('.app-shell__stage');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Programación' }));
+
+    const contenidoDespues = container.querySelector('.app-shell__stage');
+    expect(contenidoAntes).not.toBeNull();
+    expect(contenidoDespues).not.toBe(contenidoAntes);
+  });
+
+  it('permanecer en la misma pantalla conserva el contenedor del contenido', () => {
+    useSesion.getState().iniciar('jwt', usuario('ADMINISTRADOR'));
+    const { container } = render(<App />);
+    const contenidoAntes = container.querySelector('.app-shell__stage');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Panel de control' }));
+
+    expect(container.querySelector('.app-shell__stage')).toBe(contenidoAntes);
+  });
 });

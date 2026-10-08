@@ -1,6 +1,9 @@
+/* La ventana no hace scroll: la barra lateral queda fija y solo el contenido se desplaza. */
 .app-shell {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .app-shell__rail {
@@ -11,6 +14,8 @@
   padding: 18px 14px;
   background: var(--gf-panel-raised);
   border-right: 2px solid var(--gf-ink);
+  /* Solo si la ventana es muy baja para todas las opciones, la barra se desplaza sola. */
+  overflow-y: auto;
 }
 
 .app-shell__nav {
@@ -53,6 +58,7 @@
 .app-shell__stage {
   flex: 1 1 auto;
   min-width: 0;
+  overflow-y: auto;
 }
 
 .app-shell__sesion {
@@ -99,12 +105,19 @@
   color: var(--gf-ink);
 }
 
+/* En pantallas angostas la barra pasa arriba y se vuelve al scroll normal de la página. */
 @media (max-width: 720px) {
   .app-shell {
     flex-direction: column;
+    height: auto;
+    overflow: visible;
+  }
+  .app-shell__stage {
+    overflow-y: visible;
   }
   .app-shell__rail {
     flex: 0 0 auto;
+    overflow-y: visible;
     flex-direction: row;
     flex-wrap: wrap;
     border-right: none;
