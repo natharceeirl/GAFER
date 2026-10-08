@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import type { FrecuenciaServicio } from '@gafer/contracts';
+import { etiquetaFrecuencia } from '../model/catalogos-servicio';
 import { ClientesListPage } from './ClientesListPage';
 import { ClienteExpedientePage } from './ClienteExpedientePage';
 import { NuevoClientePage } from './NuevoClientePage';
@@ -109,7 +111,7 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
 
   function registrarServicio(clienteId: string, proyectoId: string, nombreSede: string, d: DatosServicio) {
     setCartera(() => agregarServicio(cartera, clienteId, proyectoId, d));
-    setVista({ tipo: 'expediente', clienteId, aviso: `Servicio ${d.tipo} (${d.frecuencia.toLowerCase()}) registrado en ${nombreSede}.` });
+    setVista({ tipo: 'expediente', clienteId, aviso: `Servicio ${d.tipo} (${etiquetaFrecuencia(d.frecuencia as FrecuenciaServicio).toLowerCase()}) registrado en ${nombreSede}.` });
   }
 
   const cliente = ficha.data;
@@ -198,7 +200,7 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
     /** Los clientes de ejemplo comparten sedes de muestra: su contrato real sale del historial. */
     const contrataDesratizacion = esClienteDeEjemplo(cartera, cliente.id)
       ? tiposContratadosDe(cliente.codigoCorto).includes('DRT')
-      : proyectos.some((p) => p.servicios.some((s) => s.tipoId === 'DRT'));
+      : proyectos.some((p) => p.servicios.some((s) => s.tipoServicio === 'DRT'));
     return (
       <ClienteExpedientePage
         cliente={cliente}

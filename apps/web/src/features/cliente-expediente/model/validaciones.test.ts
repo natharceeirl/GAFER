@@ -99,7 +99,6 @@ const proyectoValido: DatosProyecto = {
   contactoNombre: 'Luis Rojas',
   contactoCargo: 'Jefe de Planta',
   contactoTelefono: '054 223344',
-  estado: 'ACTIVO',
   observaciones: '',
 };
 
@@ -122,22 +121,31 @@ describe('validarProyecto (§7.2)', () => {
   it('exige ubicación y contacto en la sede', () => {
     const errores = validarProyecto({ ...proyectoValido, distrito: '', contactoNombre: '', contactoTelefono: '' }, []);
     expect(Object.keys(errores).sort()).toEqual(['contactoNombre', 'contactoTelefono', 'distrito']);
+    expect(errores.distrito).toBe('Campo obligatorio.');
+  });
+
+  it('muestra el mensaje del esquema cuando el teléfono no es válido', () => {
+    expect(validarProyecto({ ...proyectoValido, contactoTelefono: 'abc' }, []).contactoTelefono).toBe(
+      'El teléfono solo admite dígitos y + ( ) -',
+    );
+  });
+
+  it('en edición admite los nombres de 3 a 50 caracteres que guarda la base', () => {
+    expect(validarProyecto({ ...proyectoValido, nombre: 'ABC' }, [], { edicion: true })).toEqual({});
+    expect(validarProyecto({ ...proyectoValido, nombre: 'AB' }, [], { edicion: true }).nombre).toBeDefined();
   });
 });
 
 const servicioValido: DatosServicio = {
   tipo: 'DRT',
-  frecuencia: 'Quincenal',
+  frecuencia: 'QUINCENAL',
   areaTotal: '1200',
   areaTratar: '800',
   insumos: ['i1'],
   dosis: { i1: '1 bloque por estación' },
   equipos: ['e2'],
   requiereCertificado: true,
-  vigenciaDesde: '2026-10-01',
-  vigenciaHasta: '2027-03-31',
-  observaciones: '',
-  estado: 'ACTIVO',
+  vigenciaDias: '180',
 };
 
 describe('validarServicio (§7.3)', () => {
@@ -152,9 +160,18 @@ describe('validarServicio (§7.3)', () => {
     expect(errores.requiereCertificado).toBeDefined();
   });
 
-  it('no deja que el área a tratar supere el área total', () => {
-    expect(validarServicio({ ...servicioValido, areaTratar: '1500' }).areaTratar).toBeDefined();
-    expect(validarServicio({ ...servicioValido, areaTotal: '0' }).areaTotal).toBeDefined();
+  it('no deja que el área a tratar supere el área total (regla cruzada del esquema, en el campo del área a tratar)', () => {
+    const errores = validarServicio({ ...servicioValido, areaTratar: '1500' });
+    expect(errores.areaTratar).toBe('No puede superar el área total del local');
+    expect(errores.areaTotal).toBeUndefined();
+  });
+
+  it('pide superficies mayores a 0', () => {
+    expect(validarServicio({ ...servicioValido, areaTotal: '0' }).areaTotal).toBe('Ingrese una superficie mayor a 0 m².');
+    expect(validarServicio({ ...servicioValido, areaTratar: '', areaTotal: '' })).toMatchObject({
+      areaTotal: 'Campo obligatorio.',
+      areaTratar: 'Campo obligatorio.',
+    });
   });
 
   it('pide al menos un insumo y un equipo', () => {
@@ -167,12 +184,13 @@ describe('validarServicio (§7.3)', () => {
     expect(validarServicio({ ...servicioValido, insumos: ['i1', 'i3'], dosis: { i1: '1 bloque' } }).dosis).toBeDefined();
   });
 
-  it('con certificado, pide un período de vigencia válido', () => {
-    expect(validarServicio({ ...servicioValido, vigenciaHasta: '' }).vigenciaHasta).toBeDefined();
-    expect(validarServicio({ ...servicioValido, vigenciaHasta: '2026-09-01' }).vigenciaHasta).toBeDefined();
+  it('con certificado, pide la vigencia en días (entero mayor a 0)', () => {
+    expect(validarServicio({ ...servicioValido, vigenciaDias: '' }).vigenciaDias).toBe('Campo obligatorio.');
+    expect(validarServicio({ ...servicioValido, vigenciaDias: '0' }).vigenciaDias).toBe('Ingrese un número entero de días mayor a 0.');
+    expect(validarServicio({ ...servicioValido, vigenciaDias: '12.5' }).vigenciaDias).toBe('Ingrese un número entero de días mayor a 0.');
   });
 
   it('sin certificado, no pide vigencia', () => {
-    expect(validarServicio({ ...servicioValido, requiereCertificado: false, vigenciaDesde: '', vigenciaHasta: '' })).toEqual({});
+    expect(validarServicio({ ...servicioValido, requiereCertificado: false, vigenciaDias: '' })).toEqual({});
   });
 });

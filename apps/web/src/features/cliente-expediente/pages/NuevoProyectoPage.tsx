@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AltaFormLayout } from '../components/AltaForm';
-import { Bloque, Campo, Opciones, ariaError } from '../../../shared/ui/molecules/FormFields';
+import { Bloque, Campo, ariaError } from '../../../shared/ui/molecules/FormFields';
 import { validarProyecto, type DatosProyecto } from '../model/validaciones';
 import type { ClienteFila } from '../model/clientes-mock';
 
@@ -20,7 +20,6 @@ const INICIAL: DatosProyecto = {
   contactoNombre: '',
   contactoCargo: '',
   contactoTelefono: '',
-  estado: 'ACTIVO',
   observaciones: '',
 };
 
@@ -111,15 +110,6 @@ export function NuevoProyectoPage({ cliente, nombresExistentes, onRegistrar, onC
             onChange={(e) => set('departamento', e.target.value)}
           />
         </Campo>
-        <Opciones
-          nombre="Estado"
-          valor={datos.estado}
-          opciones={[
-            { valor: 'ACTIVO', etiqueta: 'Activo' },
-            { valor: 'INACTIVO', etiqueta: 'Inactivo' },
-          ]}
-          onCambiar={(v) => set('estado', v)}
-        />
       </Bloque>
 
       <Bloque titulo="Contacto en la sede">

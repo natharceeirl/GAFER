@@ -1,6 +1,7 @@
 import type { TipoServicio } from '@gafer/contracts';
 import type { ClienteFila } from './clientes-mock';
-import type { ProyectoExpediente } from './expediente-mock';
+import type { ProyectoExpediente } from './proyecto-mapper';
+import { etiquetaFrecuencia, etiquetaTipoServicio } from './catalogos-servicio';
 import type { Equipo, Insumo } from '../../mantenimiento/model/tipos';
 import { agendaDelDia, type VisitaProgramada } from '../../programacion/model/programacion';
 import type { EstacionCritica, ServicioRegistro } from '../../estadisticas/model/estadisticas';
@@ -52,20 +53,22 @@ export function vistaTecnico({ cliente, proyectos, historial, visitas, hoy, insu
       direccion: p.distrito ? `${p.direccion}, ${p.distrito}` : p.direccion,
       visitasHoy: deHoy.filter((v) => v.proyectoId === p.id),
       estacionesRojo: estacionesRojo.filter((e) => e.cliente === cliente.codigoCorto && e.proyecto === p.nombre),
-      servicios: p.servicios.map((s) => {
+      servicios: p.servicios
+        .filter((s) => s.estado === 'ACTIVO')
+        .map((s) => {
         const ultima = historial
-          .filter((h) => h.clienteId === cliente.id && h.ejecutado && h.proyecto === p.nombre && h.tipo === s.tipoId)
+          .filter((h) => h.clienteId === cliente.id && h.ejecutado && h.proyecto === p.nombre && h.tipo === s.tipoServicio)
           .sort((a, b) => b.fecha.localeCompare(a.fecha))[0];
         return {
           id: s.id,
-          tipoId: s.tipoId,
-          tipo: s.tipo,
-          frecuencia: s.frecuencia,
-          insumos: s.insumos.flatMap((id) => {
+          tipoId: s.tipoServicio,
+          tipo: etiquetaTipoServicio(s.tipoServicio),
+          frecuencia: etiquetaFrecuencia(s.frecuencia),
+          insumos: s.insumosAutorizados.flatMap((id) => {
             const insumo = insumos.find((i) => i.id === id && i.estado === 'ACTIVO');
-            return insumo ? [{ nombre: insumo.nombre, dosis: s.dosis[id] ?? insumo.dosisReferencial, registroDigesa: insumo.registroDigesa }] : [];
+            return insumo ? [{ nombre: insumo.nombre, dosis: s.dosisReferencial[id] ?? insumo.dosisReferencial, registroDigesa: insumo.registroDigesa }] : [];
           }),
-          equipos: s.equipos.flatMap((id) => {
+          equipos: s.equiposAutorizados.flatMap((id) => {
             const equipo = equipos.find((e) => e.id === id);
             return equipo ? [{ nombre: equipo.nombre, codigo: equipo.codigoInterno, operativo: equipo.estadoOperativo === 'OPERATIVO' }] : [];
           }),

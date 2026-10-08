@@ -21,23 +21,19 @@ const proyecto: DatosProyecto = {
   contactoNombre: 'Luis Rojas',
   contactoCargo: 'Jefe de Planta',
   contactoTelefono: '054223344',
-  estado: 'ACTIVO',
   observaciones: '',
 };
 
 const servicio: DatosServicio = {
   tipo: 'DRT',
-  frecuencia: 'Quincenal',
+  frecuencia: 'QUINCENAL',
   areaTotal: '1000',
   areaTratar: '800',
   insumos: ['i1'],
   dosis: { i1: '1 bloque por estación' },
   equipos: ['e2'],
   requiereCertificado: true,
-  vigenciaDesde: '2026-10-01',
-  vigenciaHasta: '2027-03-31',
-  observaciones: '',
-  estado: 'ACTIVO',
+  vigenciaDias: '180',
 };
 
 describe('cartera compartida (§7)', () => {
@@ -58,12 +54,13 @@ describe('cartera compartida (§7)', () => {
     expect(sede.nombre).toBe('PLANTA_NORTE');
     expect(sede.servicios).toHaveLength(1);
     expect(sede.servicios[0]).toMatchObject({
-      tipoId: 'DRT',
-      frecuencia: 'Quincenal',
+      tipoServicio: 'DRT',
+      frecuencia: 'QUINCENAL',
       requiereCertificado: true,
-      insumos: ['i1'],
-      dosis: { i1: '1 bloque por estación' },
-      equipos: ['e2'],
+      vigenciaDias: 180,
+      insumosAutorizados: ['i1'],
+      dosisReferencial: { i1: '1 bloque por estación' },
+      equiposAutorizados: ['e2'],
     });
   });
 

@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import type { TipoServicio } from '@gafer/contracts';
+import type { FrecuenciaServicio, TipoServicio } from '@gafer/contracts';
 import { AltaFormLayout } from '../components/AltaForm';
 import { Bloque, Campo, Opciones, ariaError } from '../../../shared/ui/molecules/FormFields';
 import { FRECUENCIAS, TIPOS_SERVICIO } from '../model/catalogos-servicio';
 import { validarServicio, type DatosServicio } from '../model/validaciones';
 import type { ClienteFila } from '../model/clientes-mock';
-import type { ProyectoExpediente } from '../model/expediente-mock';
+import type { ProyectoExpediente } from '../model/proyecto-mapper';
 import type { Equipo, Insumo } from '../../mantenimiento/model/tipos';
 
 interface Props {
@@ -26,10 +26,7 @@ const INICIAL: DatosServicio = {
   dosis: {},
   equipos: [],
   requiereCertificado: null,
-  vigenciaDesde: '',
-  vigenciaHasta: '',
-  observaciones: '',
-  estado: 'ACTIVO',
+  vigenciaDias: '',
 };
 
 const ESTADO_EQUIPO: Record<Equipo['estadoOperativo'], string> = {
@@ -112,12 +109,12 @@ export function NuevoServicioPage({ cliente, proyecto, insumos, equipos, onRegis
           <select
             {...ariaError('ser-frecuencia', visibles.frecuencia)}
             value={datos.frecuencia}
-            onChange={(e) => set('frecuencia', e.target.value)}
+            onChange={(e) => set('frecuencia', e.target.value as FrecuenciaServicio | '')}
           >
             <option value="">Seleccione la frecuencia…</option>
             {FRECUENCIAS.map((f) => (
-              <option key={f} value={f}>
-                {f}
+              <option key={f.codigo} value={f.codigo}>
+                {f.etiqueta}
               </option>
             ))}
           </select>
@@ -150,15 +147,6 @@ export function NuevoServicioPage({ cliente, proyecto, insumos, equipos, onRegis
             <span>m²</span>
           </div>
         </Campo>
-        <Opciones
-          nombre="Estado"
-          valor={datos.estado}
-          opciones={[
-            { valor: 'ACTIVO', etiqueta: 'Activo' },
-            { valor: 'INACTIVO', etiqueta: 'Inactivo' },
-          ]}
-          onCambiar={(v) => set('estado', v)}
-        />
       </Bloque>
 
       <Bloque titulo="Insumos autorizados y dosis">
@@ -246,38 +234,27 @@ export function NuevoServicioPage({ cliente, proyecto, insumos, equipos, onRegis
         />
         <div />
         {datos.requiereCertificado ? (
-          <>
-            <Campo id="ser-vigencia-desde" label="Vigencia desde" error={visibles.vigenciaDesde}>
+          <Campo
+            id="ser-vigencia-dias"
+            label="Vigencia del certificado"
+            error={visibles.vigenciaDias}
+            ayuda="Días que el certificado de este servicio se mantiene vigente."
+          >
+            <div className="ff-sufijo">
               <input
-                {...ariaError('ser-vigencia-desde', visibles.vigenciaDesde)}
-                type="date"
-                value={datos.vigenciaDesde}
-                onChange={(e) => set('vigenciaDesde', e.target.value)}
+                {...ariaError('ser-vigencia-dias', visibles.vigenciaDias)}
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                value={datos.vigenciaDias}
+                onChange={(e) => set('vigenciaDias', e.target.value)}
+                placeholder="180"
               />
-            </Campo>
-            <Campo id="ser-vigencia-hasta" label="Vigencia hasta" error={visibles.vigenciaHasta}>
-              <input
-                {...ariaError('ser-vigencia-hasta', visibles.vigenciaHasta)}
-                type="date"
-                value={datos.vigenciaHasta}
-                onChange={(e) => set('vigenciaHasta', e.target.value)}
-              />
-            </Campo>
-          </>
+              <span>días</span>
+            </div>
+          </Campo>
         ) : null}
-        <Campo
-          id="ser-observaciones"
-          label="Observaciones del servicio (opcional)"
-          ayuda="Restricciones por área o requisitos específicos del cliente."
-          ancho="completo"
-        >
-          <textarea
-            id="ser-observaciones"
-            value={datos.observaciones}
-            onChange={(e) => set('observaciones', e.target.value)}
-            placeholder="No aplicar en zona de envasado durante el turno de producción."
-          />
-        </Campo>
       </Bloque>
     </AltaFormLayout>
   );

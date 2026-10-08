@@ -5,7 +5,8 @@ import { PerforatedDivider } from '../../../shared/ui/molecules/PerforatedDivide
 import { Button } from '../../../shared/ui/atoms/Button';
 import { Badge } from '../../../shared/ui/atoms/Badge';
 import type { ClienteFila } from '../model/clientes-mock';
-import type { ProyectoExpediente } from '../model/expediente-mock';
+import type { ProyectoExpediente } from '../model/proyecto-mapper';
+import { etiquetaFrecuencia, etiquetaTipoServicio } from '../model/catalogos-servicio';
 import { alertaVencimiento, carpetaDelCliente, correlativos, historialPorProyecto, type PdfCarpeta } from '../model/expediente';
 import type { EstacionCritica, ServicioRegistro } from '../../estadisticas/model/estadisticas';
 import type { SedeTecnico } from '../model/vista-tecnico';
@@ -205,7 +206,7 @@ export function ClienteExpedientePage({
                     <ul className="expediente-proyecto__servicios">
                       {p.servicios.map((s) => (
                         <li key={s.id}>
-                          {s.tipo} <span className="expediente-proyecto__frecuencia">· {s.frecuencia}</span>
+                          {etiquetaTipoServicio(s.tipoServicio)} <span className="expediente-proyecto__frecuencia">· {etiquetaFrecuencia(s.frecuencia)}</span>
                           {s.requiereCertificado ? <span className="expediente-proyecto__frecuencia"> · con certificado</span> : null}
                         </li>
                       ))}
