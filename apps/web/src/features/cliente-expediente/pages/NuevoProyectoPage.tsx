@@ -1,15 +1,26 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AltaFormLayout } from '../components/AltaForm';
 import { Bloque, Campo, ariaError } from '../../../shared/ui/molecules/FormFields';
-import { validarProyecto, type DatosProyecto } from '../model/validaciones';
+import { validarProyecto, type DatosProyecto, type Errores } from '../model/validaciones';
 import type { ClienteFila } from '../model/clientes-mock';
 
 interface Props {
   cliente: ClienteFila;
+  /** Nombres de las demás sedes del cliente (en edición, sin la sede que se edita). */
   nombresExistentes: string[];
+  /** Con `inicial` el formulario edita una sede ya registrada. */
+  inicial?: DatosProyecto;
+  /** Operación en curso: se deshabilitan los botones. */
+  enviando?: boolean;
+  /** Errores por campo devueltos por el servidor (400/409). */
+  erroresServidor?: Errores<keyof DatosProyecto>;
+  /** Error del servidor que no corresponde a un campo. */
+  errorGeneral?: string | null;
   onRegistrar: (datos: DatosProyecto) => void;
   onCancelar: () => void;
 }
+
+const SIN_ERRORES: Errores<keyof DatosProyecto> = {};
 
 const INICIAL: DatosProyecto = {
   nombre: '',
@@ -23,32 +34,60 @@ const INICIAL: DatosProyecto = {
   observaciones: '',
 };
 
-/** Alta de proyecto (sede) — spec §7.2. Un cliente puede tener varias sedes activas a la vez. */
-export function NuevoProyectoPage({ cliente, nombresExistentes, onRegistrar, onCancelar }: Props) {
-  const [datos, setDatos] = useState<DatosProyecto>(INICIAL);
+/**
+ * Alta y edición de proyecto (sede) — spec §7.2. Un cliente puede tener varias sedes activas a la vez.
+ * El estado no se elige aquí: la sede nace activa y se activa o desactiva desde el expediente.
+ */
+export function NuevoProyectoPage({
+  cliente,
+  nombresExistentes,
+  inicial,
+  enviando = false,
+  erroresServidor = SIN_ERRORES,
+  errorGeneral = null,
+  onRegistrar,
+  onCancelar,
+}: Props) {
+  const edicion = inicial !== undefined;
+  const [datos, setDatos] = useState<DatosProyecto>(inicial ?? INICIAL);
   const [intentado, setIntentado] = useState(false);
 
-  const errores = validarProyecto(datos, nombresExistentes);
-  const visibles = intentado ? errores : {};
+  /** Campos que se tocaron después del último error del servidor: su error ya no aplica. */
+  const [corregidos, setCorregidos] = useState<Array<keyof DatosProyecto>>([]);
+  useEffect(() => setCorregidos([]), [erroresServidor]);
+
+  const errores = validarProyecto(datos, nombresExistentes, { edicion });
+  const delServidor: Errores<keyof DatosProyecto> = {};
+  for (const campo of Object.keys(erroresServidor) as Array<keyof DatosProyecto>) {
+    if (!corregidos.includes(campo)) delServidor[campo] = erroresServidor[campo];
+  }
+  const visibles = { ...(intentado ? errores : {}), ...delServidor };
 
   function set<K extends keyof DatosProyecto>(campo: K, valor: DatosProyecto[K]) {
     setDatos((prev) => ({ ...prev, [campo]: valor }));
+    setCorregidos((prev) => (prev.includes(campo) ? prev : [...prev, campo]));
   }
 
   function registrar() {
     setIntentado(true);
-    if (Object.keys(errores).length > 0) return;
+    if (enviando || Object.keys(errores).length > 0) return;
     onRegistrar(datos);
   }
 
   return (
     <AltaFormLayout
-      code={`ALTA DE PROYECTO · ${cliente.codigoCorto} · §7.2`}
-      title="Nueva sede"
-      meta={`${cliente.razonSocial} · la sede agrupa los servicios que se ejecutan en esa ubicación`}
-      textoConfirmar="Registrar sede"
+      code={edicion ? `SEDE · ${cliente.codigoCorto} · ${inicial.nombre} · §7.2` : `ALTA DE PROYECTO · ${cliente.codigoCorto} · §7.2`}
+      title={edicion ? 'Editar sede' : 'Nueva sede'}
+      meta={
+        edicion
+          ? `${cliente.razonSocial} · los cambios aplican a los servicios de esta sede`
+          : `${cliente.razonSocial} · la sede agrupa los servicios que se ejecutan en esa ubicación`
+      }
+      textoConfirmar={edicion ? 'Guardar sede' : 'Registrar sede'}
       cantidadErrores={Object.keys(errores).length}
       mostrarErrores={intentado}
+      enviando={enviando}
+      errorGeneral={errorGeneral}
       onSubmit={registrar}
       onCancelar={onCancelar}
     >
