@@ -9,6 +9,7 @@ import { useCartera } from '../../cliente-expediente/model/cartera-context';
 import { proyectosDe, sedesActivas } from '../../cliente-expediente/model/cartera';
 import { etiquetaFrecuencia, etiquetaTipoServicio } from '../../cliente-expediente/model/catalogos-servicio';
 import { PERSONAL_MOCK } from '../../mantenimiento/model/mantenimiento-mock';
+import { nombreCompleto } from '../../mantenimiento/model/personal-mapper';
 import { agendaDelDia, tecnicosDisponibles, validarVisita, type DatosVisita, type EstadoCampo } from '../model/programacion';
 import { useProgramacion } from '../model/programacion-context';
 import { ahora, fechaLocal } from '../../../shared/lib/fecha';
@@ -125,7 +126,7 @@ export function ProgramacionPage({ usuario, rol }: ProgramacionPageProps) {
                         {d.cliente} <span>· {d.sede}</span>
                       </span>
                       <span className="prog-fila__servicio">{d.servicio}</span>
-                      <span className="prog-fila__tecnico">{titular ? titular.nombre : 'Sin titular · cualquier técnico'}</span>
+                      <span className="prog-fila__tecnico">{titular ? nombreCompleto(titular) : 'Sin titular · cualquier técnico'}</span>
                       <Badge color={ESTADO[v.estadoCampo].color}>{ESTADO[v.estadoCampo].etiqueta}</Badge>
                     </div>
                     {v.observaciones ? <p className="prog-fila__obs">{v.observaciones}</p> : null}
@@ -192,7 +193,7 @@ export function ProgramacionPage({ usuario, rol }: ProgramacionPageProps) {
                 <option value="">Sin titular</option>
                 {tecnicos.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.nombre}
+                    {nombreCompleto(t)}
                   </option>
                 ))}
               </select>

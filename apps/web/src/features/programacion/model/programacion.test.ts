@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { agendaDelDia, agregarVisita, tecnicosDisponibles, validarVisita, type DatosVisita, type VisitaProgramada } from './programacion';
-import type { PersonalOperativo } from '../../mantenimiento/model/tipos';
+import { personalDePrueba } from '../../mantenimiento/pruebas/fabricas';
 
 const valida: DatosVisita = {
   clienteId: 'c1',
@@ -51,10 +51,10 @@ describe('agregarVisita', () => {
 
 describe('tecnicosDisponibles', () => {
   it('ofrece como titular solo técnicos operadores activos', () => {
-    const personal: PersonalOperativo[] = [
-      { id: 'p1', nombre: 'Diana Amamani', dni: '1', cargo: 'Supervisor', estado: 'ACTIVO' },
-      { id: 'p2', nombre: 'Marco Ipusari', dni: '2', cargo: 'Técnico Operador', estado: 'ACTIVO' },
-      { id: 'p5', nombre: 'Luis Beltrán', dni: '3', cargo: 'Técnico Operador', estado: 'INACTIVO' },
+    const personal = [
+      personalDePrueba({ id: 'p1', cargo: 'SUPERVISOR' }),
+      personalDePrueba({ id: 'p2', cargo: 'TECNICO_OPERADOR' }),
+      personalDePrueba({ id: 'p5', cargo: 'TECNICO_OPERADOR', estado: 'INACTIVO' }),
     ];
     expect(tecnicosDisponibles(personal).map((p) => p.id)).toEqual(['p2']);
   });

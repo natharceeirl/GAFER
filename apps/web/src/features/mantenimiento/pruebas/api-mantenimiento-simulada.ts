@@ -15,6 +15,11 @@ export interface Registro {
 export interface EstadoApi {
   insumos: Registro[];
   equipos: Registro[];
+  personal: Registro[];
+  catalogos: Registro[];
+  configuracion: Registro;
+  /** Rol de la sesión simulada: el Supervisor no ve el personal, ni los catálogos solo de Administrador, ni escribe la configuración. */
+  rol: 'ADMINISTRADOR' | 'SUPERVISOR';
   /** Responde 403 a todo lo de insumos y equipos, como el API a un rol sin acceso. */
   prohibido: boolean;
   /** Cantidad de PUT al almacenamiento que se rechazan antes de aceptar. */
@@ -23,9 +28,37 @@ export interface EstadoApi {
   subidos: string[];
 }
 
+export const configuracionApi = (extra: Partial<Registro> = {}): Registro => ({
+  id: 'global',
+  director: { nombre: 'Ing. Carlos Medina Ruiz', cip: '84512', firma: null },
+  resolucionSanitaria: '0023-2024-DESA/MINSA',
+  parametros: {},
+  actualizadoPor: null,
+  updatedAt: '2026-10-04T00:00:00.000Z',
+  ...extra,
+});
+
+export const personalApi = (n: number, extra: Partial<Registro> = {}): Registro => ({
+  id: `22222222-0000-4000-8000-${String(n).padStart(12, '0')}`,
+  dni: String(40000000 + n),
+  nombres: `Nombre${n}`,
+  apellidos: `Apellido${n}`,
+  cargo: 'TECNICO_OPERADOR',
+  telefono: '958123456',
+  usuario: null,
+  estado: 'ACTIVO',
+  ...extra,
+});
+
+export const catalogoApi = (id: string, titulo: string, items: string[], soloAdministrador = false): Registro => ({ id, titulo, items, soloAdministrador });
+
 export const crearEstadoApi = (parcial: Partial<EstadoApi> = {}): EstadoApi => ({
   insumos: [],
   equipos: [],
+  personal: [],
+  catalogos: [],
+  configuracion: configuracionApi(),
+  rol: 'ADMINISTRADOR',
   prohibido: false,
   fallosDeSubida: 0,
   subidos: [],
@@ -93,21 +126,57 @@ export function simularApiMantenimiento(fetchMock: Mock, estado: EstadoApi) {
       return json(201, { key: cuerpo.key, downloadUrl: `${ORIGEN_ALMACENAMIENTO}/ver/${encodeURIComponent(cuerpo.key)}`, expiresInSeconds: 3600 });
     }
 
-    const coleccion = ruta.startsWith('/insumos') ? 'insumos' : ruta.startsWith('/equipos') ? 'equipos' : null;
+    const prohibidoParaElRol = () => json(403, { statusCode: 403, message: 'Forbidden resource' });
+
+    if (ruta === '/configuracion') {
+      if (metodo === 'GET') return json(200, estado.configuracion);
+      if (estado.rol !== 'ADMINISTRADOR') return prohibidoParaElRol();
+      if (cuerpo.director) estado.configuracion.director = { nombre: cuerpo.director.nombre, cip: cuerpo.director.cip, firma: cuerpo.director.firma ?? null };
+      if (cuerpo.resolucionSanitaria) estado.configuracion.resolucionSanitaria = cuerpo.resolucionSanitaria;
+      return json(200, estado.configuracion);
+    }
+
+    if (ruta === '/catalogos-texto' && metodo === 'GET') {
+      return json(200, estado.catalogos.filter((c) => estado.rol === 'ADMINISTRADOR' || !c.soloAdministrador));
+    }
+    const catalogoRuta = ruta.match(/^\/catalogos-texto\/([^/]+)(\/items)?$/);
+    if (catalogoRuta) {
+      const catalogo = estado.catalogos.find((c) => c.id === catalogoRuta[1]);
+      if (!catalogo) return json(404, { statusCode: 404, message: 'Catálogo no encontrado' });
+      if (catalogo.soloAdministrador && estado.rol !== 'ADMINISTRADOR') return prohibidoParaElRol();
+      if (catalogoRuta[2] && metodo === 'POST') {
+        const items = catalogo.items as string[];
+        if (!items.includes(cuerpo.item)) items.push(cuerpo.item);
+        return json(201, catalogo);
+      }
+      if (metodo === 'PUT') {
+        catalogo.items = cuerpo.items;
+        return json(200, catalogo);
+      }
+      return json(200, catalogo);
+    }
+
+    if (ruta.startsWith('/personal') && estado.rol !== 'ADMINISTRADOR') return prohibidoParaElRol();
+
+    const coleccion = ruta.startsWith('/personal') ? 'personal' : ruta.startsWith('/insumos') ? 'insumos' : ruta.startsWith('/equipos') ? 'equipos' : null;
     if (!coleccion) return json(404, { statusCode: 404, message: 'No encontrado' });
-    if (estado.prohibido) return json(403, { statusCode: 403, message: 'Forbidden resource' });
+    if (estado.prohibido && coleccion !== 'personal') return json(403, { statusCode: 403, message: 'Forbidden resource' });
 
     const registros = estado[coleccion];
-    const claveUnica = coleccion === 'insumos' ? 'registroDigesa' : 'codigoInterno';
+    const claveUnica = coleccion === 'insumos' ? 'registroDigesa' : coleccion === 'personal' ? 'dni' : 'codigoInterno';
     const mensajeDuplicado =
-      coleccion === 'insumos' ? 'Ya existe un insumo registrado con el código DIGESA' : 'Ya existe un equipo registrado con el código interno';
+      coleccion === 'insumos'
+        ? 'Ya existe un insumo registrado con el código DIGESA'
+        : coleccion === 'personal'
+          ? 'Ya existe un colaborador registrado con el DNI'
+          : 'Ya existe un equipo registrado con el código interno';
 
     if (ruta === `/${coleccion}` && metodo === 'GET') return json(200, { total: registros.length, limit: 100, offset: 0, items: registros });
     if (ruta === `/${coleccion}` && metodo === 'POST') {
       if (registros.some((r) => r[claveUnica] === cuerpo[claveUnica])) {
         return json(409, { statusCode: 409, message: `${mensajeDuplicado}: ${cuerpo[claveUnica]}` });
       }
-      const creado: Registro = { id: nuevoId(), ...(coleccion === 'insumos' ? { estado: 'ACTIVO' } : { estadoOperativo: 'OPERATIVO' }), ...cuerpo };
+      const creado: Registro = { id: nuevoId(), ...(coleccion === 'equipos' ? { estadoOperativo: 'OPERATIVO' } : { estado: 'ACTIVO' }), ...cuerpo };
       registros.push(creado);
       return json(201, creado);
     }

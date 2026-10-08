@@ -1,4 +1,4 @@
-import type { EstadoDocumento, Insumo } from '@gafer/contracts';
+import type { DirectorTecnico, EstadoDocumento, Insumo } from '@gafer/contracts';
 import type { Rol } from '../../auth/model/roles';
 import type { EventoAuditoria } from '../../auditoria/model/evento';
 import type { DocumentoDetalle } from './tipos';
@@ -15,11 +15,7 @@ export const ETIQUETA_CAMPO: Record<CampoEditable, string> = {
 };
 
 /** Configurado una sola vez en Mantenimiento y estampado al aprobar (C7). */
-export interface DirectorTecnico {
-  nombre: string;
-  cip: string;
-  firma: string | null;
-}
+export type { DirectorTecnico } from '@gafer/contracts';
 
 interface Contexto {
   usuario: string;

@@ -1,5 +1,4 @@
-import type { PersonalOperativo } from '../../mantenimiento/model/tipos';
-import type { VisitaProgramada } from '@gafer/contracts';
+import type { Personal, VisitaProgramada } from '@gafer/contracts';
 
 export type { EstadoCampo, VisitaProgramada } from '@gafer/contracts';
 
@@ -44,6 +43,6 @@ export function agendaDelDia(visitas: VisitaProgramada[], fecha: string): Visita
   return visitas.filter((v) => v.fecha === fecha).sort((a, b) => a.hora.localeCompare(b.hora));
 }
 
-export function tecnicosDisponibles(personal: PersonalOperativo[]): PersonalOperativo[] {
-  return personal.filter((p) => p.cargo === 'Técnico Operador' && p.estado === 'ACTIVO');
+export function tecnicosDisponibles(personal: Personal[]): Personal[] {
+  return personal.filter((p) => p.cargo === 'TECNICO_OPERADOR' && p.estado === 'ACTIVO');
 }

@@ -42,6 +42,9 @@ function simularApi() {
     const { pathname } = new URL(url);
     const metodo = init?.method ?? 'GET';
     const cuerpo = init?.body ? JSON.parse(init.body as string) : undefined;
+    if (pathname === '/api/mantenimiento/catalogos-texto') {
+      return json(200, [{ id: 'giros', titulo: 'Giros de negocio', items: ['Alimentos', 'Energía', 'Minería'], soloAdministrador: false }]);
+    }
     if (pathname === '/api/mantenimiento/clientes' && metodo === 'GET') {
       return json(200, { total: clientes.length, limit: 100, offset: 0, items: clientes });
     }
@@ -155,6 +158,16 @@ describe('ClientesModule conectado al API', () => {
       camposExtra: { anticipacionAlertaDias: 60 },
     });
     expect(screen.getByText('60 días antes')).toBeInTheDocument();
+  });
+
+  it('los giros del formulario salen del catálogo de texto del API, no de una lista fija', async () => {
+    simularApi();
+    montar();
+    fireEvent.click(await screen.findByRole('button', { name: 'Nuevo cliente' }));
+
+    await waitFor(() => expect(within(screen.getByLabelText('Giro del negocio')).getByRole('option', { name: 'Minería' })).toBeInTheDocument());
+    const opciones = within(screen.getByLabelText('Giro del negocio')).getAllByRole('option').map((o) => o.textContent);
+    expect(opciones).toEqual(['Seleccione un giro…', 'Alimentos', 'Energía', 'Minería']);
   });
 
   it('un RUC repetido (409) se marca en el campo y el formulario queda abierto', async () => {

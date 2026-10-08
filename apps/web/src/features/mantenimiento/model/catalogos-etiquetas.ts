@@ -1,4 +1,5 @@
 import type {
+  CargoPersonal,
   EstadoActivoInactivo,
   EstadoOperativoEquipo,
   PresentacionInsumo,
@@ -53,6 +54,13 @@ export const UNIDADES_MEDIDA: Array<Entrada<UnidadMedidaInsumo>> = [
   { codigo: 'UNIDAD', etiqueta: 'Unidades' },
 ];
 
+/** Cargo del personal (§7.6); el código de la base es `TECNICO_OPERADOR`. */
+export const CARGOS_PERSONAL: Array<Entrada<CargoPersonal>> = [
+  { codigo: 'ADMINISTRADOR', etiqueta: 'Administrador' },
+  { codigo: 'SUPERVISOR', etiqueta: 'Supervisor' },
+  { codigo: 'TECNICO_OPERADOR', etiqueta: 'Técnico Operador' },
+];
+
 const ESTADOS_ACTIVOS: Array<Entrada<EstadoActivoInactivo>> = [
   { codigo: 'ACTIVO', etiqueta: 'Activo' },
   { codigo: 'INACTIVO', etiqueta: 'Inactivo' },
@@ -68,3 +76,4 @@ export const etiquetaTipoEquipo = (codigo: TipoEquipo) => etiquetaDe(TIPOS_EQUIP
 export const etiquetaPresentacion = (codigo: PresentacionInsumo) => etiquetaDe(PRESENTACIONES, codigo);
 export const etiquetaUnidad = (codigo: UnidadMedidaInsumo) => etiquetaDe(UNIDADES_MEDIDA, codigo);
 export const etiquetaEstadoActivo = (codigo: EstadoActivoInactivo) => etiquetaDe(ESTADOS_ACTIVOS, codigo);
+export const etiquetaCargo = (codigo: CargoPersonal) => etiquetaDe(CARGOS_PERSONAL, codigo);

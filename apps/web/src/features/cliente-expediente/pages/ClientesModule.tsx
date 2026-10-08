@@ -28,7 +28,9 @@ import {
 } from '../api/use-sedes';
 import { useEquipos } from '../../mantenimiento/api/use-equipos';
 import { useInsumos } from '../../mantenimiento/api/use-insumos';
-import { CATALOGOS_TEXTO_MOCK, PERSONAL_MOCK } from '../../mantenimiento/model/mantenimiento-mock';
+import { useCatalogosTexto } from '../../mantenimiento/api/use-catalogos-texto';
+import { PERSONAL_MOCK } from '../../mantenimiento/model/mantenimiento-mock';
+import { nombreCompleto } from '../../mantenimiento/model/personal-mapper';
 import { useProgramacion } from '../../programacion/model/programacion-context';
 import { vistaTecnico } from '../model/vista-tecnico';
 import { generarHistorial } from '../../estadisticas/model/historial-mock';
@@ -55,13 +57,14 @@ interface ClientesModuleProps {
 }
 
 /** Técnico con el que se muestra la maqueta de la app. */
-const TECNICO_DEMO = PERSONAL_MOCK.find((p) => p.cargo === 'Técnico Operador' && p.estado === 'ACTIVO')?.nombre ?? 'Técnico operador';
-
-const GIROS = CATALOGOS_TEXTO_MOCK.find((c) => c.id === 'giros')?.items ?? [];
+const TECNICO_DEMO_PERSONAL = PERSONAL_MOCK.find((p) => p.cargo === 'TECNICO_OPERADOR' && p.estado === 'ACTIVO');
+const TECNICO_DEMO = TECNICO_DEMO_PERSONAL ? nombreCompleto(TECNICO_DEMO_PERSONAL) : 'Técnico operador';
 
 /** Jerarquía CLIENTE → PROYECTO (sede) → SERVICIO (§7); clientes, sedes y servicios vienen del API. */
 export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModuleProps) {
   const { cartera } = useCartera();
+  /** Giros del negocio: salen del catálogo de texto editable (§7.7), de modo que un cambio en Mantenimiento se ve aquí. */
+  const giros = useCatalogosTexto().data?.find((c) => c.id === 'giros')?.items ?? [];
   const { registrar } = useAuditoria();
   const { visitas } = useProgramacion();
   const [vista, setVista] = useState<Vista>({ tipo: 'lista' });
@@ -206,7 +209,7 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
   if (vista.tipo === 'nuevo-cliente' && puedeDarDeAlta) {
     return (
       <NuevoClientePage
-        giros={GIROS}
+        giros={giros}
         enviando={crear.isPending}
         erroresServidor={erroresAlta?.campos}
         errorGeneral={erroresAlta?.general}
@@ -243,7 +246,7 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
   if (vista.tipo === 'editar-cliente' && puedeDarDeAlta && cliente) {
     return (
       <NuevoClientePage
-        giros={GIROS}
+        giros={giros}
         inicial={datosDeFila(cliente)}
         anticipacionInicial={cliente.anticipacionAlertaDias}
         enviando={guardandoFicha}

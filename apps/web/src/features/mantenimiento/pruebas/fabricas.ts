@@ -1,4 +1,4 @@
-import type { Equipo, Insumo } from '@gafer/contracts';
+import type { Equipo, Insumo, Personal } from '@gafer/contracts';
 
 /** Insumo del catálogo con los códigos de la base de datos; `parcial` pisa lo que cada prueba necesite. */
 export const insumoDePrueba = (parcial: Partial<Insumo> = {}): Insumo => ({
@@ -29,5 +29,18 @@ export const equipoDePrueba = (parcial: Partial<Equipo> = {}): Equipo => ({
   fechaAdquisicion: null,
   ultimoMantenimiento: null,
   proximoMantenimiento: null,
+  ...parcial,
+});
+
+/** Persona del personal con los códigos de la base de datos; `parcial` pisa lo que cada prueba necesite. */
+export const personalDePrueba = (parcial: Partial<Personal> = {}): Personal => ({
+  id: '22222222-0000-4000-8000-000000000001',
+  dni: '45892312',
+  nombres: 'Marco',
+  apellidos: 'Ipusari',
+  cargo: 'TECNICO_OPERADOR',
+  telefono: '958123456',
+  usuario: null,
+  estado: 'ACTIVO',
   ...parcial,
 });
