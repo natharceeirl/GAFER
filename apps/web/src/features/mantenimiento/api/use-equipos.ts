@@ -14,7 +14,7 @@ export function useEquipos(habilitado = true) {
 
 function useInvalidarEquipos() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: equiposKeys.todos });
+  return () => queryClient.invalidateQueries({ queryKey: equiposKeys.todos, refetchType: 'all' });
 }
 
 export function useCrearEquipo() {

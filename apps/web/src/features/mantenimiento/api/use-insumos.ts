@@ -14,10 +14,13 @@ export function useInsumos(habilitado = true) {
   return useQuery({ queryKey: insumosKeys.todos, queryFn: listarInsumos, enabled: habilitado });
 }
 
-/** Cualquier cambio en un insumo deja obsoleto el catálogo, tanto en Mantenimiento como en el formulario de servicio. */
+/**
+ * Cualquier cambio en un insumo deja obsoleto el catálogo, tanto en Mantenimiento como en el formulario de servicio.
+ * Se vuelve a leer también si nadie lo está mostrando (el formulario reemplaza la lista): así al volver ya está al día.
+ */
 function useInvalidarInsumos() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: insumosKeys.todos });
+  return () => queryClient.invalidateQueries({ queryKey: insumosKeys.todos, refetchType: 'all' });
 }
 
 export function useCrearInsumo() {
