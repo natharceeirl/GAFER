@@ -1,0 +1,24 @@
+.mant-pdf {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mant-pdf__estado {
+  font-size: 13px;
+  color: var(--gf-ink-soft);
+}
+
+.mant-pdf__error {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--gf-radius);
+  background: var(--gf-naranja);
+  color: var(--gf-naranja-ink);
+  font-size: 13px;
+  font-weight: 600;
+}

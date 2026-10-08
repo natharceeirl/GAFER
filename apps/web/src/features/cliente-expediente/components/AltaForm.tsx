@@ -14,6 +14,8 @@ interface AltaFormLayoutProps {
   onCancelar: () => void;
   /** Con una operación en curso los botones quedan deshabilitados. */
   enviando?: boolean;
+  /** Impide guardar sin cambiar el texto del botón (por ejemplo, mientras se sube un archivo). */
+  bloqueado?: boolean;
   /** Error que no corresponde a un campo (red caída, permisos, etc.). */
   errorGeneral?: string | null;
   children: ReactNode;
@@ -30,6 +32,7 @@ export function AltaFormLayout({
   onSubmit,
   onCancelar,
   enviando = false,
+  bloqueado = false,
   errorGeneral = null,
   children,
 }: AltaFormLayoutProps) {
@@ -66,7 +69,7 @@ export function AltaFormLayout({
           <Button type="button" variant="secondary" onClick={onCancelar} disabled={enviando}>
             Cancelar
           </Button>
-          <Button type="submit" variant="primary" disabled={enviando}>
+          <Button type="submit" variant="primary" disabled={enviando || bloqueado}>
             {enviando ? 'Guardando…' : textoConfirmar}
           </Button>
         </div>
