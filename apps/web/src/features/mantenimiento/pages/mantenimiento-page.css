@@ -271,3 +271,26 @@
   border-radius: var(--gf-radius);
   padding: 4px 6px;
 }
+
+.mant-nota {
+  margin: 0;
+  font-size: 13px;
+  color: var(--gf-ink-soft);
+}
+
+.mant-lectura {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0;
+}
+.mant-lectura dt {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gf-ink-faint);
+}
+.mant-lectura dd {
+  margin: 0;
+}

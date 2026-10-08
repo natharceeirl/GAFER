@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agregarAlFinal, quitarItem, reemplazarItem, validarItem } from './catalogo-texto';
+import { quitarItem, reemplazarItem, validarItem } from './catalogo-texto';
 
 describe('validarItem', () => {
   it('acepta un texto nuevo', () => {
@@ -26,14 +26,9 @@ describe('edición de la lista de un catálogo', () => {
     expect(quitarItem(items, 0)).toEqual(['B', 'C']);
   });
 
-  it('agrega al final', () => {
-    expect(agregarAlFinal(items, ' D ')).toEqual(['A', 'B', 'C', 'D']);
-  });
-
   it('no modifican la lista original', () => {
     reemplazarItem(items, 0, 'X');
     quitarItem(items, 0);
-    agregarAlFinal(items, 'Y');
     expect(items).toEqual(['A', 'B', 'C']);
   });
 });
