@@ -90,10 +90,10 @@
 
 .app-shell__salir {
   padding: 8px 10px;
-  border: 1.5px solid var(--gf-rule-strong);
+  border: 1.5px solid var(--gf-rojo);
   border-radius: var(--gf-radius);
   background: transparent;
-  color: var(--gf-ink-soft);
+  color: var(--gf-rojo);
   font-family: var(--gf-font-ui);
   font-weight: 600;
   font-size: 12.5px;
@@ -101,8 +101,8 @@
   cursor: pointer;
 }
 .app-shell__salir:hover {
-  border-color: var(--gf-ink);
-  color: var(--gf-ink);
+  background: var(--gf-rojo);
+  color: var(--gf-rojo-ink);
 }
 
 /* En pantallas angostas la barra pasa arriba y se vuelve al scroll normal de la página. */
