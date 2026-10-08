@@ -2,19 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { vistaTecnico } from './vista-tecnico';
 import { CLIENTES_MOCK } from './clientes-mock';
 import type { ProyectoExpediente } from './proyecto-mapper';
-import type { Insumo, Equipo } from '../../mantenimiento/model/tipos';
+import { equipoDePrueba, insumoDePrueba } from '../../mantenimiento/pruebas/fabricas';
 import type { VisitaProgramada } from '../../programacion/model/programacion';
 import type { ServicioRegistro } from '../../estadisticas/model/estadisticas';
 
 const cliente = CLIENTES_MOCK.find((c) => c.codigoCorto === 'KALLPA')!;
 
-const insumos: Insumo[] = [
-  { id: 'i1', nombre: 'Brodifacoum', principioActivo: 'B', presentacion: 'Bloque', concentracion: '0.005%', registroDigesa: 'DIG-1', dosisReferencial: '', estado: 'ACTIVO' },
-  { id: 'i4', nombre: 'Deltametrina', principioActivo: 'D', presentacion: 'SC', concentracion: '2.5%', registroDigesa: 'DIG-4', dosisReferencial: '', estado: 'INACTIVO' },
+const insumos = [
+  insumoDePrueba({ id: 'i1', nombreComercial: 'Brodifacoum', principioActivo: 'B', registroDigesa: 'DIG-1', dosisEstandar: '' }),
+  insumoDePrueba({ id: 'i4', nombreComercial: 'Deltametrina', principioActivo: 'D', presentacion: 'LIQUIDO', concentracion: '2.5%', registroDigesa: 'DIG-4', dosisEstandar: '', estado: 'INACTIVO' }),
 ];
-const equipos: Equipo[] = [
-  { id: 'e2', nombre: 'Aspersora', codigoInterno: 'EQ-022', tipo: 'Aspersión', estadoOperativo: 'OPERATIVO' },
-  { id: 'e3', nombre: 'Termonebulizadora', codigoInterno: 'EQ-007', tipo: 'Termo', estadoOperativo: 'EN_MANTENIMIENTO' },
+const equipos = [
+  equipoDePrueba({ id: 'e2', nombre: 'Aspersora', codigoInterno: 'EQ-022', tipo: 'ASPERSION' }),
+  equipoDePrueba({ id: 'e3', nombre: 'Termonebulizadora', codigoInterno: 'EQ-007', tipo: 'NEBULIZACION', estadoOperativo: 'MANTENIMIENTO' }),
 ];
 
 const sede = {

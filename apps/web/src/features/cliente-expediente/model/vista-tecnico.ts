@@ -1,8 +1,7 @@
-import type { TipoServicio } from '@gafer/contracts';
+import type { Equipo, Insumo, TipoServicio } from '@gafer/contracts';
 import type { ClienteFila } from './clientes-mock';
 import type { ProyectoExpediente } from './proyecto-mapper';
 import { etiquetaFrecuencia, etiquetaTipoServicio } from './catalogos-servicio';
-import type { Equipo, Insumo } from '../../mantenimiento/model/tipos';
 import { agendaDelDia, type VisitaProgramada } from '../../programacion/model/programacion';
 import type { EstacionCritica, ServicioRegistro } from '../../estadisticas/model/estadisticas';
 
@@ -66,7 +65,7 @@ export function vistaTecnico({ cliente, proyectos, historial, visitas, hoy, insu
           frecuencia: etiquetaFrecuencia(s.frecuencia),
           insumos: s.insumosAutorizados.flatMap((id) => {
             const insumo = insumos.find((i) => i.id === id && i.estado === 'ACTIVO');
-            return insumo ? [{ nombre: insumo.nombre, dosis: s.dosisReferencial[id] ?? insumo.dosisReferencial, registroDigesa: insumo.registroDigesa }] : [];
+            return insumo ? [{ nombre: insumo.nombreComercial, dosis: s.dosisReferencial[id] ?? insumo.dosisEstandar, registroDigesa: insumo.registroDigesa }] : [];
           }),
           equipos: s.equiposAutorizados.flatMap((id) => {
             const equipo = equipos.find((e) => e.id === id);

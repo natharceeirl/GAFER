@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { FrecuenciaServicio, TipoServicio } from '@gafer/contracts';
+import type { Equipo, FrecuenciaServicio, Insumo, TipoServicio } from '@gafer/contracts';
 import { AltaFormLayout } from '../components/AltaForm';
 import { EstadoCargando, EstadoError } from '../components/EstadoConsulta';
 import { Bloque, Campo, Opciones, ariaError } from '../../../shared/ui/molecules/FormFields';
@@ -7,7 +7,7 @@ import { FRECUENCIAS, TIPOS_SERVICIO, etiquetaTipoServicio } from '../model/cata
 import { validarServicio, type DatosServicio, type Errores } from '../model/validaciones';
 import type { ClienteFila } from '../model/clientes-mock';
 import type { ProyectoExpediente } from '../model/proyecto-mapper';
-import type { Equipo, Insumo } from '../../mantenimiento/model/tipos';
+import { etiquetaEstadoOperativo, etiquetaTipoEquipo } from '../../mantenimiento/model/catalogos-etiquetas';
 
 interface Props {
   cliente: ClienteFila;
@@ -45,11 +45,9 @@ const INICIAL: DatosServicio = {
   vigenciaDias: '',
 };
 
-const ESTADO_EQUIPO: Record<Equipo['estadoOperativo'], string> = {
-  OPERATIVO: 'Operativo',
-  EN_MANTENIMIENTO: 'En mantenimiento',
-  FUERA_DE_SERVICIO: 'Fuera de servicio — no se puede asignar',
-};
+/** Estado del equipo en el listado de selección: uno fuera de servicio se ve, pero no se puede asignar. */
+const estadoDeEquipo = (e: Equipo) =>
+  e.estadoOperativo === 'FUERA_SERVICIO' ? `${etiquetaEstadoOperativo(e.estadoOperativo)} — no se puede asignar` : etiquetaEstadoOperativo(e.estadoOperativo);
 
 /** Insumo o equipo que se puede marcar; `catalogo` es nulo si el catálogo no lo entregó y solo se conoce su identificador. */
 interface Opcion<T> {
@@ -98,7 +96,7 @@ export function NuevoServicioPage({
 
   /** Solo se ofrecen insumos activos, más los ya elegidos (aunque se hayan desactivado o el catálogo no los entregue) para poder quitarlos. */
   const insumosVisibles: Opcion<Insumo>[] = [
-    ...insumos.filter((i) => i.estado === 'ACTIVO' || datos.insumos.includes(i.id)).map((i) => ({ id: i.id, nombre: i.nombre, catalogo: i })),
+    ...insumos.filter((i) => i.estado === 'ACTIVO' || datos.insumos.includes(i.id)).map((i) => ({ id: i.id, nombre: i.nombreComercial, catalogo: i })),
     ...datos.insumos
       .filter((id) => !insumos.some((i) => i.id === id))
       .map((id) => ({ id, nombre: `Insumo ${identificador(id)}`, catalogo: null })),
@@ -237,7 +235,7 @@ export function NuevoServicioPage({
               const completo = i.catalogo;
               return (
                 <li key={i.id} className="ff-check">
-                  <input type="checkbox" id={`ser-insumo-${i.id}`} checked={elegido} onChange={() => alternarInsumo(i.id, completo?.dosisReferencial ?? '')} />
+                  <input type="checkbox" id={`ser-insumo-${i.id}`} checked={elegido} onChange={() => alternarInsumo(i.id, completo?.dosisEstandar ?? '')} />
                   <label htmlFor={`ser-insumo-${i.id}`} className="ff-check__nombre">
                     {i.nombre}
                   </label>
@@ -277,7 +275,7 @@ export function NuevoServicioPage({
             {equiposVisibles.map((eq) => {
               const elegido = datos.equipos.includes(eq.id);
               const completo = eq.catalogo;
-              const deshabilitado = completo?.estadoOperativo === 'FUERA_DE_SERVICIO' && !elegido;
+              const deshabilitado = completo?.estadoOperativo === 'FUERA_SERVICIO' && !elegido;
               return (
                 <li key={eq.id} className={deshabilitado ? 'ff-check ff-check--deshabilitado' : 'ff-check'}>
                   <input
@@ -292,7 +290,7 @@ export function NuevoServicioPage({
                   </label>
                   {completo ? (
                     <span className="ff-check__detalle">
-                      {completo.codigoInterno} · {completo.tipo} · {ESTADO_EQUIPO[completo.estadoOperativo]}
+                      {completo.codigoInterno} · {etiquetaTipoEquipo(completo.tipo)} · {estadoDeEquipo(completo)}
                     </span>
                   ) : null}
                 </li>

@@ -1,7 +1,6 @@
-import type { EstadoDocumento } from '@gafer/contracts';
+import type { EstadoDocumento, Insumo } from '@gafer/contracts';
 import type { Rol } from '../../auth/model/roles';
 import type { EventoAuditoria } from '../../auditoria/model/evento';
-import type { Insumo } from '../../mantenimiento/model/tipos';
 import type { DocumentoDetalle } from './tipos';
 
 export const MAX_FOTOS_PDF = 20;
@@ -75,7 +74,7 @@ export function anexosAutomaticos(doc: DocumentoDetalle, insumos: Insumo[]): str
     doc.insumosUsados.some((u) => u.producto.toLowerCase().startsWith(cat.principioActivo.toLowerCase())),
   );
   return [
-    ...usados.flatMap((cat) => [`Ficha técnica — ${cat.nombre}`, `MSDS — ${cat.nombre}`]),
+    ...usados.flatMap((cat) => [`Ficha técnica — ${cat.nombreComercial}`, `MSDS — ${cat.nombreComercial}`]),
     'Resolución de licencia sanitaria de GAFER',
   ];
 }
