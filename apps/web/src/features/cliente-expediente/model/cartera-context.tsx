@@ -3,15 +3,14 @@ import { estadoInicialCartera, type CarteraEstado } from './cartera';
 
 interface CarteraContexto {
   cartera: CarteraEstado;
-  setCartera: (actualizar: (prev: CarteraEstado) => CarteraEstado) => void;
 }
 
 const Contexto = createContext<CarteraContexto | null>(null);
 
-/** Vive por encima del login: lo que da de alta el Administrador lo ve después el técnico en la misma demo. */
+/** Vive por encima del login: entrega los clientes de ejemplo que aún usan programación, tablero y mapa murino. */
 export function CarteraProvider({ children }: { children: ReactNode }) {
-  const [cartera, setCartera] = useState<CarteraEstado>(estadoInicialCartera);
-  return <Contexto.Provider value={{ cartera, setCartera }}>{children}</Contexto.Provider>;
+  const [cartera] = useState<CarteraEstado>(estadoInicialCartera);
+  return <Contexto.Provider value={{ cartera }}>{children}</Contexto.Provider>;
 }
 
 export function useCartera(): CarteraContexto {

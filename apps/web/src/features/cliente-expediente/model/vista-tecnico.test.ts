@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { vistaTecnico } from './vista-tecnico';
 import { CLIENTES_MOCK } from './clientes-mock';
-import type { ProyectoExpediente } from './expediente-mock';
+import type { ProyectoExpediente } from './proyecto-mapper';
 import type { Insumo, Equipo } from '../../mantenimiento/model/tipos';
 import type { VisitaProgramada } from '../../programacion/model/programacion';
 import type { ServicioRegistro } from '../../estadisticas/model/estadisticas';
@@ -17,26 +17,42 @@ const equipos: Equipo[] = [
   { id: 'e3', nombre: 'Termonebulizadora', codigoInterno: 'EQ-007', tipo: 'Termo', estadoOperativo: 'EN_MANTENIMIENTO' },
 ];
 
+const sede = {
+  clienteId: cliente.id,
+  provincia: 'Arequipa',
+  departamento: 'Arequipa',
+  contactoNombre: 'Luis Rojas',
+  contactoCargo: 'Jefe de Planta',
+  contactoTelefono: '054 223344',
+  observaciones: '',
+};
+
+const servicioBase = {
+  id: 's1',
+  proyectoId: 'p1',
+  tipoServicio: 'DRT' as const,
+  frecuencia: 'QUINCENAL' as const,
+  areaTotalM2: 1200,
+  areaTratarM2: 800,
+  requiereCertificado: true,
+  vigenciaDias: 180,
+  estado: 'ACTIVO' as const,
+  insumosAutorizados: ['i1', 'i4'],
+  dosisReferencial: { i1: '1 bloque por estación', i4: '8 ml/L' },
+  equiposAutorizados: ['e2', 'e3'],
+};
+
 const proyectos: ProyectoExpediente[] = [
   {
+    ...sede,
     id: 'p1',
     nombre: 'CSF_SUNNY',
     direccion: 'Parque Industrial',
+    distrito: '',
     estado: 'ACTIVO',
-    servicios: [
-      {
-        id: 's1',
-        tipoId: 'DRT',
-        tipo: 'DRT — Desratización',
-        frecuencia: 'Quincenal',
-        requiereCertificado: true,
-        insumos: ['i1', 'i4'],
-        dosis: { i1: '1 bloque por estación', i4: '8 ml/L' },
-        equipos: ['e2', 'e3'],
-      },
-    ],
+    servicios: [servicioBase, { ...servicioBase, id: 's2', tipoServicio: 'LRA', estado: 'INACTIVO' }],
   },
-  { id: 'p3', nombre: 'OFICINA', direccion: 'Centro', estado: 'INACTIVO', servicios: [] },
+  { ...sede, id: 'p3', nombre: 'OFICINA', direccion: 'Centro', distrito: '', estado: 'INACTIVO', servicios: [] },
 ];
 
 const historial: ServicioRegistro[] = [
@@ -65,6 +81,12 @@ describe('vistaTecnico (§3, §8.2): lo que el técnico ve del cliente en la app
       { nombre: 'Aspersora', codigo: 'EQ-022', operativo: true },
       { nombre: 'Termonebulizadora', codigo: 'EQ-007', operativo: false },
     ]);
+  });
+
+  it('muestra las etiquetas de tipo y frecuencia y deja fuera los servicios inactivos', () => {
+    const servicios = vistaTecnico(base).sedes[0].servicios;
+    expect(servicios.map((s) => s.id)).toEqual(['s1']);
+    expect(servicios[0]).toMatchObject({ tipoId: 'DRT', tipo: 'DRT — Desratización', frecuencia: 'Quincenal' });
   });
 
   it('indica la última visita ejecutada del servicio en esa sede', () => {
