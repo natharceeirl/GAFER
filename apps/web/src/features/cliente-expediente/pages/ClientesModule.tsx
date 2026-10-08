@@ -1,6 +1,4 @@
 import { useMemo, useState } from 'react';
-import type { FrecuenciaServicio } from '@gafer/contracts';
-import { etiquetaFrecuencia } from '../model/catalogos-servicio';
 import { ClientesListPage } from './ClientesListPage';
 import { ClienteExpedientePage } from './ClienteExpedientePage';
 import { NuevoClientePage } from './NuevoClientePage';
@@ -10,15 +8,29 @@ import { EstadoCargando, EstadoError } from '../components/EstadoConsulta';
 import type { ClienteFila } from '../model/clientes-mock';
 import { TicketHeader } from '../../../shared/ui/molecules/TicketHeader';
 import { useCartera } from '../model/cartera-context';
-import { agregarProyecto, agregarServicio, esClienteDeEjemplo, proyectosDe } from '../model/cartera';
 import { camposDeError, datosDeFila } from '../model/cliente-mapper';
+import { camposDeErrorProyecto, datosDeProyecto } from '../model/proyecto-mapper';
+import { camposDeErrorServicio, datosDeServicio } from '../model/servicio-mapper';
+import { etiquetaFrecuencia } from '../model/catalogos-servicio';
 import { mensajeDeError } from '../../../shared/api/errores';
 import type { DatosCliente, DatosProyecto, DatosServicio } from '../model/validaciones';
 import { useActivarCliente, useActualizarCliente, useCliente, useClientes, useCrearCliente, useDesactivarCliente } from '../api/use-clientes';
-import { CATALOGOS_TEXTO_MOCK, EQUIPOS_MOCK, INSUMOS_MOCK, PERSONAL_MOCK } from '../../mantenimiento/model/mantenimiento-mock';
+import {
+  useActivarSede,
+  useActivarServicio,
+  useActualizarSede,
+  useActualizarServicio,
+  useCrearSede,
+  useCrearServicio,
+  useDesactivarSede,
+  useDesactivarServicio,
+  useSedes,
+} from '../api/use-sedes';
+import { useEquiposCatalogo, useInsumosCatalogo } from '../api/use-catalogos-servicio';
+import { CATALOGOS_TEXTO_MOCK, PERSONAL_MOCK } from '../../mantenimiento/model/mantenimiento-mock';
 import { useProgramacion } from '../../programacion/model/programacion-context';
 import { vistaTecnico } from '../model/vista-tecnico';
-import { generarHistorial, tiposContratadosDe } from '../../estadisticas/model/historial-mock';
+import { generarHistorial } from '../../estadisticas/model/historial-mock';
 import { estacionesRojoDe } from '../../mapa-murino/model/mapas-mock';
 import { useAuditoria } from '../../auditoria/model/auditoria-context';
 import type { AccionAuditoria } from '../../auditoria/model/evento';
@@ -31,7 +43,9 @@ type Vista =
   | { tipo: 'editar-cliente'; clienteId: string }
   | { tipo: 'expediente'; clienteId: string; aviso: string | null }
   | { tipo: 'nuevo-proyecto'; clienteId: string }
-  | { tipo: 'nuevo-servicio'; clienteId: string; proyectoId: string };
+  | { tipo: 'editar-proyecto'; clienteId: string; proyectoId: string }
+  | { tipo: 'nuevo-servicio'; clienteId: string; proyectoId: string }
+  | { tipo: 'editar-servicio'; clienteId: string; proyectoId: string; servicioId: string };
 
 interface ClientesModuleProps {
   usuario: string;
@@ -44,9 +58,9 @@ const TECNICO_DEMO = PERSONAL_MOCK.find((p) => p.cargo === 'Técnico Operador' &
 
 const GIROS = CATALOGOS_TEXTO_MOCK.find((c) => c.id === 'giros')?.items ?? [];
 
-/** Jerarquía CLIENTE → PROYECTO (sede) → SERVICIO (§7), sobre la cartera compartida de la app. */
+/** Jerarquía CLIENTE → PROYECTO (sede) → SERVICIO (§7); clientes, sedes y servicios vienen del API. */
 export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModuleProps) {
-  const { cartera, setCartera } = useCartera();
+  const { cartera } = useCartera();
   const { registrar } = useAuditoria();
   const { visitas } = useProgramacion();
   const [vista, setVista] = useState<Vista>({ tipo: 'lista' });
@@ -55,19 +69,40 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
   const estacionesRojo = useMemo(() => estacionesRojoDe(historial, cartera.clientes), [historial, cartera.clientes]);
   /** Solo el Administrador da de alta clientes, sedes y servicios (§12, decisión C1). */
   const puedeDarDeAlta = rol === 'ADMINISTRADOR';
+  /** El API entrega insumos y equipos solo a Administrador y Técnico: el Supervisor no los consulta. */
+  const puedeLeerCatalogos = rol === 'ADMINISTRADOR';
 
   const lista = useClientes();
   const clienteIdAbierto = vista.tipo === 'lista' || vista.tipo === 'nuevo-cliente' ? null : vista.clienteId;
   const ficha = useCliente(clienteIdAbierto);
+  const sedes = useSedes(clienteIdAbierto);
+  const insumos = useInsumosCatalogo(puedeLeerCatalogos && clienteIdAbierto !== null);
+  const equipos = useEquiposCatalogo(puedeLeerCatalogos && clienteIdAbierto !== null);
   const crear = useCrearCliente();
   const actualizar = useActualizarCliente();
   const activar = useActivarCliente();
   const desactivar = useDesactivarCliente();
+  const crearSede = useCrearSede();
+  const actualizarSede = useActualizarSede();
+  const activarSede = useActivarSede();
+  const desactivarSede = useDesactivarSede();
+  const crearServicio = useCrearServicio();
+  const actualizarServicio = useActualizarServicio();
+  const activarServicio = useActivarServicio();
+  const desactivarServicio = useDesactivarServicio();
 
   const erroresAlta = useMemo(() => (crear.error ? camposDeError(crear.error) : null), [crear.error]);
   const errorEdicion = actualizar.error ?? activar.error ?? desactivar.error;
   const erroresEdicion = useMemo(() => (errorEdicion ? camposDeError(errorEdicion) : null), [errorEdicion]);
   const guardandoFicha = actualizar.isPending || activar.isPending || desactivar.isPending;
+
+  const errorSede = crearSede.error ?? actualizarSede.error;
+  const erroresSede = useMemo(() => (errorSede ? camposDeErrorProyecto(errorSede) : null), [errorSede]);
+  const errorServicio = crearServicio.error ?? actualizarServicio.error;
+  const erroresServicio = useMemo(() => (errorServicio ? camposDeErrorServicio(errorServicio) : null), [errorServicio]);
+  const cambiandoEstado = activarSede.isPending || desactivarSede.isPending || activarServicio.isPending || desactivarServicio.isPending;
+  const errorEstado = activarSede.error ?? desactivarSede.error ?? activarServicio.error ?? desactivarServicio.error;
+  const errorCatalogos = insumos.error ?? equipos.error;
 
   function auditar(accion: AccionAuditoria, referencia: string, detalle: string) {
     const fechaHora = ahora();
@@ -75,10 +110,22 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
   }
 
   function irA(siguiente: Vista) {
-    crear.reset();
-    actualizar.reset();
-    activar.reset();
-    desactivar.reset();
+    for (const mutacion of [
+      crear,
+      actualizar,
+      activar,
+      desactivar,
+      crearSede,
+      actualizarSede,
+      activarSede,
+      desactivarSede,
+      crearServicio,
+      actualizarServicio,
+      activarServicio,
+      desactivarServicio,
+    ]) {
+      mutacion.reset();
+    }
     setVista(siguiente);
   }
 
@@ -103,18 +150,57 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
     }
   }
 
-  function registrarProyecto(clienteId: string, d: DatosProyecto) {
-    const { estado } = agregarProyecto(cartera, clienteId, d);
-    setCartera(() => estado);
-    setVista({ tipo: 'expediente', clienteId, aviso: `Sede ${d.nombre} registrada. Ya puede agregarle servicios.` });
+  async function registrarProyecto(clienteId: string, d: DatosProyecto) {
+    try {
+      await crearSede.mutateAsync({ clienteId, datos: d });
+      irA({ tipo: 'expediente', clienteId, aviso: `Sede ${d.nombre} registrada. Ya puede agregarle servicios.` });
+    } catch {
+      // El error queda en la mutación y el formulario lo muestra por campo.
+    }
   }
 
-  function registrarServicio(clienteId: string, proyectoId: string, nombreSede: string, d: DatosServicio) {
-    setCartera(() => agregarServicio(cartera, clienteId, proyectoId, d));
-    setVista({ tipo: 'expediente', clienteId, aviso: `Servicio ${d.tipo} (${etiquetaFrecuencia(d.frecuencia as FrecuenciaServicio).toLowerCase()}) registrado en ${nombreSede}.` });
+  async function guardarProyecto(clienteId: string, proyectoId: string, d: DatosProyecto) {
+    try {
+      await actualizarSede.mutateAsync({ id: proyectoId, datos: d });
+      irA({ tipo: 'expediente', clienteId, aviso: `Sede ${d.nombre} actualizada.` });
+    } catch {
+      // El error queda en la mutación y el formulario lo muestra por campo.
+    }
+  }
+
+  async function registrarServicio(clienteId: string, proyectoId: string, nombreSede: string, d: DatosServicio) {
+    try {
+      await crearServicio.mutateAsync({ proyectoId, datos: d });
+      const frecuencia = etiquetaFrecuencia(d.frecuencia as Exclude<DatosServicio['frecuencia'], ''>).toLowerCase();
+      irA({ tipo: 'expediente', clienteId, aviso: `Servicio ${d.tipo} (${frecuencia}) registrado en ${nombreSede}.` });
+    } catch {
+      // El error queda en la mutación y el formulario lo muestra por campo.
+    }
+  }
+
+  async function guardarServicio(clienteId: string, servicioId: string, tipo: string, d: DatosServicio) {
+    try {
+      await actualizarServicio.mutateAsync({ id: servicioId, datos: d });
+      irA({ tipo: 'expediente', clienteId, aviso: `Servicio ${tipo} actualizado.` });
+    } catch {
+      // El error queda en la mutación y el formulario lo muestra por campo.
+    }
+  }
+
+  function cambiarEstadoProyecto(proyectoId: string, activa: boolean) {
+    activarSede.reset();
+    desactivarSede.reset();
+    (activa ? activarSede : desactivarSede).mutate(proyectoId);
+  }
+
+  function cambiarEstadoServicio(servicioId: string, activa: boolean) {
+    activarServicio.reset();
+    desactivarServicio.reset();
+    (activa ? activarServicio : desactivarServicio).mutate(servicioId);
   }
 
   const cliente = ficha.data;
+  const proyectos = sedes.data ?? [];
 
   if (vista.tipo === 'nuevo-cliente' && puedeDarDeAlta) {
     return (
@@ -172,39 +258,78 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
     return (
       <NuevoProyectoPage
         cliente={cliente}
-        nombresExistentes={proyectosDe(cartera, cliente.id).map((p) => p.nombre)}
-        onRegistrar={(d) => registrarProyecto(cliente.id, d)}
-        onCancelar={() => setVista({ tipo: 'expediente', clienteId: cliente.id, aviso: null })}
+        nombresExistentes={proyectos.map((p) => p.nombre)}
+        enviando={crearSede.isPending}
+        erroresServidor={erroresSede?.campos}
+        errorGeneral={erroresSede?.general}
+        onRegistrar={(d) => void registrarProyecto(cliente.id, d)}
+        onCancelar={() => irA({ tipo: 'expediente', clienteId: cliente.id, aviso: null })}
       />
     );
   }
 
-  if (vista.tipo === 'nuevo-servicio' && puedeDarDeAlta && cliente) {
-    const proyecto = proyectosDe(cartera, cliente.id).find((p) => p.id === vista.proyectoId);
+  if (vista.tipo === 'editar-proyecto' && puedeDarDeAlta && cliente) {
+    const proyecto = proyectos.find((p) => p.id === vista.proyectoId);
     if (proyecto) {
+      return (
+        <NuevoProyectoPage
+          cliente={cliente}
+          nombresExistentes={proyectos.filter((p) => p.id !== proyecto.id).map((p) => p.nombre)}
+          inicial={datosDeProyecto(proyecto)}
+          enviando={actualizarSede.isPending}
+          erroresServidor={erroresSede?.campos}
+          errorGeneral={erroresSede?.general}
+          onRegistrar={(d) => void guardarProyecto(cliente.id, proyecto.id, d)}
+          onCancelar={() => irA({ tipo: 'expediente', clienteId: cliente.id, aviso: null })}
+        />
+      );
+    }
+  }
+
+  if ((vista.tipo === 'nuevo-servicio' || vista.tipo === 'editar-servicio') && puedeDarDeAlta && cliente) {
+    const proyecto = proyectos.find((p) => p.id === vista.proyectoId);
+    const servicio = vista.tipo === 'editar-servicio' ? proyecto?.servicios.find((s) => s.id === vista.servicioId) : undefined;
+    if (proyecto && (vista.tipo === 'nuevo-servicio' || servicio)) {
       return (
         <NuevoServicioPage
           cliente={cliente}
           proyecto={proyecto}
-          insumos={INSUMOS_MOCK}
-          equipos={EQUIPOS_MOCK}
-          onRegistrar={(d) => registrarServicio(cliente.id, proyecto.id, proyecto.nombre, d)}
-          onCancelar={() => setVista({ tipo: 'expediente', clienteId: cliente.id, aviso: null })}
+          insumos={insumos.data ?? []}
+          equipos={equipos.data ?? []}
+          inicial={servicio ? datosDeServicio(servicio) : undefined}
+          cargandoCatalogos={insumos.isPending || equipos.isPending}
+          errorCatalogos={errorCatalogos ? mensajeDeError(errorCatalogos) : null}
+          onReintentarCatalogos={() => {
+            if (insumos.isError) void insumos.refetch();
+            if (equipos.isError) void equipos.refetch();
+          }}
+          enviando={crearServicio.isPending || actualizarServicio.isPending}
+          erroresServidor={erroresServicio?.campos}
+          errorGeneral={erroresServicio?.general}
+          onRegistrar={(d) =>
+            servicio
+              ? void guardarServicio(cliente.id, servicio.id, servicio.tipoServicio, d)
+              : void registrarServicio(cliente.id, proyecto.id, proyecto.nombre, d)
+          }
+          onCancelar={() => irA({ tipo: 'expediente', clienteId: cliente.id, aviso: null })}
         />
       );
     }
   }
 
   if (vista.tipo !== 'lista' && vista.tipo !== 'nuevo-cliente' && cliente) {
-    const proyectos = proyectosDe(cartera, cliente.id);
-    /** Los clientes de ejemplo comparten sedes de muestra: su contrato real sale del historial. */
-    const contrataDesratizacion = esClienteDeEjemplo(cartera, cliente.id)
-      ? tiposContratadosDe(cliente.codigoCorto).includes('DRT')
-      : proyectos.some((p) => p.servicios.some((s) => s.tipoServicio === 'DRT'));
+    const contrataDesratizacion = proyectos.some((p) =>
+      p.estado === 'ACTIVO' && p.servicios.some((s) => s.estado === 'ACTIVO' && s.tipoServicio === 'DRT'),
+    );
     return (
       <ClienteExpedientePage
         cliente={cliente}
         proyectos={proyectos}
+        cargandoProyectos={sedes.isPending}
+        errorProyectos={sedes.isError ? mensajeDeError(sedes.error) : null}
+        onReintentarProyectos={() => void sedes.refetch()}
+        cambiandoEstado={cambiandoEstado}
+        errorEstado={errorEstado ? mensajeDeError(errorEstado) : null}
         historial={historial}
         hoy={hoy}
         programaRoedores={
@@ -218,17 +343,21 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
             historial,
             visitas,
             hoy,
-            insumos: INSUMOS_MOCK,
-            equipos: EQUIPOS_MOCK,
+            insumos: insumos.data ?? [],
+            equipos: equipos.data ?? [],
             estacionesRojo,
           }).sedes,
         }}
         puedeDarDeAlta={puedeDarDeAlta}
         aviso={vista.tipo === 'expediente' ? vista.aviso : null}
-        onVolver={() => setVista({ tipo: 'lista' })}
-        onEditarFicha={() => setVista({ tipo: 'editar-cliente', clienteId: cliente.id })}
-        onNuevoProyecto={() => setVista({ tipo: 'nuevo-proyecto', clienteId: cliente.id })}
-        onNuevoServicio={(proyectoId) => setVista({ tipo: 'nuevo-servicio', clienteId: cliente.id, proyectoId })}
+        onVolver={() => irA({ tipo: 'lista' })}
+        onEditarFicha={() => irA({ tipo: 'editar-cliente', clienteId: cliente.id })}
+        onNuevoProyecto={() => irA({ tipo: 'nuevo-proyecto', clienteId: cliente.id })}
+        onEditarProyecto={(proyectoId) => irA({ tipo: 'editar-proyecto', clienteId: cliente.id, proyectoId })}
+        onCambiarEstadoProyecto={cambiarEstadoProyecto}
+        onNuevoServicio={(proyectoId) => irA({ tipo: 'nuevo-servicio', clienteId: cliente.id, proyectoId })}
+        onEditarServicio={(proyectoId, servicioId) => irA({ tipo: 'editar-servicio', clienteId: cliente.id, proyectoId, servicioId })}
+        onCambiarEstadoServicio={cambiarEstadoServicio}
         onAbrirMapaMurino={() => onAbrirMapaMurino(cliente.id)}
       />
     );
