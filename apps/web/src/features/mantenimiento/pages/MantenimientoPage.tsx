@@ -1,11 +1,16 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react';
+import type { Equipo, Insumo } from '@gafer/contracts';
 import { TicketHeader } from '../../../shared/ui/molecules/TicketHeader';
 import { Bloque, Campo } from '../../../shared/ui/molecules/FormFields';
 import { Button } from '../../../shared/ui/atoms/Button';
 import type { Rol } from '../../auth/model/roles';
-import { INSUMOS_MOCK, EQUIPOS_MOCK, PERSONAL_MOCK, CATALOGOS_TEXTO_MOCK } from '../model/mantenimiento-mock';
+import { PERSONAL_MOCK, CATALOGOS_TEXTO_MOCK } from '../model/mantenimiento-mock';
 import { useConfiguracion } from '../model/configuracion-context';
-import type { CatalogoTexto, EstadoOperativo } from '../model/tipos';
+import type { CatalogoTexto } from '../model/tipos';
+import { EquipoFormulario } from './EquipoFormulario';
+import { EquiposSeccion } from './EquiposSeccion';
+import { InsumoFormulario } from './InsumoFormulario';
+import { InsumosSeccion } from './InsumosSeccion';
 import './mantenimiento-page.css';
 
 const SECCIONES = [
@@ -27,76 +32,6 @@ const SECCIONES_POR_ROL: Record<Rol, SeccionId[]> = {
   ADMINISTRADOR: ['insumos', 'equipos', 'personal', 'director', 'catalogos'],
   SUPERVISOR: ['catalogos'],
 };
-
-const ETIQUETA_OPERATIVO: Record<EstadoOperativo, string> = {
-  OPERATIVO: 'Operativo',
-  EN_MANTENIMIENTO: 'En mantenimiento',
-  FUERA_DE_SERVICIO: 'Fuera de servicio',
-};
-
-function TablaInsumos() {
-  return (
-    <table className="mant-tabla tabular">
-      <thead>
-        <tr>
-          <th>Producto</th>
-          <th>Principio activo</th>
-          <th>Presentación</th>
-          <th>Conc.</th>
-          <th>N° DIGESA</th>
-          <th>Dosis referencial</th>
-          <th title="Se adjuntan solos al PDF cuando el insumo se consume (decisión C14)">Anexos del PDF</th>
-          <th>Estado</th>
-        </tr>
-      </thead>
-      <tbody>
-        {INSUMOS_MOCK.map((i) => (
-          <tr key={i.id}>
-            <td>{i.nombre}</td>
-            <td>{i.principioActivo}</td>
-            <td>{i.presentacion}</td>
-            <td>{i.concentracion}</td>
-            <td className="mant-tabla__mono">{i.registroDigesa}</td>
-            <td>{i.dosisReferencial}</td>
-            <td className="mant-tabla__anexos">Ficha técnica · MSDS</td>
-            <td>
-              <span className={`mant-estado mant-estado--${i.estado === 'ACTIVO' ? 'ok' : 'off'}`}>{i.estado}</span>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-function TablaEquipos() {
-  return (
-    <table className="mant-tabla tabular">
-      <thead>
-        <tr>
-          <th>Equipo</th>
-          <th>Código interno</th>
-          <th>Tipo</th>
-          <th>Estado operativo</th>
-        </tr>
-      </thead>
-      <tbody>
-        {EQUIPOS_MOCK.map((e) => (
-          <tr key={e.id}>
-            <td>{e.nombre}</td>
-            <td className="mant-tabla__mono">{e.codigoInterno}</td>
-            <td>{e.tipo}</td>
-            <td>
-              <span className={`mant-estado mant-estado--${e.estadoOperativo === 'OPERATIVO' ? 'ok' : e.estadoOperativo === 'EN_MANTENIMIENTO' ? 'warn' : 'off'}`}>
-                {ETIQUETA_OPERATIVO[e.estadoOperativo]}
-              </span>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
 
 function TablaPersonal() {
   return (
@@ -240,14 +175,31 @@ interface MantenimientoPageProps {
   rol: Rol;
 }
 
+/** Formulario abierto en lugar de la pantalla: alta (sin registro) o edición (con el registro elegido). */
+type Formulario = { tipo: 'insumo'; insumo?: Insumo } | { tipo: 'equipo'; equipo?: Equipo };
+
 export function MantenimientoPage({ rol }: MantenimientoPageProps) {
   const seccionesVisibles = SECCIONES.filter((s) => SECCIONES_POR_ROL[rol].includes(s.id));
   const [seccion, setSeccion] = useState<SeccionId>(seccionesVisibles[0].id);
+  const [formulario, setFormulario] = useState<Formulario | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+
+  function cerrarFormulario(mensaje: string | null) {
+    setFormulario(null);
+    setAviso(mensaje);
+  }
+
+  if (formulario?.tipo === 'insumo') {
+    return <InsumoFormulario insumo={formulario.insumo} onTerminar={cerrarFormulario} onCancelar={() => cerrarFormulario(null)} />;
+  }
+  if (formulario?.tipo === 'equipo') {
+    return <EquipoFormulario equipo={formulario.equipo} onTerminar={cerrarFormulario} onCancelar={() => cerrarFormulario(null)} />;
+  }
 
   return (
     <div className="mant-page">
       <TicketHeader
-        code={`${INSUMOS_MOCK.length + EQUIPOS_MOCK.length + PERSONAL_MOCK.length} registros`}
+        code="CATÁLOGOS · §7"
         title="Mantenimiento"
         meta={rol === 'ADMINISTRADOR' ? 'Catálogos editables — acceso completo' : 'Catálogos de texto — acceso de Supervisor'}
       />
@@ -259,7 +211,10 @@ export function MantenimientoPage({ rol }: MantenimientoPageProps) {
               key={s.id}
               type="button"
               className={`mant-rail__item ${seccion === s.id ? 'mant-rail__item--activo' : ''}`}
-              onClick={() => setSeccion(s.id)}
+              onClick={() => {
+                setSeccion(s.id);
+                setAviso(null);
+              }}
             >
               {s.etiqueta}
             </button>
@@ -267,8 +222,13 @@ export function MantenimientoPage({ rol }: MantenimientoPageProps) {
         </nav>
 
         <div className="mant-contenido">
-          {seccion === 'insumos' && <TablaInsumos />}
-          {seccion === 'equipos' && <TablaEquipos />}
+          {aviso ? (
+            <p className="mant-aviso mant-aviso--ok" role="status">
+              {aviso}
+            </p>
+          ) : null}
+          {seccion === 'insumos' && <InsumosSeccion onNuevo={() => setFormulario({ tipo: 'insumo' })} onEditar={(insumo) => setFormulario({ tipo: 'insumo', insumo })} />}
+          {seccion === 'equipos' && <EquiposSeccion onNuevo={() => setFormulario({ tipo: 'equipo' })} onEditar={(equipo) => setFormulario({ tipo: 'equipo', equipo })} />}
           {seccion === 'personal' && <TablaPersonal />}
           {seccion === 'director' && <DirectorTecnicoForm />}
           {seccion === 'catalogos' && (

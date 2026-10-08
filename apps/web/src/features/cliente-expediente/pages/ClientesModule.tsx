@@ -26,7 +26,8 @@ import {
   useDesactivarServicio,
   useSedes,
 } from '../api/use-sedes';
-import { useEquiposCatalogo, useInsumosCatalogo } from '../api/use-catalogos-servicio';
+import { useEquipos } from '../../mantenimiento/api/use-equipos';
+import { useInsumos } from '../../mantenimiento/api/use-insumos';
 import { CATALOGOS_TEXTO_MOCK, PERSONAL_MOCK } from '../../mantenimiento/model/mantenimiento-mock';
 import { useProgramacion } from '../../programacion/model/programacion-context';
 import { vistaTecnico } from '../model/vista-tecnico';
@@ -76,8 +77,8 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
   const clienteIdAbierto = vista.tipo === 'lista' || vista.tipo === 'nuevo-cliente' ? null : vista.clienteId;
   const ficha = useCliente(clienteIdAbierto);
   const sedes = useSedes(clienteIdAbierto);
-  const insumos = useInsumosCatalogo(puedeLeerCatalogos && clienteIdAbierto !== null);
-  const equipos = useEquiposCatalogo(puedeLeerCatalogos && clienteIdAbierto !== null);
+  const insumos = useInsumos(puedeLeerCatalogos && clienteIdAbierto !== null);
+  const equipos = useEquipos(puedeLeerCatalogos && clienteIdAbierto !== null);
   const crear = useCrearCliente();
   const actualizar = useActualizarCliente();
   const activar = useActivarCliente();
