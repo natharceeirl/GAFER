@@ -2,9 +2,11 @@ import type {
   EstadoActivoInactivo,
   FrecuenciaServicio,
   ServicioContratadoActualizacion,
+  ServicioContratadoDetalle,
   ServicioContratadoRegistro,
   TipoServicio,
 } from '@gafer/contracts';
+import { repartirError, type ErroresDeServidor } from './errores-servidor';
 import type { DatosServicio } from './validaciones';
 
 /**
@@ -31,6 +33,23 @@ export interface ServicioContratado {
   requiereCertificado: boolean;
   vigenciaDias: number | null;
   estado: EstadoActivoInactivo;
+}
+
+export function servicioDeApi(api: ServicioContratadoDetalle): ServicioContratado {
+  return {
+    id: api.id,
+    proyectoId: api.proyectoId,
+    tipoServicio: api.tipoServicio,
+    frecuencia: api.frecuencia,
+    areaTotalM2: api.areaTotalM2,
+    areaTratarM2: api.areaTratarM2,
+    insumosAutorizados: api.insumosAutorizados ?? [],
+    equiposAutorizados: api.equiposAutorizados ?? [],
+    dosisReferencial: api.dosisReferencial ?? {},
+    requiereCertificado: api.requiereCertificado ?? false,
+    vigenciaDias: api.vigenciaDias ?? null,
+    estado: api.estado,
+  };
 }
 
 export function datosDeServicio(s: ServicioContratado): DatosServicio {
@@ -89,4 +108,9 @@ export function campoDeRutaServicio(ruta: string): keyof DatosServicio | null {
     vigenciaDias: 'vigenciaDias',
   };
   return campos[ruta.split('.')[0]] ?? null;
+}
+
+/** Reparte un error del API entre los campos del formulario del servicio y un mensaje general. */
+export function camposDeErrorServicio(error: unknown): ErroresDeServidor<keyof DatosServicio> {
+  return repartirError(error, campoDeRutaServicio);
 }

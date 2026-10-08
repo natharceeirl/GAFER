@@ -1,4 +1,5 @@
-import type { EstadoActivoInactivo, ProyectoActualizacion, ProyectoRegistro } from '@gafer/contracts';
+import type { EstadoActivoInactivo, ProyectoActualizacion, ProyectoDetalle, ProyectoRegistro } from '@gafer/contracts';
+import { repartirError, type ErroresDeServidor } from './errores-servidor';
 import type { ServicioContratado } from './servicio-mapper';
 import type { DatosProyecto } from './validaciones';
 
@@ -24,6 +25,24 @@ export interface ProyectoExpediente {
   observaciones: string;
   estado: EstadoActivoInactivo;
   servicios: ServicioContratado[];
+}
+
+export function proyectoDeApi(api: ProyectoDetalle, servicios: ServicioContratado[]): ProyectoExpediente {
+  return {
+    id: api.id,
+    clienteId: api.clienteId,
+    nombre: api.nombre,
+    direccion: api.direccionSede,
+    distrito: api.distrito,
+    provincia: api.provincia,
+    departamento: api.departamento,
+    contactoNombre: api.contactoNombre,
+    contactoCargo: api.contactoCargo,
+    contactoTelefono: api.contactoTelefono,
+    observaciones: api.observaciones ?? '',
+    estado: api.estado,
+    servicios,
+  };
 }
 
 export function datosDeProyecto(p: ProyectoExpediente): DatosProyecto {
@@ -77,4 +96,11 @@ export function campoDeRutaProyecto(ruta: string): keyof DatosProyecto | null {
     observaciones: 'observaciones',
   };
   return campos[ruta] ?? null;
+}
+
+/** Reparte un error del API entre los campos del formulario de la sede y un mensaje general. */
+export function camposDeErrorProyecto(error: unknown): ErroresDeServidor<keyof DatosProyecto> {
+  return repartirError(error, campoDeRutaProyecto, (mensaje) =>
+    /nombre/i.test(mensaje) ? { nombre: 'Este cliente ya tiene una sede con ese nombre.' } : null,
+  );
 }
