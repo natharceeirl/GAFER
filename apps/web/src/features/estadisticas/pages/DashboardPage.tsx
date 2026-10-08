@@ -13,6 +13,7 @@ import { proyectosDe } from '../../cliente-expediente/model/cartera';
 import { useProgramacion } from '../../programacion/model/programacion-context';
 import { agendaDelDia, type EstadoCampo } from '../../programacion/model/programacion';
 import { PERSONAL_MOCK } from '../../mantenimiento/model/mantenimiento-mock';
+import { nombreCompleto } from '../../mantenimiento/model/personal-mapper';
 import { alertasActivas, clientesSinServicio, type Alerta } from '../model/estadisticas';
 import { generarHistorial, vencimientosDe } from '../model/historial-mock';
 import { estacionesRojoDe } from '../../mapa-murino/model/mapas-mock';
@@ -81,12 +82,13 @@ export function DashboardPage({ rol, documentos, onAbrirDocumento }: DashboardPa
   const agenda = agendaDelDia(visitas, hoy).map((v) => {
     const cliente = cartera.clientes.find((c) => c.id === v.clienteId);
     const proyecto = cliente ? proyectosDe(cartera, cliente.id).find((p) => p.id === v.proyectoId) : undefined;
+    const titular = PERSONAL_MOCK.find((p) => p.id === v.tecnicoTitularId);
     return {
       ...v,
       cliente: cliente?.codigoCorto ?? '—',
       proyecto: proyecto?.nombre ?? '—',
       tipo: proyecto?.servicios.find((s) => s.id === v.servicioId)?.tipoServicio ?? '—',
-      tecnico: PERSONAL_MOCK.find((p) => p.id === v.tecnicoTitularId)?.nombre ?? 'Sin titular',
+      tecnico: titular ? nombreCompleto(titular) : 'Sin titular',
     };
   });
   const cerrados = agenda.filter((v) => v.estadoCampo === 'EN_REVISION').length;

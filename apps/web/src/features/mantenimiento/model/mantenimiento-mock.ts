@@ -1,5 +1,4 @@
-import type { Insumo } from '@gafer/contracts';
-import type { CatalogoTexto, PersonalOperativo } from './tipos';
+import type { CatalogoTexto, Insumo, Personal } from '@gafer/contracts';
 
 /**
  * Catálogo de insumos de demostración que siguen usando los documentos (anexos del PDF). Tiene la forma del API
@@ -21,12 +20,24 @@ export const INSUMOS_MOCK: Insumo[] = [
   insumoMock({ id: 'i4', nombreComercial: 'Deltametrina 2.5% SC', principioActivo: 'Deltametrina', presentacion: 'OTRO', unidadMedida: 'ML', concentracion: '2.5%', registroDigesa: 'DIG-1765-SA', dosisEstandar: '8 ml/L', estado: 'INACTIVO' }),
 ];
 
-export const PERSONAL_MOCK: PersonalOperativo[] = [
-  { id: 'p1', nombre: 'Diana Amamani', dni: '45231098', cargo: 'Supervisor', estado: 'ACTIVO' },
-  { id: 'p2', nombre: 'Marco Ipusari', dni: '47210345', cargo: 'Técnico Operador', estado: 'ACTIVO' },
-  { id: 'p3', nombre: 'Jorge Huamán', dni: '46109287', cargo: 'Técnico Operador', estado: 'ACTIVO' },
-  { id: 'p4', nombre: 'Rosa Agárate', dni: '44982315', cargo: 'Administrador', estado: 'ACTIVO' },
-  { id: 'p5', nombre: 'Luis Beltrán', dni: '48765123', cargo: 'Técnico Operador', estado: 'INACTIVO' },
+/** Personal de demostración que siguen usando programación y el panel; la pantalla de Mantenimiento ya lee el real. */
+const personalMock = (id: string, nombres: string, apellidos: string, dni: string, cargo: Personal['cargo'], estado: Personal['estado'] = 'ACTIVO'): Personal => ({
+  id,
+  dni,
+  nombres,
+  apellidos,
+  cargo,
+  telefono: '958123456',
+  usuario: null,
+  estado,
+});
+
+export const PERSONAL_MOCK: Personal[] = [
+  personalMock('p1', 'Diana', 'Amamani', '45231098', 'SUPERVISOR'),
+  personalMock('p2', 'Marco', 'Ipusari', '47210345', 'TECNICO_OPERADOR'),
+  personalMock('p3', 'Jorge', 'Huamán', '46109287', 'TECNICO_OPERADOR'),
+  personalMock('p4', 'Rosa', 'Agárate', '44982315', 'ADMINISTRADOR'),
+  personalMock('p5', 'Luis', 'Beltrán', '48765123', 'TECNICO_OPERADOR', 'INACTIVO'),
 ];
 
 export const CATALOGOS_TEXTO_MOCK: CatalogoTexto[] = [
