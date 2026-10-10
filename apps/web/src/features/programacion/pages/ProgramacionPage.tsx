@@ -7,6 +7,7 @@ import { Badge } from '../../../shared/ui/atoms/Badge';
 import { Button } from '../../../shared/ui/atoms/Button';
 import { useCartera } from '../../cliente-expediente/model/cartera-context';
 import { proyectosDe, sedesActivas } from '../../cliente-expediente/model/cartera';
+import { etiquetaFrecuencia, etiquetaTipoServicio } from '../../cliente-expediente/model/catalogos-servicio';
 import { PERSONAL_MOCK } from '../../mantenimiento/model/mantenimiento-mock';
 import { agendaDelDia, tecnicosDisponibles, validarVisita, type DatosVisita, type EstadoCampo } from '../model/programacion';
 import { useProgramacion } from '../model/programacion-context';
@@ -60,7 +61,7 @@ export function ProgramacionPage({ usuario, rol }: ProgramacionPageProps) {
     const cliente = cartera.clientes.find((c) => c.id === clienteId);
     const proyecto = cliente ? proyectosDe(cartera, clienteId).find((p) => p.id === proyectoId) : undefined;
     const servicio = proyecto?.servicios.find((s) => s.id === servicioId);
-    return { cliente: cliente?.codigoCorto ?? '—', sede: proyecto?.nombre ?? '—', servicio: servicio?.tipo ?? '—' };
+    return { cliente: cliente?.codigoCorto ?? '—', sede: proyecto?.nombre ?? '—', servicio: servicio ? etiquetaTipoServicio(servicio.tipoServicio) : '—' };
   }
 
   function set<K extends keyof DatosVisita>(campo: K, valor: DatosVisita[K]) {
@@ -170,7 +171,7 @@ export function ProgramacionPage({ usuario, rol }: ProgramacionPageProps) {
                 <option value="">{sede && sede.proyecto.servicios.length === 0 ? 'Esta sede no tiene servicios' : 'Seleccione el servicio…'}</option>
                 {sede?.proyecto.servicios.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.tipo} · {s.frecuencia}
+                    {etiquetaTipoServicio(s.tipoServicio)} · {etiquetaFrecuencia(s.frecuencia)}
                   </option>
                 ))}
               </select>

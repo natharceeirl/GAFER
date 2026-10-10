@@ -85,7 +85,7 @@ export function DashboardPage({ rol, documentos, onAbrirDocumento }: DashboardPa
       ...v,
       cliente: cliente?.codigoCorto ?? '—',
       proyecto: proyecto?.nombre ?? '—',
-      tipo: proyecto?.servicios.find((s) => s.id === v.servicioId)?.tipoId ?? '—',
+      tipo: proyecto?.servicios.find((s) => s.id === v.servicioId)?.tipoServicio ?? '—',
       tecnico: PERSONAL_MOCK.find((p) => p.id === v.tecnicoTitularId)?.nombre ?? 'Sin titular',
     };
   });

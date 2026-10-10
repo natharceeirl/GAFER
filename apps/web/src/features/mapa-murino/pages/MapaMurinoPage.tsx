@@ -41,7 +41,7 @@ export function MapaMurinoPage({ seleccion, onSeleccionar }: Props) {
       .filter((c) => esClienteNuevo(cartera, c.id))
       .flatMap((c) =>
         proyectosDe(cartera, c.id)
-          .filter((p) => p.estado === 'ACTIVO' && p.servicios.some((s) => s.tipoId === 'DRT'))
+          .filter((p) => p.estado === 'ACTIVO' && p.servicios.some((s) => s.tipoServicio === 'DRT'))
           .map((p) => ({ clienteId: c.id, cliente: c.codigoCorto, proyecto: p.nombre, mapa: null })),
       ),
   ];

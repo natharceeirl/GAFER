@@ -5,7 +5,9 @@ import { PerforatedDivider } from '../../../shared/ui/molecules/PerforatedDivide
 import { Button } from '../../../shared/ui/atoms/Button';
 import { Badge } from '../../../shared/ui/atoms/Badge';
 import type { ClienteFila } from '../model/clientes-mock';
-import type { ProyectoExpediente } from '../model/expediente-mock';
+import type { ProyectoExpediente } from '../model/proyecto-mapper';
+import { ETIQUETA_ESTADO, etiquetaFrecuencia, etiquetaTipoServicio } from '../model/catalogos-servicio';
+import { EstadoCargando, EstadoError } from '../components/EstadoConsulta';
 import { alertaVencimiento, carpetaDelCliente, correlativos, historialPorProyecto, type PdfCarpeta } from '../model/expediente';
 import type { EstacionCritica, ServicioRegistro } from '../../estadisticas/model/estadisticas';
 import type { SedeTecnico } from '../model/vista-tecnico';
@@ -22,12 +24,25 @@ interface Props {
   programaRoedores: { estacionesRojo: EstacionCritica[] } | null;
   /** Maqueta de lo que ve el técnico en la app Android (C10). */
   vistaApp: { sedes: SedeTecnico[]; tecnico: string };
+  /** Las sedes y sus servicios se están leyendo del API. */
+  cargandoProyectos?: boolean;
+  /** Motivo por el que no se pudieron leer las sedes. */
+  errorProyectos?: string | null;
+  onReintentarProyectos?: () => void;
+  /** Un cambio de estado está en curso: se deshabilitan los botones de activar y desactivar. */
+  cambiandoEstado?: boolean;
+  /** Error del último cambio de estado, para mostrarlo sobre las sedes. */
+  errorEstado?: string | null;
   puedeDarDeAlta: boolean;
   aviso: string | null;
   onVolver: () => void;
   onEditarFicha: () => void;
   onNuevoProyecto: () => void;
+  onEditarProyecto: (proyectoId: string) => void;
+  onCambiarEstadoProyecto: (proyectoId: string, activar: boolean) => void;
   onNuevoServicio: (proyectoId: string) => void;
+  onEditarServicio: (proyectoId: string, servicioId: string) => void;
+  onCambiarEstadoServicio: (servicioId: string, activar: boolean) => void;
   onAbrirMapaMurino: () => void;
 }
 
@@ -48,12 +63,21 @@ export function ClienteExpedientePage({
   hoy,
   programaRoedores,
   vistaApp,
+  cargandoProyectos = false,
+  errorProyectos = null,
+  onReintentarProyectos = () => {},
+  cambiandoEstado = false,
+  errorEstado = null,
   puedeDarDeAlta,
   aviso,
   onVolver,
   onEditarFicha,
   onNuevoProyecto,
+  onEditarProyecto,
+  onCambiarEstadoProyecto,
   onNuevoServicio,
+  onEditarServicio,
+  onCambiarEstadoServicio,
   onAbrirMapaMurino,
 }: Props) {
   const proyectosActivos = proyectos.filter((p) => p.estado === 'ACTIVO');
@@ -176,60 +200,129 @@ export function ClienteExpedientePage({
           ) : null}
         </div>
 
-        <FoldPanel label={`Proyectos activos (${proyectosActivos.length})`} defaultOpen>
-          {proyectosActivos.length === 0 ? (
-            <p className="expediente-vacio">
-              {puedeDarDeAlta
-                ? 'Este cliente todavía no tiene sedes. Registre la primera con «Nueva sede».'
-                : 'Este cliente todavía no tiene sedes activas.'}
-            </p>
-          ) : (
-            <ul className="expediente-proyectos">
-              {proyectosActivos.map((p) => (
-                <li key={p.id} className="expediente-proyecto">
-                  <div className="expediente-proyecto__cabecera">
-                    <span className="expediente-proyecto__nombre">{p.nombre}</span>
-                    <span className="expediente-proyecto__direccion">
-                      {p.direccion}
-                      {p.distrito ? `, ${p.distrito}` : ''}
-                    </span>
-                    {puedeDarDeAlta ? (
-                      <button type="button" className="expediente-proyecto__agregar" onClick={() => onNuevoServicio(p.id)}>
-                        + Servicio
-                      </button>
-                    ) : null}
-                  </div>
-                  {p.servicios.length === 0 ? (
-                    <p className="expediente-proyecto__sin-servicios">Sin servicios contratados todavía.</p>
-                  ) : (
-                    <ul className="expediente-proyecto__servicios">
-                      {p.servicios.map((s) => (
-                        <li key={s.id}>
-                          {s.tipo} <span className="expediente-proyecto__frecuencia">· {s.frecuencia}</span>
-                          {s.requiereCertificado ? <span className="expediente-proyecto__frecuencia"> · con certificado</span> : null}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </FoldPanel>
+        {errorEstado ? (
+          <p className="expediente-alerta expediente-alerta--vencido" role="alert">
+            {errorEstado}
+          </p>
+        ) : null}
 
-        {proyectosInactivos.length > 0 && (
-          <FoldPanel label={`Proyectos inactivos (${proyectosInactivos.length})`}>
-            <ul className="expediente-proyectos">
-              {proyectosInactivos.map((p) => (
-                <li key={p.id} className="expediente-proyecto expediente-proyecto--inactivo">
-                  <div className="expediente-proyecto__cabecera">
-                    <span className="expediente-proyecto__nombre">{p.nombre}</span>
-                    <span className="expediente-proyecto__direccion">{p.direccion}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </FoldPanel>
+        {cargandoProyectos ? (
+          <EstadoCargando mensaje="Cargando las sedes…" />
+        ) : errorProyectos ? (
+          <EstadoError mensaje={errorProyectos} onReintentar={onReintentarProyectos} />
+        ) : (
+          <>
+            <FoldPanel label={`Proyectos activos (${proyectosActivos.length})`} defaultOpen>
+              {proyectosActivos.length === 0 ? (
+                <p className="expediente-vacio">
+                  {puedeDarDeAlta
+                    ? 'Este cliente todavía no tiene sedes. Registre la primera con «Nueva sede».'
+                    : 'Este cliente todavía no tiene sedes activas.'}
+                </p>
+              ) : (
+                <ul className="expediente-proyectos">
+                  {proyectosActivos.map((p) => (
+                    <li key={p.id} className="expediente-proyecto">
+                      <div className="expediente-proyecto__cabecera">
+                        <span className="expediente-proyecto__nombre">{p.nombre}</span>
+                        <span className="expediente-proyecto__direccion">
+                          {p.direccion}
+                          {p.distrito ? `, ${p.distrito}` : ''}
+                        </span>
+                        {puedeDarDeAlta ? (
+                          <span className="expediente-proyecto__acciones">
+                            <button type="button" className="expediente-proyecto__agregar" aria-label={`Editar sede ${p.nombre}`} onClick={() => onEditarProyecto(p.id)}>
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              className="expediente-proyecto__agregar"
+                              aria-label={`Desactivar sede ${p.nombre}`}
+                              disabled={cambiandoEstado}
+                              onClick={() => onCambiarEstadoProyecto(p.id, false)}
+                            >
+                              Desactivar
+                            </button>
+                            <button type="button" className="expediente-proyecto__agregar" aria-label={`+ Servicio en ${p.nombre}`} onClick={() => onNuevoServicio(p.id)}>
+                              + Servicio
+                            </button>
+                          </span>
+                        ) : null}
+                      </div>
+                      {p.servicios.length === 0 ? (
+                        <p className="expediente-proyecto__sin-servicios">Sin servicios contratados todavía.</p>
+                      ) : (
+                        <ul className="expediente-proyecto__servicios">
+                          {p.servicios.map((s) => (
+                            <li key={s.id} className={s.estado === 'INACTIVO' ? 'expediente-servicio expediente-servicio--inactivo' : 'expediente-servicio'}>
+                              <span>
+                                {etiquetaTipoServicio(s.tipoServicio)}{' '}
+                                <span className="expediente-proyecto__frecuencia">
+                                  · {etiquetaFrecuencia(s.frecuencia)} · {s.areaTratarM2} de {s.areaTotalM2} m²
+                                  {s.requiereCertificado && s.vigenciaDias !== null ? ` · certificado de ${s.vigenciaDias} días` : ' · sin certificado'}
+                                  {` · ${s.insumosAutorizados.length} ${s.insumosAutorizados.length === 1 ? 'insumo' : 'insumos'} · ${s.equiposAutorizados.length} ${s.equiposAutorizados.length === 1 ? 'equipo' : 'equipos'}`}
+                                  {s.estado === 'INACTIVO' ? ` · ${ETIQUETA_ESTADO.INACTIVO.toLowerCase()}` : ''}
+                                </span>
+                              </span>
+                              {puedeDarDeAlta ? (
+                                <span className="expediente-proyecto__acciones">
+                                  <button
+                                    type="button"
+                                    className="expediente-proyecto__agregar"
+                                    aria-label={`Editar servicio ${s.tipoServicio} en ${p.nombre}`}
+                                    onClick={() => onEditarServicio(p.id, s.id)}
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="expediente-proyecto__agregar"
+                                    aria-label={`${s.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'} servicio ${s.tipoServicio} en ${p.nombre}`}
+                                    disabled={cambiandoEstado}
+                                    onClick={() => onCambiarEstadoServicio(s.id, s.estado !== 'ACTIVO')}
+                                  >
+                                    {s.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'}
+                                  </button>
+                                </span>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </FoldPanel>
+
+            {proyectosInactivos.length > 0 && (
+              <FoldPanel label={`Proyectos inactivos (${proyectosInactivos.length})`}>
+                <ul className="expediente-proyectos">
+                  {proyectosInactivos.map((p) => (
+                    <li key={p.id} className="expediente-proyecto expediente-proyecto--inactivo">
+                      <div className="expediente-proyecto__cabecera">
+                        <span className="expediente-proyecto__nombre">{p.nombre}</span>
+                        <span className="expediente-proyecto__direccion">{p.direccion}</span>
+                        {puedeDarDeAlta ? (
+                          <span className="expediente-proyecto__acciones">
+                            <button
+                              type="button"
+                              className="expediente-proyecto__agregar"
+                              aria-label={`Activar sede ${p.nombre}`}
+                              disabled={cambiandoEstado}
+                              onClick={() => onCambiarEstadoProyecto(p.id, true)}
+                            >
+                              Activar
+                            </button>
+                          </span>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </FoldPanel>
+            )}
+          </>
         )}
 
         {programaRoedores ? (
