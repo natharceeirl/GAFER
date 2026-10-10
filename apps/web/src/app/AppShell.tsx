@@ -105,7 +105,8 @@ export function AppShell() {
         </div>
       </nav>
 
-      <div className="app-shell__stage">
+      {/* El contenido tiene su propio scroll; la clave lo reinicia al cambiar de pantalla o abrir un documento. */}
+      <div className="app-shell__stage" key={`${pantalla}:${documentoAbierto ?? ''}`}>
         {pantalla === 'DASHBOARD' ? <DashboardPage rol={sesion.rol} documentos={documentos} onAbrirDocumento={abrirDocumento} /> : null}
         {pantalla === 'PROGRAMACION' ? <ProgramacionPage usuario={sesion.usuario} rol={sesion.rol} /> : null}
         {pantalla === 'CLIENTES' ? (

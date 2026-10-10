@@ -131,6 +131,7 @@
 }
 
 body {
+  margin: 0;
   background: var(--gf-bg);
   color: var(--gf-ink);
   font-family: var(--gf-font-ui);
