@@ -15,11 +15,19 @@ import {
   validarSeleccionFotos,
 } from './flujo-documento';
 import type { DocumentoDetalle } from './tipos';
-import type { Insumo } from '../../mantenimiento/model/tipos';
+import { insumoDePrueba } from '../../mantenimiento/pruebas/fabricas';
 
-const insumos: Insumo[] = [
-  { id: 'i1', nombre: 'Brodifacoum 0.005% bloque parafinado', principioActivo: 'Brodifacoum', presentacion: 'Bloque', concentracion: '0.005%', registroDigesa: 'DIG-2451-SA', dosisReferencial: '1 bloque', estado: 'ACTIVO' },
-  { id: 'i2', nombre: 'Cipermetrina 25% EC', principioActivo: 'Cipermetrina', presentacion: 'Líquido', concentracion: '25%', registroDigesa: 'DIG-1980-SA', dosisReferencial: '10 ml/L', estado: 'ACTIVO' },
+const insumos = [
+  insumoDePrueba({ id: 'i1', nombreComercial: 'Brodifacoum 0.005% bloque parafinado', registroDigesa: 'DIG-2451-SA', dosisEstandar: '1 bloque' }),
+  insumoDePrueba({
+    id: 'i2',
+    nombreComercial: 'Cipermetrina 25% EC',
+    principioActivo: 'Cipermetrina',
+    presentacion: 'LIQUIDO',
+    concentracion: '25%',
+    registroDigesa: 'DIG-1980-SA',
+    dosisEstandar: '10 ml/L',
+  }),
 ];
 
 const doc: DocumentoDetalle = {

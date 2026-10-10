@@ -1,18 +1,24 @@
-import type { CatalogoTexto, Equipo, Insumo, PersonalOperativo } from './tipos';
+import type { Insumo } from '@gafer/contracts';
+import type { CatalogoTexto, PersonalOperativo } from './tipos';
+
+/**
+ * Catálogo de insumos de demostración que siguen usando los documentos (anexos del PDF). Tiene la forma del API
+ * (`Insumo` de @gafer/contracts); la pantalla de Mantenimiento ya lee el catálogo real.
+ */
+const insumoMock = (parcial: Pick<Insumo, 'id' | 'nombreComercial' | 'principioActivo' | 'presentacion' | 'unidadMedida' | 'concentracion' | 'registroDigesa' | 'dosisEstandar' | 'estado'>): Insumo => ({
+  ...parcial,
+  fichaTecnicaKey: `insumos/ficha-tecnica/${parcial.id}.pdf`,
+  hojaMsdsKey: `insumos/hoja-msds/${parcial.id}.pdf`,
+  resolucionKey: null,
+  proveedor: null,
+});
 
 export const INSUMOS_MOCK: Insumo[] = [
-  { id: 'i1', nombre: 'Brodifacoum 0.005% bloque parafinado', principioActivo: 'Brodifacoum', presentacion: 'Bloque', concentracion: '0.005%', registroDigesa: 'DIG-2451-SA', dosisReferencial: '1 bloque por estación', estado: 'ACTIVO' },
-  { id: 'i2', nombre: 'Cipermetrina 25% EC', principioActivo: 'Cipermetrina', presentacion: 'Líquido', concentracion: '25%', registroDigesa: 'DIG-1980-SA', dosisReferencial: '10 ml/L', estado: 'ACTIVO' },
-  { id: 'i3', nombre: 'Bromadiolona 0.005% pellet', principioActivo: 'Bromadiolona', presentacion: 'Pellet', concentracion: '0.005%', registroDigesa: 'DIG-2510-SA', dosisReferencial: '1 sobre por estación', estado: 'ACTIVO' },
-  { id: 'i5', nombre: 'Hipoclorito de sodio 7.5%', principioActivo: 'Hipoclorito de sodio', presentacion: 'Líquido', concentracion: '7.5%', registroDigesa: 'DIG-3120-SA', dosisReferencial: '50 ppm de cloro libre', estado: 'ACTIVO' },
-  { id: 'i4', nombre: 'Deltametrina 2.5% SC', principioActivo: 'Deltametrina', presentacion: 'Suspensión', concentracion: '2.5%', registroDigesa: 'DIG-1765-SA', dosisReferencial: '8 ml/L', estado: 'INACTIVO' },
-];
-
-export const EQUIPOS_MOCK: Equipo[] = [
-  { id: 'e1', nombre: 'Nebulizadora ULV Vector Fog C-150', codigoInterno: 'EQ-014', tipo: 'Nebulización', estadoOperativo: 'OPERATIVO' },
-  { id: 'e2', nombre: 'Aspersora de mochila 20L', codigoInterno: 'EQ-022', tipo: 'Aspersión', estadoOperativo: 'OPERATIVO' },
-  { id: 'e3', nombre: 'Termonebulizadora Swingfog SN-50', codigoInterno: 'EQ-007', tipo: 'Termonebulización', estadoOperativo: 'EN_MANTENIMIENTO' },
-  { id: 'e4', nombre: 'Detector de humedad', codigoInterno: 'EQ-031', tipo: 'Medición', estadoOperativo: 'FUERA_DE_SERVICIO' },
+  insumoMock({ id: 'i1', nombreComercial: 'Brodifacoum 0.005% bloque parafinado', principioActivo: 'Brodifacoum', presentacion: 'BLOQUE', unidadMedida: 'BLOQUE', concentracion: '0.005%', registroDigesa: 'DIG-2451-SA', dosisEstandar: '1 bloque por estación', estado: 'ACTIVO' }),
+  insumoMock({ id: 'i2', nombreComercial: 'Cipermetrina 25% EC', principioActivo: 'Cipermetrina', presentacion: 'LIQUIDO', unidadMedida: 'ML', concentracion: '25%', registroDigesa: 'DIG-1980-SA', dosisEstandar: '10 ml/L', estado: 'ACTIVO' }),
+  insumoMock({ id: 'i3', nombreComercial: 'Bromadiolona 0.005% pellet', principioActivo: 'Bromadiolona', presentacion: 'OTRO', unidadMedida: 'SOBRE', concentracion: '0.005%', registroDigesa: 'DIG-2510-SA', dosisEstandar: '1 sobre por estación', estado: 'ACTIVO' }),
+  insumoMock({ id: 'i5', nombreComercial: 'Hipoclorito de sodio 7.5%', principioActivo: 'Hipoclorito de sodio', presentacion: 'LIQUIDO', unidadMedida: 'L', concentracion: '7.5%', registroDigesa: 'DIG-3120-SA', dosisEstandar: '50 ppm de cloro libre', estado: 'ACTIVO' }),
+  insumoMock({ id: 'i4', nombreComercial: 'Deltametrina 2.5% SC', principioActivo: 'Deltametrina', presentacion: 'OTRO', unidadMedida: 'ML', concentracion: '2.5%', registroDigesa: 'DIG-1765-SA', dosisEstandar: '8 ml/L', estado: 'INACTIVO' }),
 ];
 
 export const PERSONAL_MOCK: PersonalOperativo[] = [

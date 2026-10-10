@@ -4,7 +4,7 @@ import { NuevoServicioPage } from './NuevoServicioPage';
 import { CLIENTES_MOCK } from '../model/clientes-mock';
 import type { ProyectoExpediente } from '../model/proyecto-mapper';
 import type { DatosServicio } from '../model/validaciones';
-import type { Equipo, Insumo } from '../../mantenimiento/model/tipos';
+import { equipoDePrueba, insumoDePrueba } from '../../mantenimiento/pruebas/fabricas';
 
 const cliente = CLIENTES_MOCK[0];
 
@@ -24,15 +24,15 @@ const proyecto: ProyectoExpediente = {
   servicios: [],
 };
 
-const insumos: Insumo[] = [
-  { id: 'i1', nombre: 'Brodifacoum', principioActivo: 'Brodifacoum', presentacion: 'BLOQUE', concentracion: '0.005%', registroDigesa: 'DIG-1', dosisReferencial: '1 bloque por estación', estado: 'ACTIVO' },
-  { id: 'i2', nombre: 'Cloro', principioActivo: 'Hipoclorito', presentacion: 'LIQUIDO', concentracion: '5%', registroDigesa: 'DIG-2', dosisReferencial: '50 ppm', estado: 'ACTIVO' },
-  { id: 'i9', nombre: 'Retirado', principioActivo: 'X', presentacion: 'LIQUIDO', concentracion: '1%', registroDigesa: 'DIG-9', dosisReferencial: '1 ml', estado: 'INACTIVO' },
+const insumos = [
+  insumoDePrueba({ id: 'i1', nombreComercial: 'Brodifacoum', dosisEstandar: '1 bloque por estación' }),
+  insumoDePrueba({ id: 'i2', nombreComercial: 'Cloro', principioActivo: 'Hipoclorito', presentacion: 'LIQUIDO', concentracion: '5%', registroDigesa: 'DIG-2', dosisEstandar: '50 ppm' }),
+  insumoDePrueba({ id: 'i9', nombreComercial: 'Retirado', registroDigesa: 'DIG-9', dosisEstandar: '1 ml', estado: 'INACTIVO' }),
 ];
 
-const equipos: Equipo[] = [
-  { id: 'e1', nombre: 'Aspersora', codigoInterno: 'EQ-022', tipo: 'Aspersión', estadoOperativo: 'OPERATIVO' },
-  { id: 'e2', nombre: 'Nebulizadora', codigoInterno: 'EQ-007', tipo: 'Nebulización', estadoOperativo: 'FUERA_DE_SERVICIO' },
+const equipos = [
+  equipoDePrueba({ id: 'e1', nombre: 'Aspersora', codigoInterno: 'EQ-022', tipo: 'ASPERSION' }),
+  equipoDePrueba({ id: 'e2', nombre: 'Nebulizadora', codigoInterno: 'EQ-007', tipo: 'NEBULIZACION', estadoOperativo: 'FUERA_SERVICIO' }),
 ];
 
 const existente: DatosServicio = {

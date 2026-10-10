@@ -204,3 +204,70 @@
   display: flex;
   justify-content: flex-end;
 }
+
+.mant-barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.mant-barra__texto {
+  margin: 0;
+  max-width: 560px;
+  font-size: 13px;
+  color: var(--gf-ink-soft);
+}
+
+.mant-aviso {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: var(--gf-radius);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.mant-aviso--ok {
+  background: var(--gf-panel);
+  border: 1.5px solid var(--gf-verde);
+  color: var(--gf-verde);
+}
+.mant-aviso--error,
+.mant-aviso--permiso {
+  background: var(--gf-naranja);
+  color: var(--gf-naranja-ink);
+}
+
+.mant-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.mant-fila--inactiva td {
+  color: var(--gf-ink-faint);
+}
+
+.mant-enlace {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--gf-ink);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.mant-enlace:disabled {
+  color: var(--gf-ink-faint);
+  cursor: default;
+}
+
+.mant-estado-select {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--gf-panel);
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  padding: 4px 6px;
+}
