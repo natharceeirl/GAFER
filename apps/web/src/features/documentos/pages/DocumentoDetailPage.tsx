@@ -6,7 +6,8 @@ import { Button } from '../../../shared/ui/atoms/Button';
 import { ahora } from '../../../shared/lib/fecha';
 import type { Rol } from '../../auth/model/roles';
 import { useAuditoria } from '../../auditoria/model/auditoria-context';
-import { useConfiguracion } from '../../mantenimiento/model/configuracion-context';
+import { useConfiguracionSistema } from '../../mantenimiento/api/use-configuracion';
+import { directorDeConfiguracion } from '../../mantenimiento/model/configuracion-mapper';
 import { CATALOGOS_TEXTO_MOCK, INSUMOS_MOCK } from '../../mantenimiento/model/mantenimiento-mock';
 import { useDocumentos } from '../model/documentos-context';
 import {
@@ -51,7 +52,8 @@ const MOTIVOS = CATALOGOS_TEXTO_MOCK.find((c) => c.id === 'motivos-modificacion'
 export function DocumentoDetailPage({ detalle: doc, rol, usuario, onVolver }: DocumentoDetailPageProps) {
   const { actualizar } = useDocumentos();
   const { registrar } = useAuditoria();
-  const { director } = useConfiguracion();
+  const configuracion = useConfiguracionSistema();
+  const director = configuracion.data ? directorDeConfiguracion(configuracion.data) : null;
 
   const [modo, setModo] = useState<Modo>('ver');
   const [animar, setAnimar] = useState(false);

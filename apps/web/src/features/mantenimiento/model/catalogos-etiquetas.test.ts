@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { EstadoOperativoEquipoSchema, PresentacionInsumoSchema, TipoEquipoSchema, UnidadMedidaInsumoSchema } from '@gafer/contracts';
+import { CargoPersonalSchema, EstadoOperativoEquipoSchema, PresentacionInsumoSchema, TipoEquipoSchema, UnidadMedidaInsumoSchema } from '@gafer/contracts';
 import {
+  CARGOS_PERSONAL,
   ESTADOS_OPERATIVOS,
   PRESENTACIONES,
   TIPOS_EQUIPO,
   UNIDADES_MEDIDA,
+  etiquetaCargo,
   etiquetaEstadoActivo,
   etiquetaEstadoOperativo,
   etiquetaPresentacion,
@@ -20,6 +22,7 @@ describe('etiquetas de los catálogos de Mantenimiento', () => {
     expect(codigos(TIPOS_EQUIPO)).toEqual(TipoEquipoSchema.options);
     expect(codigos(PRESENTACIONES)).toEqual(PresentacionInsumoSchema.options);
     expect(codigos(UNIDADES_MEDIDA)).toEqual(UnidadMedidaInsumoSchema.options);
+    expect(codigos(CARGOS_PERSONAL)).toEqual(CargoPersonalSchema.options);
   });
 
   it('el estado de la base FUERA_SERVICIO se muestra como "Fuera de servicio"', () => {
@@ -34,6 +37,12 @@ describe('etiquetas de los catálogos de Mantenimiento', () => {
     expect(etiquetaUnidad('ML')).toBe('Mililitros (ml)');
     expect(etiquetaEstadoActivo('ACTIVO')).toBe('Activo');
     expect(etiquetaEstadoActivo('INACTIVO')).toBe('Inactivo');
+  });
+
+  it('traduce el cargo del personal: TECNICO_OPERADOR se muestra como "Técnico Operador"', () => {
+    expect(etiquetaCargo('ADMINISTRADOR')).toBe('Administrador');
+    expect(etiquetaCargo('SUPERVISOR')).toBe('Supervisor');
+    expect(etiquetaCargo('TECNICO_OPERADOR')).toBe('Técnico Operador');
   });
 
   it('un código desconocido se muestra tal cual en vez de romper la pantalla', () => {

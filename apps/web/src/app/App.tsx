@@ -5,23 +5,20 @@ import { CarteraProvider } from '../features/cliente-expediente/model/cartera-co
 import { ProgramacionProvider } from '../features/programacion/model/programacion-context';
 import { DocumentosProvider } from '../features/documentos/model/documentos-context';
 import { AuditoriaProvider } from '../features/auditoria/model/auditoria-context';
-import { ConfiguracionProvider } from '../features/mantenimiento/model/configuracion-context';
 
 /** Los estados compartidos viven por encima del login para que la demo recorra ambos roles. */
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ConfiguracionProvider>
-        <AuditoriaProvider>
-          <CarteraProvider>
-            <ProgramacionProvider>
-              <DocumentosProvider>
-                <AppShell />
-              </DocumentosProvider>
-            </ProgramacionProvider>
-          </CarteraProvider>
-        </AuditoriaProvider>
-      </ConfiguracionProvider>
+      <AuditoriaProvider>
+        <CarteraProvider>
+          <ProgramacionProvider>
+            <DocumentosProvider>
+              <AppShell />
+            </DocumentosProvider>
+          </ProgramacionProvider>
+        </CarteraProvider>
+      </AuditoriaProvider>
     </QueryClientProvider>
   );
 }

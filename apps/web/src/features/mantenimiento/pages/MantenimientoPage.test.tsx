@@ -2,10 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MantenimientoPage } from './MantenimientoPage';
-import { ConfiguracionProvider } from '../model/configuracion-context';
 import { useSesion } from '../../../shared/api/sesion';
 import type { Rol } from '../../auth/model/roles';
-import { crearEstadoApi, equipoApi, insumoApi, llamadasA, simularApiMantenimiento, type EstadoApi } from '../pruebas/api-mantenimiento-simulada';
+import { catalogoApi, crearEstadoApi, equipoApi, insumoApi, llamadasA, personalApi, simularApiMantenimiento, type EstadoApi } from '../pruebas/api-mantenimiento-simulada';
 
 const fetchMock = vi.fn();
 
@@ -13,9 +12,7 @@ function montar(rol: Rol, estado: EstadoApi = crearEstadoApi()) {
   simularApiMantenimiento(fetchMock, estado);
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>
-      <ConfiguracionProvider>
-        <MantenimientoPage rol={rol} />
-      </ConfiguracionProvider>
+      <MantenimientoPage rol={rol} />
     </QueryClientProvider>,
   );
 }
@@ -55,17 +52,21 @@ describe('MantenimientoPage', () => {
       montar('ADMINISTRADOR', crearEstadoApi({ insumos: [insumoApi(1)] }));
 
       const nav = screen.getByRole('navigation', { name: 'Secciones de mantenimiento' });
-      expect(within(nav).getAllByRole('button').map((b) => b.textContent)).toEqual(['Insumos', 'Equipos', 'Personal', 'Director Técnico', 'Catálogos de texto']);
+      expect(within(nav).getAllByRole('button').map((b) => b.textContent)).toEqual(['Insumos', 'Equipos', 'Personal', 'Configuración', 'Catálogos de texto']);
       expect(await screen.findByText('Insumo 1')).toBeInTheDocument();
     });
 
-    it('el Supervisor solo ve catálogos de texto y no consulta insumos ni equipos', () => {
-      montar('SUPERVISOR');
+    it('el Supervisor ve solo catálogos de texto y configuración, abre en catálogos y no consulta insumos, equipos ni personal', async () => {
+      montar('SUPERVISOR', crearEstadoApi({ rol: 'SUPERVISOR', catalogos: [catalogoApi('giros', 'Giros de negocio', ['Energía'])] }));
 
       const nav = screen.getByRole('navigation', { name: 'Secciones de mantenimiento' });
-      expect(within(nav).getAllByRole('button').map((b) => b.textContent)).toEqual(['Catálogos de texto']);
-      expect(screen.queryByRole('button', { name: 'Nuevo insumo' })).toBeNull();
-      expect(fetchMock).not.toHaveBeenCalled();
+      expect(within(nav).getAllByRole('button').map((b) => b.textContent)).toEqual(['Catálogos de texto', 'Configuración']);
+      expect(await screen.findByRole('heading', { name: 'Giros de negocio' })).toBeInTheDocument();
+
+      irA('Configuración');
+      expect(await screen.findByText(/Solo el Administrador puede modificarla/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Guardar configuración' })).toBeNull();
+      expect(fetchMock.mock.calls.map(([url]) => new URL(String(url)).pathname)).not.toContainEqual(expect.stringMatching(/insumos|equipos|personal/));
     });
 
     it('si el API rechaza al rol (403) la sección lo dice con claridad y la página sigue usable', async () => {
@@ -74,8 +75,8 @@ describe('MantenimientoPage', () => {
       expect(await screen.findByRole('alert')).toHaveTextContent('No tiene permiso para ver los insumos.');
       irA('Equipos');
       expect(await screen.findByText(/No tiene permiso para ver los equipos/)).toBeInTheDocument();
-      irA('Catálogos de texto');
-      expect(screen.getByText('Tipos de hallazgo')).toBeInTheDocument();
+      irA('Configuración');
+      expect(await screen.findByLabelText('Nombre completo')).toBeInTheDocument();
     });
   });
 
@@ -174,6 +175,61 @@ describe('MantenimientoPage', () => {
       expect(await screen.findByText('Insumo actualizado.')).toBeInTheDocument();
       expect(estado.insumos[0].fichaTecnicaKey).toMatch(/^insumos\/ficha-tecnica\/.+\.pdf$/);
       expect(estado.insumos[0].fichaTecnicaKey).not.toBe('insumos/ficha-tecnica/1.pdf');
+    });
+  });
+
+  describe('personal', () => {
+    it('registra a una persona y la muestra en la lista, avisando que la clave la asigna el administrador del sistema', async () => {
+      const estado = crearEstadoApi();
+      montar('ADMINISTRADOR', estado);
+
+      irA('Personal');
+      fireEvent.click(await screen.findByRole('button', { name: 'Nueva persona' }));
+      expect(screen.getByText(/La clave de acceso no se define en esta pantalla/)).toBeInTheDocument();
+      escribir('DNI', '45892312');
+      escribir('Nombres', 'Marco Antonio');
+      escribir('Apellidos', 'Ipusari Quispe');
+      escribir('Cargo', 'TECNICO_OPERADOR');
+      escribir('Teléfono', '958123456');
+      fireEvent.click(screen.getByRole('button', { name: 'Registrar persona' }));
+
+      expect(await screen.findByText('Persona registrada.')).toBeInTheDocument();
+      const fila = screen.getByText('Marco Antonio Ipusari Quispe').closest('tr') as HTMLElement;
+      expect(within(fila).getByText('Técnico Operador')).toBeInTheDocument();
+      expect(llamadasA(fetchMock, 'POST', '/personal')[0].cuerpo).toEqual({
+        dni: '45892312',
+        nombres: 'Marco Antonio',
+        apellidos: 'Ipusari Quispe',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '958123456',
+        usuario: null,
+      });
+    });
+
+    it('edita a una persona y la lista muestra el cambio', async () => {
+      montar('ADMINISTRADOR', crearEstadoApi({ personal: [personalApi(1), personalApi(2)] }));
+
+      irA('Personal');
+      fireEvent.click(await screen.findByRole('button', { name: 'Editar a Nombre1 Apellido1' }));
+      escribir('Teléfono', '999888777');
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar persona' }));
+
+      expect(await screen.findByText('Datos de la persona actualizados.')).toBeInTheDocument();
+      expect(screen.getByText('999888777')).toBeInTheDocument();
+    });
+  });
+
+  describe('catálogos de texto', () => {
+    it('el Administrador agrega un texto y queda guardado en el servidor', async () => {
+      const estado = crearEstadoApi({ catalogos: [catalogoApi('giros', 'Giros de negocio', ['Energía'])] });
+      montar('ADMINISTRADOR', estado);
+
+      irA('Catálogos de texto');
+      fireEvent.change(await screen.findByLabelText('Nuevo texto en Giros de negocio'), { target: { value: 'Minería' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Agregar' }));
+
+      expect(await screen.findByText('Minería')).toBeInTheDocument();
+      expect(estado.catalogos[0].items).toEqual(['Energía', 'Minería']);
     });
   });
 

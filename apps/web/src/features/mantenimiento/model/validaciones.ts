@@ -1,7 +1,9 @@
-import { EquipoRegistroSchema, InsumoRegistroSchema } from '@gafer/contracts';
+import { ConfiguracionSistemaActualizacionSchema, EquipoRegistroSchema, InsumoRegistroSchema, PersonalRegistroSchema } from '@gafer/contracts';
 import type { Errores } from '../../cliente-expediente/model/validaciones';
+import { actualizacionDeConfiguracion, campoDeRutaConfiguracion, type DatosConfiguracion } from './configuracion-mapper';
 import { campoDeRutaEquipo, registroDeEquipo, type DatosEquipo } from './equipo-mapper';
 import { campoDeRutaInsumo, registroDeInsumo, type DatosInsumo } from './insumo-mapper';
+import { campoDeRutaPersonal, registroDePersonal, type DatosPersonal } from './personal-mapper';
 
 const OBLIGATORIO = 'Campo obligatorio.';
 
@@ -53,6 +55,59 @@ export function validarEquipo(d: DatosEquipo): Errores<keyof DatosEquipo> {
   if (vacio(d.codigoInterno)) e.codigoInterno = OBLIGATORIO;
   if (vacio(d.nombre)) e.nombre = OBLIGATORIO;
   return e;
+}
+
+/** DNI y usuarios de las demás personas ya cargadas (en edición, sin la que se edita). */
+export interface PersonalExistente {
+  dnis: string[];
+  usuarios: string[];
+}
+
+/**
+ * Valida el personal con el esquema de alta de `@gafer/contracts`. La unicidad del DNI y del usuario la confirma el
+ * servidor (409); aquí se adelanta con las personas ya cargadas, sin distinguir mayúsculas en el usuario.
+ */
+export function validarPersonal(d: DatosPersonal, existentes: PersonalExistente = { dnis: [], usuarios: [] }): Errores<keyof DatosPersonal> {
+  const e: Errores<keyof DatosPersonal> = {};
+  const resultado = PersonalRegistroSchema.safeParse(registroDePersonal(d));
+
+  if (!resultado.success) {
+    for (const incidencia of resultado.error.issues) {
+      const campo = campoDeRutaPersonal(String(incidencia.path[0]));
+      if (!campo || e[campo]) continue;
+      e[campo] = vacio(d[campo]) || incidencia.code === 'invalid_enum_value' ? OBLIGATORIO : incidencia.message;
+    }
+  }
+  if (d.cargo === '') e.cargo = OBLIGATORIO;
+
+  if (!e.dni && existentes.dnis.includes(d.dni.trim())) e.dni = 'Ya hay una persona registrada con ese DNI.';
+  const usuario = d.usuario.trim().toUpperCase();
+  if (usuario !== '' && existentes.usuarios.some((u) => u.trim().toUpperCase() === usuario)) e.usuario = 'Ya hay una persona con ese usuario.';
+  return e;
+}
+
+/** Valida el Director Técnico y la resolución sanitaria con el esquema de actualización de `@gafer/contracts`. */
+export function validarConfiguracion(d: DatosConfiguracion): Errores<keyof DatosConfiguracion> {
+  const e: Errores<keyof DatosConfiguracion> = {};
+  const resultado = ConfiguracionSistemaActualizacionSchema.safeParse(actualizacionDeConfiguracion(d));
+  if (resultado.success) return e;
+
+  for (const incidencia of resultado.error.issues) {
+    const campo = campoDeRutaConfiguracion(incidencia.path.join('.'));
+    if (!campo || e[campo]) continue;
+    const valor = d[campo];
+    e[campo] = typeof valor === 'string' && vacio(valor) ? OBLIGATORIO : incidencia.message;
+  }
+  return e;
+}
+
+/** Tamaño máximo de la imagen de la firma: 1 MB, porque viaja dentro de la configuración como texto. */
+export const TAMANO_MAXIMO_FIRMA = 1024 * 1024;
+
+export function validarFirma(archivo: File): string | null {
+  if (archivo.type !== 'image/png' && archivo.type !== 'image/jpeg') return 'La firma debe ser una imagen PNG o JPG.';
+  if (archivo.size > TAMANO_MAXIMO_FIRMA) return 'La imagen pesa más de 1 MB. Cargue una más liviana.';
+  return null;
 }
 
 /** Tamaño máximo de una ficha técnica o MSDS: 10 MB, de sobra para un PDF escaneado y sin riesgo para la subida directa. */
