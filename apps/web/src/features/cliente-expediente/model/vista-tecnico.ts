@@ -2,6 +2,7 @@ import type { Equipo, Insumo, TipoServicio } from '@gafer/contracts';
 import type { ClienteFila } from './clientes-mock';
 import type { ProyectoExpediente } from './proyecto-mapper';
 import { etiquetaFrecuencia, etiquetaTipoServicio } from './catalogos-servicio';
+
 import { agendaDelDia, type VisitaProgramada } from '../../programacion/model/programacion';
 import type { EstacionCritica, ServicioRegistro } from '../../estadisticas/model/estadisticas';
 

@@ -105,6 +105,47 @@ GAFER_CLAVE='<clave de al menos 12 caracteres>' pnpm db:crear-usuario \
 
 Toda ruta de la API exige `Authorization: Bearer <token>` y un rol permitido; solo son públicos `POST /api/auth/login` y la documentación (`/docs`, `/docs-json`).
 
+### Datos de ejemplo (demo y QA)
+
+> **Advertencia:** son datos **ficticios**. GAFER no ha entregado sus datos reales (clientes, sedes, servicios, insumos, equipos ni textos); no los uses como si lo fueran ni los cargues en producción.
+
+`pnpm db:seed:demo` deja una base ya migrada lista para la demo H1 (alta de un cliente con su sede y su servicio, edición de un catálogo) y para que QA entre con cada rol.
+
+```bash
+pnpm infra:up          # PostgreSQL, Redis y MinIO
+pnpm db:migrate        # el seed necesita las tablas y los catálogos que siembra la migración
+# JWT_SECRET (mínimo 32 caracteres) en apps/api/.env o en el entorno, como en la sección anterior
+pnpm db:seed:demo      # carga los datos e imprime las claves de los usuarios, UNA sola vez
+pnpm dev:api
+```
+
+**Qué carga** (todo en una transacción: o se carga todo o nada):
+
+| Entidad | Cantidad | Clave natural (la que usa para no duplicar) |
+|---|---|---|
+| Clientes de rubros variados | 12 | RUC (con dígito verificador, rango ficticio `2099…`) y código corto `DEMO…` |
+| Sedes | 23 (1 a 3 por cliente) | cliente + nombre de la sede |
+| Servicios contratados | 56 (1 a 3 por sede) | sede + tipo; cubren los 7 tipos, varias frecuencias y algunos con certificado |
+| Insumos | 12 | `registroDigesa` con prefijo `DEMO-` (nombres comerciales ficticios, principios activos genéricos) |
+| Equipos | 11 | `codigoInterno` con prefijo `EQ-DEMO-` |
+| Personal con usuario | 5: `demo.admin`, `demo.supervisor`, `demo.tecnico1` a `demo.tecnico3` | DNI ficticio (`99…`) y usuario |
+| Textos de catálogo | 56, agregados a los que ya siembra la migración | el propio texto |
+
+Los datos viven en `apps/api/src/database/seed/datos-demo.ts` (fuente de verdad del seed y de la limpieza) y se validan con los esquemas de `@gafer/contracts` antes de escribir. El Director Técnico de ejemplo es el que ya siembra la migración; el seed solo lo completa si la fila estuviera vacía.
+
+**Claves:** no hay ninguna en el repositorio. Cada usuario nuevo recibe una clave al azar (32 caracteres), guardada solo como hash scrypt, y la tabla usuario/cargo/clave se imprime **una vez** en la consola (no se escribe en archivos). Si pierdes la tabla, usa `--regenerar-claves`. El `TECNICO_OPERADOR` solo puede iniciar sesión desde la app móvil (cliente `mobile`); la web lo rechaza (decisión C10).
+
+**Idempotente:** volver a correrlo no duplica nada; informa "sin cambios" por entidad y no toca lo que ya existe ni las claves vigentes.
+
+| Comando | Efecto |
+|---|---|
+| `pnpm db:seed:demo` | Carga los datos que falten |
+| `pnpm db:seed:demo --regenerar-claves` | Además, genera claves nuevas para los usuarios de ejemplo que ya existen |
+| `pnpm db:seed:demo --limpiar` | Elimina **solo** las filas del conjunto de datos (servicios, sedes, clientes, insumos, equipos, personal y sus textos). Sirve para cuando lleguen los datos reales |
+| `pnpm db:seed:demo --confirmar-destino-remoto` | Obligatorio si `DATABASE_URL` no apunta a `localhost` ni `127.0.0.1` |
+
+**Seguridad:** se niega a correr con `NODE_ENV=production` y sin `DATABASE_URL`; antes de escribir imprime el destino (host, puerto y base, sin credenciales). La limpieza nunca borra en cascada: si una fila de ejemplo ya tiene inspecciones, visitas o documentos, o el usuario la modificó o le agregó otras filas, la conserva y lo avisa. Una fila ajena con la misma clave natural (por ejemplo, otro cliente con el mismo RUC) hace fallar la carga sin escribir nada. Los textos que tú agregaste a un catálogo no se tocan.
+
 ### 5. Iniciar Servicios en Desarrollo
 
 Abre terminales separadas para los servicios que vayas a ejecutar:

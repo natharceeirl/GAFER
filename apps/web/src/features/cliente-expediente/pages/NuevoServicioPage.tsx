@@ -59,6 +59,7 @@ interface Opcion<T> {
 /** Nombre corto con el que se identifica un insumo o equipo que el catálogo no entregó. */
 const identificador = (id: string) => id.slice(0, 8);
 
+
 /**
  * Alta y edición de servicio por proyecto — spec §7.3. Define qué se hace, con qué
  * frecuencia y con qué insumos y equipos; eso es lo que después se precarga
