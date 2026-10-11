@@ -8,6 +8,7 @@ import {
   TextInputProps,
   ViewStyle,
 } from 'react-native';
+import { TOKENS } from '../theme/tokens';
 
 export interface InputProps extends Omit<TextInputProps, 'style'> {
   label: string;
@@ -50,7 +51,7 @@ export const Input: React.FC<InputProps> = ({
           value={valor}
           onChangeText={onCambio}
           placeholder={placeholder}
-          placeholderTextColor="#9e9e9e"
+          placeholderTextColor={TOKENS.inkFaint}
           autoCapitalize={autoCapitalize}
           keyboardType={keyboardType}
           secureTextEntry={esClave && !claveVisible}
@@ -67,7 +68,7 @@ export const Input: React.FC<InputProps> = ({
             accessibilityRole="button"
           >
             <Text style={styles.textoVisibilidad}>
-              {claveVisible ? 'Ocultar' : 'Mostrar'}
+              {claveVisible ? 'OCULTAR' : 'VER'}
             </Text>
           </TouchableOpacity>
         ) : null}
@@ -86,53 +87,57 @@ export const Input: React.FC<InputProps> = ({
 
 const styles = StyleSheet.create({
   contenedor: {
-    marginVertical: 8,
+    marginVertical: 6,
     width: '100%',
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#263238',
-    marginBottom: 6,
+    fontSize: 12,
+    fontWeight: '800',
+    color: TOKENS.inkSoft,
+    marginBottom: 5,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   campoContenedor: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 50,
-    backgroundColor: '#ffffff',
-    borderWidth: 1.2,
-    borderColor: '#cfd8dc',
-    borderRadius: 8,
-    paddingHorizontal: 14,
+    height: 48,
+    backgroundColor: TOKENS.panelRaised,
+    borderWidth: 1.5,
+    borderColor: TOKENS.ruleStrong,
+    borderRadius: TOKENS.radius,
+    paddingHorizontal: 12,
   },
   campoError: {
-    borderColor: '#d32f2f',
-    backgroundColor: '#fffbfa',
+    borderColor: TOKENS.rojo,
+    backgroundColor: TOKENS.rojoInk,
   },
   input: {
     flex: 1,
     height: '100%',
-    fontSize: 16,
-    color: '#1a1a1a',
+    fontSize: 15,
+    color: TOKENS.ink,
+    fontWeight: '500',
   },
   botonVisibilidad: {
     paddingHorizontal: 8,
     paddingVertical: 6,
   },
   textoVisibilidad: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1f4d3d',
+    fontSize: 11,
+    fontWeight: '800',
+    color: TOKENS.marca,
+    letterSpacing: 0.5,
   },
   textoError: {
     fontSize: 12,
-    color: '#d32f2f',
+    color: TOKENS.rojo,
     marginTop: 4,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   textoAyuda: {
-    fontSize: 12,
-    color: '#607d8b',
+    fontSize: 11,
+    color: TOKENS.inkFaint,
     marginTop: 4,
   },
 });

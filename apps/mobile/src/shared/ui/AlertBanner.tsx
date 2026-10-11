@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View, ViewStyle, TouchableOpacity } from 'react-native';
+import { TOKENS } from '../theme/tokens';
 
 export interface AlertBannerProps {
   mensaje: string;
@@ -62,17 +63,17 @@ export const AlertBanner: React.FC<AlertBannerProps> = ({
 
 const styles = StyleSheet.create({
   base: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginVertical: 10,
-    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: TOKENS.radius,
+    marginVertical: 8,
+    borderWidth: 1.5,
     width: '100%',
   },
   textoBase: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '500',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
   },
   filaContenido: {
     flexDirection: 'row',
@@ -87,28 +88,28 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   textoCerrar: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
   },
   contenedorError: {
-    backgroundColor: '#ffebee',
-    borderColor: '#ffcdd2',
+    backgroundColor: TOKENS.rojoInk,
+    borderColor: TOKENS.rojo,
   },
   textoError: {
-    color: '#b71c1c',
+    color: TOKENS.rojo,
   },
   contenedorAdvertencia: {
-    backgroundColor: '#fff8e1',
-    borderColor: '#ffecb3',
+    backgroundColor: TOKENS.amarilloInk,
+    borderColor: TOKENS.amarillo,
   },
   textoAdvertencia: {
-    color: '#f57f17',
+    color: TOKENS.amarillo,
   },
   contenedorInfo: {
-    backgroundColor: '#e8f5e9',
-    borderColor: '#c8e6c9',
+    backgroundColor: TOKENS.infoInk,
+    borderColor: TOKENS.info,
   },
   textoInfo: {
-    color: '#1b5e20',
+    color: TOKENS.info,
   },
 });

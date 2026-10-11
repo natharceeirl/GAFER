@@ -12,6 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '../model/use-auth-store';
 import { validarFormularioLogin } from '../model/login-validation';
 import { Button, Input, AlertBanner } from '../../../shared/ui';
+import { TOKENS } from '../../../shared/theme/tokens';
 
 export interface LoginScreenProps {
   onLoginExitoso?: () => void;
@@ -54,18 +55,25 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginExitoso }) => {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Cabecera de Garita de Control Industrial */}
           <View style={styles.header}>
-            <View style={styles.badgeContenedor}>
-              <Text style={styles.badgeTexto}>GAFER OPERACIONES</Text>
+            <View style={styles.placaMarca}>
+              <Text style={styles.placaTexto}>GAFER SANEAMIENTO AMBIENTAL</Text>
             </View>
-            <Text style={styles.titulo}>Saneamiento Ambiental</Text>
+            <Text style={styles.titulo}>Operaciones de Campo</Text>
             <Text style={styles.subtitulo}>
-              Control de agenda e inspecciones de campo para personal técnico
+              Terminal de registro técnico y control de visitas offline
             </Text>
           </View>
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitulo}>Ingreso de Personal</Text>
+          {/* Compartimento técnico */}
+          <View style={styles.compartimento}>
+            <View style={styles.compartimentoHeader}>
+              <Text style={styles.compartimentoTitulo}>INGRESO DE PERSONAL</Text>
+              <View style={styles.badgeEstado}>
+                <Text style={styles.badgeEstadoTexto}>H2 · CAMPO</Text>
+              </View>
+            </View>
 
             {errorAuth ? (
               <AlertBanner
@@ -79,7 +87,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginExitoso }) => {
             <Input
               testID="input-usuario"
               label="Usuario o Correo"
-              placeholder="ej. demo.tecnico1"
+              placeholder="demo.tecnico1"
               valor={usuario}
               onCambio={(texto) => {
                 setUsuario(texto);
@@ -107,7 +115,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginExitoso }) => {
 
             <Button
               testID="boton-ingresar"
-              titulo={estaCargando ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+              titulo={estaCargando ? 'Autenticando...' : 'Iniciar Sesión'}
               onPress={handleSubmit}
               cargando={estaCargando}
               deshabilitado={estaCargando}
@@ -115,9 +123,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginExitoso }) => {
               style={styles.botonAcceso}
             />
 
-            <View style={styles.footerAviso}>
-              <Text style={styles.footerTexto}>
-                Acceso exclusivo para personal técnico acreditado. Las operaciones de campo se registran localmente para sincronización posterior.
+            <View style={styles.pieCompartimento}>
+              <Text style={styles.pieTexto}>
+                Acceso exclusivo para técnicos de campo autorizados. Las operaciones y certificados se sincronizan de forma segura con la base central.
               </Text>
             </View>
           </View>
@@ -130,82 +138,102 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginExitoso }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#1f4d3d',
+    backgroundColor: TOKENS.marca,
   },
   keyboardContainer: {
     flex: 1,
-    backgroundColor: '#f4f6f8',
+    backgroundColor: TOKENS.bg,
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 20,
+    padding: 16,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  badgeContenedor: {
-    backgroundColor: '#e8f5e9',
+  placaMarca: {
+    backgroundColor: TOKENS.marca,
     paddingHorizontal: 12,
     paddingVertical: 4,
-    borderRadius: 16,
-    marginBottom: 10,
+    borderRadius: TOKENS.radiusSm,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#034527',
   },
-  badgeTexto: {
-    color: '#1f4d3d',
-    fontWeight: '700',
-    fontSize: 12,
+  placaTexto: {
+    color: TOKENS.marcaInk,
+    fontWeight: '800',
+    fontSize: 11,
     letterSpacing: 0.8,
   },
   titulo: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#1a2e26',
+    fontSize: 22,
+    fontWeight: '900',
+    color: TOKENS.ink,
     textAlign: 'center',
+    letterSpacing: 0.2,
   },
   subtitulo: {
-    fontSize: 13,
-    color: '#556961',
+    fontSize: 12,
+    color: TOKENS.inkSoft,
     textAlign: 'center',
-    marginTop: 6,
-    paddingHorizontal: 12,
-    lineHeight: 18,
+    marginTop: 4,
+    paddingHorizontal: 16,
+    lineHeight: 16,
   },
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+  compartimento: {
+    backgroundColor: TOKENS.panel,
+    borderRadius: TOKENS.radius,
+    padding: 18,
+    borderWidth: 1.5,
+    borderColor: TOKENS.ruleStrong,
+  },
+  compartimentoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+    paddingBottom: 8,
+    borderBottomWidth: 1.5,
+    borderBottomColor: TOKENS.rule,
+  },
+  compartimentoTitulo: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: TOKENS.inkSoft,
+    letterSpacing: 0.6,
+  },
+  badgeEstado: {
+    backgroundColor: TOKENS.panelRaised,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: TOKENS.radiusSm,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: TOKENS.rule,
   },
-  cardTitulo: {
-    fontSize: 18,
+  badgeEstadoTexto: {
+    fontSize: 10,
     fontWeight: '700',
-    color: '#1a202c',
-    marginBottom: 16,
+    color: TOKENS.inkFaint,
   },
   alerta: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   botonAcceso: {
-    marginTop: 18,
+    marginTop: 14,
   },
-  footerAviso: {
-    marginTop: 20,
-    paddingTop: 16,
+  pieCompartimento: {
+    marginTop: 14,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#f0f2f5',
+    borderTopColor: TOKENS.rule,
   },
-  footerTexto: {
+  pieTexto: {
     fontSize: 11,
-    color: '#8c9ba5',
+    color: TOKENS.inkFaint,
     textAlign: 'center',
-    lineHeight: 16,
+    lineHeight: 15,
   },
 });

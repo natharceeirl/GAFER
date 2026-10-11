@@ -22,6 +22,7 @@ import {
 } from '../model/agenda';
 import { useBorradorStore } from '../../operaciones/model/use-borrador-store';
 import { Button, AlertBanner } from '../../../shared/ui';
+import { TOKENS } from '../../../shared/theme/tokens';
 
 type VistaAgenda = 'MIS_VISITAS' | 'DISPONIBLES' | 'SEDES_ACTIVAS';
 
@@ -50,28 +51,30 @@ export const AgendaScreen: React.FC = () => {
     cargarAgenda(tecnicoId);
   }, [cargarAgenda, tecnicoId]);
 
+  // Guarda de cierre de sesión para prevención de pérdida de datos offline
   const handleCerrarSesion = () => {
-    Alert.alert(
-      'Cerrar Sesión',
-      '¿Desea salir de la aplicación? Los datos locales se conservarán.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Cerrar Sesión',
-          style: 'destructive',
-          onPress: async () => {
-            await cerrarSesion();
-          },
+    const tieneBorrador = Boolean(borrador);
+    const mensajeAdvertencia = tieneBorrador
+      ? 'Tiene una inspección activa en borrador sin sincronizar. Además, si se encuentra sin conexión no podrá volver a ingresar hasta tener red. ¿Seguro que desea salir?'
+      : 'Si se encuentra en campo sin conexión a internet, no podrá volver a iniciar sesión hasta contar con red Wi-Fi o datos móviles. ¿Desea cerrar sesión?';
+
+    Alert.alert('Cerrar Sesión de Campo', mensajeAdvertencia, [
+      { text: 'Permanecer en App', style: 'cancel' },
+      {
+        text: 'Cerrar Sesión',
+        style: 'destructive',
+        onPress: async () => {
+          await cerrarSesion();
         },
-      ],
-    );
+      },
+    ]);
   };
 
   const handleIniciarVisita = (visita: ItemAgenda) => {
     const ok = iniciarAtencionVisita(visita.id);
     if (ok) {
       setMensajeExito(
-        `Inspección iniciada para ${visita.clienteRazonSocial} (${visita.sedeNombre})`,
+        `Inspección iniciada: ${visita.clienteRazonSocial} (${visita.sedeNombre})`,
       );
     }
   };
@@ -79,7 +82,7 @@ export const AgendaScreen: React.FC = () => {
   const handleIniciarSede = (sede: SedeActiva) => {
     iniciarAtencionEnSede(sede);
     setMensajeExito(
-      `Atención iniciada en sede ${sede.nombre} de ${sede.clienteRazonSocial}`,
+      `Atención iniciada en sede ${sede.nombre} (${sede.clienteRazonSocial})`,
     );
   };
 
@@ -99,10 +102,10 @@ export const AgendaScreen: React.FC = () => {
     const enCurso = item.estadoCampo === 'EN_CURSO';
 
     return (
-      <View style={[styles.tarjetaVisita, enCurso && styles.tarjetaEnCurso]}>
-        <View style={styles.cabeceraVisita}>
+      <View style={[styles.fichaOrden, enCurso && styles.fichaEnCurso]}>
+        <View style={styles.cabeceraFicha}>
           <View style={styles.badgeHora}>
-            <Text style={styles.textoHora}>{item.hora}</Text>
+            <Text style={styles.textoHora}>{item.hora} HRS</Text>
           </View>
 
           <View
@@ -126,24 +129,24 @@ export const AgendaScreen: React.FC = () => {
               ]}
             >
               {esTitular
-                ? 'Mi Visita'
+                ? 'ASIGNADA A MÍ'
                 : esAbierta
-                  ? 'Abierta / Disponible'
-                  : item.tecnicoTitularNombre || 'Colega'}
+                  ? 'DISPONIBLE (C12)'
+                  : (item.tecnicoTitularNombre || 'COLEGA').toUpperCase()}
             </Text>
           </View>
         </View>
 
         <Text style={styles.clienteNombre}>{item.clienteRazonSocial}</Text>
         <Text style={styles.sedeNombre}>
-          Sede: <Text style={styles.sedeValor}>{item.sedeNombre}</Text>
+          SEDE: <Text style={styles.sedeValor}>{item.sedeNombre}</Text>
         </Text>
         <Text style={styles.direccionTexto}>{item.sedeDireccion}</Text>
 
-        <View style={styles.separador} />
+        <View style={styles.separadorFicha} />
 
         <View style={styles.servicioFila}>
-          <Text style={styles.servicioEtiqueta}>Servicio:</Text>
+          <Text style={styles.servicioEtiqueta}>SERVICIO:</Text>
           <Text style={styles.servicioValor}>{item.servicioTipo}</Text>
         </View>
 
@@ -156,7 +159,7 @@ export const AgendaScreen: React.FC = () => {
         <View style={styles.accionesVisita}>
           {enCurso ? (
             <View style={styles.badgeEnCurso}>
-              <Text style={styles.textoEnCurso}>● Inspección En Curso</Text>
+              <Text style={styles.textoEnCurso}>● INSPECCIÓN ACTIVA EN CURSO</Text>
             </View>
           ) : (
             <Button
@@ -176,23 +179,23 @@ export const AgendaScreen: React.FC = () => {
     const estaSeleccionada = borrador?.servicioId?.includes(item.id.substring(0, 8));
 
     return (
-      <View style={[styles.tarjetaSede, estaSeleccionada && styles.tarjetaEnCurso]}>
-        <View style={styles.cabeceraSede}>
+      <View style={[styles.fichaOrden, estaSeleccionada && styles.fichaEnCurso]}>
+        <View style={styles.cabeceraFicha}>
           <Text style={styles.sedeTitulo}>{item.nombre}</Text>
           <View style={styles.badgeActivo}>
-            <Text style={styles.textoBadgeActivo}>Activa</Text>
+            <Text style={styles.textoBadgeActivo}>SEDE ACTIVA</Text>
           </View>
         </View>
 
         <Text style={styles.clienteNombre}>{item.clienteRazonSocial}</Text>
         <Text style={styles.direccionTexto}>
-          {item.direccionSede} - {item.distrito}
+          {item.direccionSede} · {item.distrito}
         </Text>
 
         <View style={styles.accionesVisita}>
           <Button
             testID={`boton-sede-${item.id}`}
-            titulo="Atender en Sede"
+            titulo="Atender en Sede (§8.2)"
             onPress={() => handleIniciarSede(item)}
             variante="secundario"
             style={styles.botonAtender}
@@ -206,12 +209,12 @@ export const AgendaScreen: React.FC = () => {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="light" />
 
-      {/* Cabecera superior con datos del técnico y logout */}
+      {/* Cabecera superior con estilo de Garita de Control */}
       <View style={styles.header}>
         <View style={styles.headerInfo}>
-          <Text style={styles.appTitulo}>GAFER Campo</Text>
+          <Text style={styles.appTitulo}>GAFER SANEAMIENTO AMBIENTAL</Text>
           <Text style={styles.usuarioNombre}>
-            {usuario ? `${usuario.nombres} (${usuario.usuario})` : 'Técnico Operador'}
+            {usuario ? usuario.nombres : 'Técnico Operador'}
           </Text>
           <Text style={styles.fechaTexto}>
             {new Date().toLocaleDateString('es-PE', {
@@ -227,19 +230,19 @@ export const AgendaScreen: React.FC = () => {
           style={styles.botonSalir}
           onPress={handleCerrarSesion}
           accessibilityRole="button"
-          accessibilityLabel="Cerrar sesión"
+          accessibilityLabel="Cerrar sesión de campo"
         >
-          <Text style={styles.textoSalir}>Salir</Text>
+          <Text style={styles.textoSalir}>SALIR</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Banner de borrador activo si existe */}
+      {/* Banner de inspección activa en borrador */}
       {borrador ? (
         <View style={styles.bannerBorrador}>
           <View style={styles.bannerBorradorInfo}>
-            <Text style={styles.bannerBorradorTitulo}>Inspección Activa en Borrador</Text>
+            <Text style={styles.bannerBorradorTitulo}>INSPECCIÓN EN CURSO</Text>
             <Text style={styles.bannerBorradorSubtitulo}>
-              Servicio: {borrador.servicioId}
+              Servicio ID: {borrador.servicioId}
             </Text>
           </View>
           <TouchableOpacity
@@ -247,12 +250,12 @@ export const AgendaScreen: React.FC = () => {
             style={styles.botonFinalizarBorrador}
             accessibilityRole="button"
           >
-            <Text style={styles.textoFinalizarBorrador}>Finalizar</Text>
+            <Text style={styles.textoFinalizarBorrador}>FINALIZAR</Text>
           </TouchableOpacity>
         </View>
       ) : null}
 
-      {/* Feedback contextual */}
+      {/* Mensajes de retroalimentación */}
       {mensajeExito ? (
         <AlertBanner
           tipo="info"
@@ -270,7 +273,7 @@ export const AgendaScreen: React.FC = () => {
         />
       ) : null}
 
-      {/* Selector de Pestañas (Decisión C12 + Sedes Activas §8.2) */}
+      {/* Pestañas de control de visitas (Decisión C12 + Sedes Activas §8.2) */}
       <View style={styles.tabsContainer}>
         <TouchableOpacity
           style={[styles.tab, vistaActiva === 'MIS_VISITAS' && styles.tabActivo]}
@@ -279,7 +282,7 @@ export const AgendaScreen: React.FC = () => {
           <Text
             style={[styles.tabTexto, vistaActiva === 'MIS_VISITAS' && styles.tabTextoActivo]}
           >
-            Mi Agenda
+            MI AGENDA
           </Text>
         </TouchableOpacity>
 
@@ -290,7 +293,7 @@ export const AgendaScreen: React.FC = () => {
           <Text
             style={[styles.tabTexto, vistaActiva === 'DISPONIBLES' && styles.tabTextoActivo]}
           >
-            Abiertas (C12)
+            ABIERTAS (C12)
           </Text>
         </TouchableOpacity>
 
@@ -301,31 +304,31 @@ export const AgendaScreen: React.FC = () => {
           <Text
             style={[styles.tabTexto, vistaActiva === 'SEDES_ACTIVAS' && styles.tabTextoActivo]}
           >
-            Sedes Activas
+            SEDES ACTIVAS
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Buscador de Sedes Activas en modo Sedes */}
+      {/* Buscador de Sedes Activas en modo Contingencia */}
       {vistaActiva === 'SEDES_ACTIVAS' ? (
         <View style={styles.buscadorContenedor}>
           <TextInput
             testID="input-buscar-sede"
             style={styles.inputBuscador}
-            placeholder="Buscar sede, cliente o distrito..."
-            placeholderTextColor="#8a9ba8"
+            placeholder="Buscar por sede, cliente o distrito..."
+            placeholderTextColor={TOKENS.inkFaint}
             value={busquedaSede}
             onChangeText={setBusquedaSede}
           />
         </View>
       ) : null}
 
-      {/* Contenido principal */}
+      {/* Lista de Fichas de Campo */}
       <View style={styles.cuerpo}>
         {cargando ? (
           <View style={styles.cargandoContenedor}>
-            <ActivityIndicator size="large" color="#1f4d3d" />
-            <Text style={styles.cargandoTexto}>Cargando agenda del día...</Text>
+            <ActivityIndicator size="large" color={TOKENS.marca} />
+            <Text style={styles.cargandoTexto}>Cargando agenda de operaciones...</Text>
           </View>
         ) : vistaActiva === 'SEDES_ACTIVAS' ? (
           <FlatList
@@ -335,9 +338,9 @@ export const AgendaScreen: React.FC = () => {
             contentContainerStyle={styles.listaContenido}
             ListEmptyComponent={
               <View style={styles.vacioContenedor}>
-                <Text style={styles.vacioTitulo}>No se encontraron sedes</Text>
+                <Text style={styles.vacioTitulo}>Sin sedes encontradas</Text>
                 <Text style={styles.vacioSubtitulo}>
-                  Intente con otro término de búsqueda o verifique la conexión.
+                  Verifique el término de búsqueda o la conexión con la base central.
                 </Text>
               </View>
             }
@@ -350,10 +353,10 @@ export const AgendaScreen: React.FC = () => {
             contentContainerStyle={styles.listaContenido}
             ListEmptyComponent={
               <View style={styles.vacioContenedor}>
-                <Text style={styles.vacioTitulo}>Sin visitas en esta vista</Text>
+                <Text style={styles.vacioTitulo}>Sin visitas programadas</Text>
                 <Text style={styles.vacioSubtitulo}>
                   {vistaActiva === 'MIS_VISITAS'
-                    ? 'No tiene visitas programadas como titular hoy. Puede revisar las visitas abiertas o elegir una sede activa.'
+                    ? 'No tiene visitas asignadas como titular para hoy. Puede revisar las visitas abiertas o elegir una sede activa.'
                     : 'No hay visitas abiertas disponibles sin titular para esta fecha.'}
                 </Text>
               </View>
@@ -368,133 +371,144 @@ export const AgendaScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#1f4d3d',
+    backgroundColor: TOKENS.marca,
   },
   header: {
-    backgroundColor: '#1f4d3d',
+    backgroundColor: TOKENS.marca,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#034527',
   },
   headerInfo: {
     flex: 1,
   },
   appTitulo: {
-    color: '#a3e9d2',
-    fontSize: 12,
-    fontWeight: '700',
+    color: TOKENS.hoja,
+    fontSize: 10,
+    fontWeight: '800',
     letterSpacing: 0.8,
-    textTransform: 'uppercase',
   },
   usuarioNombre: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '800',
+    color: TOKENS.marcaInk,
+    fontSize: 17,
+    fontWeight: '900',
     marginTop: 2,
+    letterSpacing: 0.2,
   },
   fechaTexto: {
     color: '#d4edda',
-    fontSize: 12,
+    fontSize: 11,
     marginTop: 2,
     textTransform: 'capitalize',
   },
   botonSalir: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: TOKENS.radiusSm,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.25)',
   },
   textoSalir: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '700',
+    color: TOKENS.marcaInk,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.6,
   },
   bannerBorrador: {
-    backgroundColor: '#fff3cd',
+    backgroundColor: TOKENS.amarilloInk,
     borderLeftWidth: 4,
-    borderLeftColor: '#ffc107',
+    borderLeftColor: TOKENS.amarillo,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: TOKENS.rule,
   },
   bannerBorradorInfo: {
     flex: 1,
   },
   bannerBorradorTitulo: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#856404',
+    fontSize: 11,
+    fontWeight: '800',
+    color: TOKENS.amarillo,
+    letterSpacing: 0.5,
   },
   bannerBorradorSubtitulo: {
-    fontSize: 12,
-    color: '#856404',
-    marginTop: 2,
+    fontSize: 11,
+    color: TOKENS.inkSoft,
+    marginTop: 1,
   },
   botonFinalizarBorrador: {
-    backgroundColor: '#856404',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
+    backgroundColor: TOKENS.amarillo,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: TOKENS.radiusSm,
   },
   textoFinalizarBorrador: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '700',
+    color: TOKENS.amarilloInk,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   alertaMensaje: {
-    marginHorizontal: 16,
+    marginHorizontal: 14,
     marginTop: 8,
     marginBottom: 0,
   },
   tabsContainer: {
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    backgroundColor: TOKENS.panel,
+    borderBottomWidth: 1.5,
+    borderBottomColor: TOKENS.ruleStrong,
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: 'center',
-    borderBottomWidth: 2,
+    borderBottomWidth: 3,
     borderBottomColor: 'transparent',
   },
   tabActivo: {
-    borderBottomColor: '#1f4d3d',
+    borderBottomColor: TOKENS.marca,
+    backgroundColor: TOKENS.panelRaised,
   },
   tabTexto: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#607d8b',
+    fontSize: 11,
+    fontWeight: '700',
+    color: TOKENS.inkFaint,
+    letterSpacing: 0.5,
   },
   tabTextoActivo: {
-    color: '#1f4d3d',
-    fontWeight: '700',
+    color: TOKENS.marca,
+    fontWeight: '900',
   },
   buscadorContenedor: {
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eceff1',
+    backgroundColor: TOKENS.panel,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderBottomWidth: 1.5,
+    borderBottomColor: TOKENS.rule,
   },
   inputBuscador: {
-    backgroundColor: '#f1f5f8',
-    borderRadius: 8,
-    height: 42,
-    paddingHorizontal: 14,
-    fontSize: 14,
-    color: '#263238',
+    backgroundColor: TOKENS.panelRaised,
+    borderRadius: TOKENS.radius,
+    height: 40,
+    paddingHorizontal: 12,
+    fontSize: 13,
+    color: TOKENS.ink,
+    borderWidth: 1,
+    borderColor: TOKENS.ruleStrong,
   },
   cuerpo: {
     flex: 1,
-    backgroundColor: '#f5f7fa',
+    backgroundColor: TOKENS.bg,
   },
   cargandoContenedor: {
     flex: 1,
@@ -502,189 +516,179 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cargandoTexto: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#546e7a',
+    marginTop: 10,
+    fontSize: 13,
+    color: TOKENS.inkSoft,
+    fontWeight: '600',
   },
   listaContenido: {
-    padding: 16,
+    padding: 14,
   },
-  tarjetaVisita: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+  fichaOrden: {
+    backgroundColor: TOKENS.panel,
+    borderRadius: TOKENS.radius,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: TOKENS.ruleStrong,
   },
-  tarjetaEnCurso: {
-    borderColor: '#1f4d3d',
+  fichaEnCurso: {
+    borderColor: TOKENS.marca,
     borderWidth: 2,
-    backgroundColor: '#f9fdfa',
+    backgroundColor: TOKENS.panelRaised,
   },
-  cabeceraVisita: {
+  cabeceraFicha: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   badgeHora: {
-    backgroundColor: '#1f4d3d',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  textoHora: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  badgeTitular: {
+    backgroundColor: TOKENS.marca,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: TOKENS.radiusSm,
+  },
+  textoHora: {
+    color: TOKENS.marcaInk,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  badgeTitular: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: TOKENS.radiusSm,
+    borderWidth: 1,
   },
   textoBadgeTitular: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.4,
   },
   badgeTitularAsignada: {
-    backgroundColor: '#e8f5e9',
+    backgroundColor: TOKENS.verdeInk,
+    borderColor: TOKENS.verde,
   },
   textoTitularAsignada: {
-    color: '#2e7d32',
-    fontSize: 11,
-    fontWeight: '700',
+    color: TOKENS.verde,
   },
   badgeTitularAbierta: {
-    backgroundColor: '#e3f2fd',
+    backgroundColor: TOKENS.infoInk,
+    borderColor: TOKENS.info,
   },
   textoTitularAbierta: {
-    color: '#1565c0',
-    fontSize: 11,
-    fontWeight: '700',
+    color: TOKENS.info,
   },
   badgeTitularColega: {
-    backgroundColor: '#f3e5f5',
+    backgroundColor: TOKENS.panelRaised,
+    borderColor: TOKENS.ruleStrong,
   },
   textoTitularColega: {
-    color: '#7b1fa2',
-    fontSize: 11,
-    fontWeight: '700',
+    color: TOKENS.inkSoft,
   },
   clienteNombre: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1a202c',
-    marginBottom: 4,
+    fontSize: 15,
+    fontWeight: '800',
+    color: TOKENS.ink,
+    marginBottom: 3,
   },
   sedeNombre: {
-    fontSize: 13,
-    color: '#4a5568',
+    fontSize: 12,
+    color: TOKENS.inkSoft,
     marginBottom: 2,
+    fontWeight: '700',
   },
   sedeValor: {
-    fontWeight: '600',
-    color: '#2d3748',
+    fontWeight: '800',
+    color: TOKENS.ink,
   },
   direccionTexto: {
     fontSize: 12,
-    color: '#718096',
-    marginBottom: 8,
+    color: TOKENS.inkFaint,
+    marginBottom: 6,
   },
-  separador: {
+  separadorFicha: {
     height: 1,
-    backgroundColor: '#edf2f7',
-    marginVertical: 8,
+    backgroundColor: TOKENS.rule,
+    marginVertical: 6,
   },
   servicioFila: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   servicioEtiqueta: {
-    fontSize: 12,
-    color: '#718096',
+    fontSize: 11,
+    color: TOKENS.inkFaint,
+    fontWeight: '700',
     marginRight: 6,
   },
   servicioValor: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#1f4d3d',
+    fontWeight: '800',
+    color: TOKENS.marca,
   },
   observacionesTexto: {
     fontSize: 11,
-    color: '#718096',
+    color: TOKENS.inkSoft,
     fontStyle: 'italic',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   accionesVisita: {
-    marginTop: 8,
+    marginTop: 6,
   },
   botonAtender: {
-    height: 44,
-    marginVertical: 4,
+    height: 42,
+    marginVertical: 2,
   },
   badgeEnCurso: {
-    backgroundColor: '#e8f5e9',
+    backgroundColor: TOKENS.verdeInk,
+    borderColor: TOKENS.verde,
+    borderWidth: 1,
     paddingVertical: 8,
-    borderRadius: 6,
+    borderRadius: TOKENS.radiusSm,
     alignItems: 'center',
   },
   textoEnCurso: {
-    color: '#2e7d32',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  tarjetaSede: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  cabeceraSede: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
+    color: TOKENS.verde,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   sedeTitulo: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1a202c',
+    fontSize: 14,
+    fontWeight: '800',
+    color: TOKENS.ink,
   },
   badgeActivo: {
-    backgroundColor: '#e8f5e9',
-    paddingHorizontal: 8,
+    backgroundColor: TOKENS.verdeInk,
+    borderColor: TOKENS.verde,
+    borderWidth: 1,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: TOKENS.radiusSm,
   },
   textoBadgeActivo: {
-    color: '#2e7d32',
-    fontSize: 10,
-    fontWeight: '700',
+    color: TOKENS.verde,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.4,
   },
   vacioContenedor: {
     padding: 30,
     alignItems: 'center',
   },
   vacioTitulo: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#4a5568',
-    marginBottom: 6,
+    fontSize: 14,
+    fontWeight: '800',
+    color: TOKENS.inkSoft,
+    marginBottom: 4,
   },
   vacioSubtitulo: {
-    fontSize: 13,
-    color: '#718096',
+    fontSize: 12,
+    color: TOKENS.inkFaint,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 16,
   },
 });

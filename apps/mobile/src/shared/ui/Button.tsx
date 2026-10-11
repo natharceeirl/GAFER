@@ -7,6 +7,7 @@ import {
   ViewStyle,
   TextStyle,
 } from 'react-native';
+import { TOKENS } from '../theme/tokens';
 
 export interface ButtonProps {
   titulo: string;
@@ -57,7 +58,7 @@ export const Button: React.FC<ButtonProps> = ({
   return (
     <TouchableOpacity
       testID={testID}
-      activeOpacity={0.8}
+      activeOpacity={0.85}
       onPress={onPress}
       disabled={estaInactivo}
       style={[
@@ -72,7 +73,7 @@ export const Button: React.FC<ButtonProps> = ({
       {cargando ? (
         <ActivityIndicator
           size="small"
-          color={variante === 'secundario' ? '#1f4d3d' : '#ffffff'}
+          color={variante === 'secundario' ? TOKENS.marca : TOKENS.marcaInk}
         />
       ) : (
         <Text style={[styles.textoBase, getEstiloTexto(), textoStyle]}>
@@ -85,36 +86,39 @@ export const Button: React.FC<ButtonProps> = ({
 
 const styles = StyleSheet.create({
   base: {
-    height: 50,
-    borderRadius: 8,
+    height: 48,
+    borderRadius: TOKENS.radius,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginVertical: 8,
+    paddingHorizontal: 16,
+    marginVertical: 6,
+    borderWidth: 1.5,
   },
   contenedorPrimario: {
-    backgroundColor: '#1f4d3d',
+    backgroundColor: TOKENS.marca,
+    borderColor: '#034527',
   },
   contenedorSecundario: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1.5,
-    borderColor: '#1f4d3d',
+    backgroundColor: TOKENS.panelRaised,
+    borderColor: TOKENS.ruleStrong,
   },
   contenedorPeligro: {
-    backgroundColor: '#c62828',
+    backgroundColor: TOKENS.rojo,
+    borderColor: '#7a1f16',
   },
   deshabilitado: {
     opacity: 0.55,
   },
   textoBase: {
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 0.3,
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   textoPrimario: {
-    color: '#ffffff',
+    color: TOKENS.marcaInk,
   },
   textoSecundario: {
-    color: '#1f4d3d',
+    color: TOKENS.ink,
   },
 });

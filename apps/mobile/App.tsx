@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from './src/features/auth/model/use-auth-store';
 import { LoginScreen } from './src/features/auth/ui';
 import { AgendaScreen } from './src/features/agenda/ui';
+import { TOKENS } from './src/shared/theme/tokens';
 
 export default function App() {
   const { estado, restaurarSesion } = useAuthStore();
@@ -34,8 +35,8 @@ export default function App() {
           <Text style={styles.logoTexto}>GAFER</Text>
         </View>
         <Text style={styles.tituloSplash}>Saneamiento Ambiental</Text>
-        <Text style={styles.subtituloSplash}>Operaciones de Campo</Text>
-        <ActivityIndicator size="small" color="#a3e9d2" style={styles.spinner} />
+        <Text style={styles.subtituloSplash}>Operaciones de Campo (Offline-First)</Text>
+        <ActivityIndicator size="small" color={TOKENS.hoja} style={styles.spinner} />
       </View>
     );
   }
@@ -50,39 +51,39 @@ export default function App() {
 const styles = StyleSheet.create({
   splashContenedor: {
     flex: 1,
-    backgroundColor: '#1f4d3d',
+    backgroundColor: TOKENS.marca,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
   logoBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     paddingHorizontal: 20,
     paddingVertical: 8,
-    borderRadius: 24,
+    borderRadius: TOKENS.radiusSm,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
   },
   logoTexto: {
     fontSize: 22,
     fontWeight: '900',
-    color: '#ffffff',
+    color: TOKENS.marcaInk,
     letterSpacing: 3,
   },
   tituloSplash: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#ffffff',
+    fontWeight: '800',
+    color: TOKENS.marcaInk,
     textAlign: 'center',
   },
   subtituloSplash: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#d4edda',
     marginTop: 6,
     textAlign: 'center',
   },
   spinner: {
-    marginTop: 28,
+    marginTop: 24,
   },
 });
