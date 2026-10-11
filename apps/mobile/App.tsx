@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from './src/features/auth/model/use-auth-store';
 import { LoginScreen } from './src/features/auth/ui';
 import { AgendaScreen } from './src/features/agenda/ui';
 import { TOKENS } from './src/shared/theme/tokens';
 
-export default function App() {
+function AppContent() {
   const { estado, restaurarSesion } = useAuthStore();
   const [iniciando, setIniciando] = useState(true);
 
@@ -46,6 +47,14 @@ export default function App() {
   }
 
   return <AgendaScreen />;
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppContent />
+    </SafeAreaProvider>
+  );
 }
 
 const styles = StyleSheet.create({

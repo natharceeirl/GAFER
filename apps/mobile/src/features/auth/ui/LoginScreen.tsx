@@ -6,8 +6,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '../model/use-auth-store';
 import { validarFormularioLogin } from '../model/login-validation';
@@ -45,8 +45,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginExitoso }) => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" />
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
+      <StatusBar style="dark" />
       <KeyboardAvoidingView
         style={styles.keyboardContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -138,7 +138,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginExitoso }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: TOKENS.marca,
+    backgroundColor: TOKENS.bg,
   },
   keyboardContainer: {
     flex: 1,

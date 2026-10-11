@@ -3,13 +3,13 @@ import {
   StyleSheet,
   Text,
   View,
-  SafeAreaView,
   FlatList,
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '../../auth/model/use-auth-store';
 import {
@@ -206,7 +206,7 @@ export const AgendaScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       <StatusBar style="light" />
 
       {/* Cabecera superior con estilo de Garita de Control */}
@@ -324,7 +324,7 @@ export const AgendaScreen: React.FC = () => {
       ) : null}
 
       {/* Lista de Fichas de Campo */}
-      <View style={styles.cuerpo}>
+      <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.cuerpo}>
         {cargando ? (
           <View style={styles.cargandoContenedor}>
             <ActivityIndicator size="large" color={TOKENS.marca} />
@@ -363,7 +363,7 @@ export const AgendaScreen: React.FC = () => {
             }
           />
         )}
-      </View>
+      </SafeAreaView>
     </SafeAreaView>
   );
 };
