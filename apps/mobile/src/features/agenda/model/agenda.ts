@@ -11,6 +11,7 @@ export interface ItemAgenda extends VisitaProgramada {
   sedeDireccion: string;
   servicioTipo: string;
   tecnicoTitularNombre?: string | null;
+  numeroOrden?: string;
 }
 
 export interface SedeActiva {
@@ -184,6 +185,7 @@ export const useAgendaStore = create<AgendaState>((set, get) => ({
       const visitasSimuladas: ItemAgenda[] = [
         {
           id: 'a1111111-1111-4000-8000-000000000001',
+          numeroOrden: 'ORD-2026-001',
           fecha: hoy,
           hora: '08:30',
           clienteId: 'c1a2c3d4-0001-4000-8000-000000000001',
@@ -199,6 +201,7 @@ export const useAgendaStore = create<AgendaState>((set, get) => ({
         },
         {
           id: 'a2222222-2222-4000-8000-000000000002',
+          numeroOrden: 'ORD-2026-002',
           fecha: hoy,
           hora: '11:15',
           clienteId: 'c1a2c3d4-0002-4000-8000-000000000002',
@@ -214,6 +217,7 @@ export const useAgendaStore = create<AgendaState>((set, get) => ({
         },
         {
           id: 'a3333333-3333-4000-8000-000000000003',
+          numeroOrden: 'ORD-2026-003',
           fecha: hoy,
           hora: '15:00',
           clienteId: 'c1a2c3d4-0003-4000-8000-000000000003',
@@ -255,7 +259,12 @@ export const useAgendaStore = create<AgendaState>((set, get) => ({
     );
 
     // Conectar reactivamente con el borrador de inspección de campo
-    useBorradorStore.getState().iniciarBorrador(visita.servicioId);
+    useBorradorStore.getState().iniciarBorrador(visita.servicioId, {
+      clienteRazonSocial: visita.clienteRazonSocial,
+      sedeNombre: visita.sedeNombre,
+      numeroOrden: visita.numeroOrden,
+      servicioTipo: visita.servicioTipo,
+    });
     if (visita.observaciones) {
       useBorradorStore.getState().actualizarObservaciones(visita.observaciones);
     }
@@ -270,7 +279,12 @@ export const useAgendaStore = create<AgendaState>((set, get) => ({
 
   iniciarAtencionEnSede: (sede: SedeActiva, servicioId?: string) => {
     const idServicio = servicioId || `contingencia-${sede.id.substring(0, 8)}`;
-    useBorradorStore.getState().iniciarBorrador(idServicio);
+    useBorradorStore.getState().iniciarBorrador(idServicio, {
+      clienteRazonSocial: sede.clienteRazonSocial,
+      sedeNombre: sede.nombre,
+      numeroOrden: 'CONTINGENCIA',
+      servicioTipo: 'ATENCIÓN EN SEDE ACTIVA',
+    });
     set({ sedeSeleccionada: sede });
   },
 

@@ -43,7 +43,6 @@ export const AgendaScreen: React.FC = () => {
 
   const [vistaActiva, setVistaActiva] = useState<VistaAgenda>('MIS_VISITAS');
   const [busquedaSede, setBusquedaSede] = useState('');
-  const [mensajeExito, setMensajeExito] = useState<string | null>(null);
 
   const tecnicoId = usuario?.id || 'tecnico-defecto-id';
 
@@ -71,18 +70,27 @@ export const AgendaScreen: React.FC = () => {
   };
 
   const handleIniciarVisita = (visita: ItemAgenda) => {
-    const ok = iniciarAtencionVisita(visita.id);
-    if (ok) {
-      setMensajeExito(
-        `Inspección iniciada: ${visita.clienteRazonSocial} (${visita.sedeNombre})`,
-      );
-    }
+    iniciarAtencionVisita(visita.id);
   };
 
   const handleIniciarSede = (sede: SedeActiva) => {
     iniciarAtencionEnSede(sede);
-    setMensajeExito(
-      `Atención iniciada en sede ${sede.nombre} (${sede.clienteRazonSocial})`,
+  };
+
+  const handleConcluirInspeccion = () => {
+    Alert.alert(
+      'Concluir Inspección',
+      '¿Desea finalizar la atención de esta visita en su terminal móvil?',
+      [
+        { text: 'Permanecer en servicio', style: 'cancel' },
+        {
+          text: 'Concluir',
+          style: 'destructive',
+          onPress: () => {
+            limpiarBorrador();
+          },
+        },
+      ],
     );
   };
 
@@ -105,7 +113,9 @@ export const AgendaScreen: React.FC = () => {
       <View style={[styles.fichaOrden, enCurso && styles.fichaEnCurso]}>
         <View style={styles.cabeceraFicha}>
           <View style={styles.badgeHora}>
-            <Text style={styles.textoHora}>{item.hora} HRS</Text>
+            <Text style={styles.textoHora}>
+              {item.hora} HRS{item.numeroOrden ? ` · ${item.numeroOrden}` : ''}
+            </Text>
           </View>
 
           <View
@@ -193,13 +203,19 @@ export const AgendaScreen: React.FC = () => {
         </Text>
 
         <View style={styles.accionesVisita}>
-          <Button
-            testID={`boton-sede-${item.id}`}
-            titulo="Atender en Sede (§8.2)"
-            onPress={() => handleIniciarSede(item)}
-            variante="secundario"
-            style={styles.botonAtender}
-          />
+          {estaSeleccionada ? (
+            <View style={styles.badgeEnCurso}>
+              <Text style={styles.textoEnCurso}>● EN ATENCIÓN ACTIVA</Text>
+            </View>
+          ) : (
+            <Button
+              testID={`boton-sede-${item.id}`}
+              titulo="Atender en Sede (§8.2)"
+              onPress={() => handleIniciarSede(item)}
+              variante="secundario"
+              style={styles.botonAtender}
+            />
+          )}
         </View>
       </View>
     );
@@ -236,33 +252,33 @@ export const AgendaScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Banner de inspección activa en borrador */}
+      {/* Placa de Inspección Activa en Garita */}
       {borrador ? (
-        <View style={styles.bannerBorrador}>
-          <View style={styles.bannerBorradorInfo}>
-            <Text style={styles.bannerBorradorTitulo}>INSPECCIÓN EN CURSO</Text>
-            <Text style={styles.bannerBorradorSubtitulo}>
-              Servicio ID: {borrador.servicioId}
+        <View style={styles.placaInspeccionActiva}>
+          <View style={styles.placaInspeccionInfo}>
+            <View style={styles.indicadorEnServicio}>
+              <View style={styles.puntoVerdeActivo} />
+              <Text style={styles.indicadorTexto}>EN SERVICIO ACTIVO</Text>
+            </View>
+            <Text style={styles.placaClienteTexto} numberOfLines={1}>
+              {borrador.clienteRazonSocial || 'Atención en Sede'}
+              {borrador.sedeNombre ? ` · ${borrador.sedeNombre}` : ''}
+            </Text>
+            <Text style={styles.placaDetalleTexto} numberOfLines={1}>
+              {borrador.servicioTipo || 'Inspección de Saneamiento'}
+              {borrador.numeroOrden ? ` · ${borrador.numeroOrden}` : ''}
             </Text>
           </View>
           <TouchableOpacity
-            onPress={limpiarBorrador}
-            style={styles.botonFinalizarBorrador}
+            testID="boton-concluir-inspeccion"
+            onPress={handleConcluirInspeccion}
+            style={styles.botonConcluir}
             accessibilityRole="button"
+            accessibilityLabel="Concluir inspección activa"
           >
-            <Text style={styles.textoFinalizarBorrador}>FINALIZAR</Text>
+            <Text style={styles.textoBotonConcluir}>CONCLUIR</Text>
           </TouchableOpacity>
         </View>
-      ) : null}
-
-      {/* Mensajes de retroalimentación */}
-      {mensajeExito ? (
-        <AlertBanner
-          tipo="info"
-          mensaje={mensajeExito}
-          onCerrar={() => setMensajeExito(null)}
-          style={styles.alertaMensaje}
-        />
       ) : null}
 
       {error ? (
@@ -419,40 +435,61 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.6,
   },
-  bannerBorrador: {
-    backgroundColor: TOKENS.amarilloInk,
+  placaInspeccionActiva: {
+    backgroundColor: TOKENS.panelRaised,
     borderLeftWidth: 4,
-    borderLeftColor: TOKENS.amarillo,
+    borderLeftColor: TOKENS.marca,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: TOKENS.rule,
+    borderBottomWidth: 1.5,
+    borderBottomColor: TOKENS.ruleStrong,
   },
-  bannerBorradorInfo: {
+  placaInspeccionInfo: {
     flex: 1,
+    paddingRight: 10,
   },
-  bannerBorradorTitulo: {
-    fontSize: 11,
+  indicadorEnServicio: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  puntoVerdeActivo: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: TOKENS.marca,
+    marginRight: 6,
+  },
+  indicadorTexto: {
+    fontSize: 10,
     fontWeight: '800',
-    color: TOKENS.amarillo,
-    letterSpacing: 0.5,
+    color: TOKENS.marca,
+    letterSpacing: 0.6,
   },
-  bannerBorradorSubtitulo: {
+  placaClienteTexto: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: TOKENS.ink,
+    letterSpacing: 0.2,
+  },
+  placaDetalleTexto: {
     fontSize: 11,
     color: TOKENS.inkSoft,
     marginTop: 1,
   },
-  botonFinalizarBorrador: {
-    backgroundColor: TOKENS.amarillo,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  botonConcluir: {
+    backgroundColor: TOKENS.panel,
+    borderWidth: 1.5,
+    borderColor: TOKENS.ruleStrong,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: TOKENS.radiusSm,
   },
-  textoFinalizarBorrador: {
-    color: TOKENS.amarilloInk,
+  textoBotonConcluir: {
+    color: TOKENS.ink,
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
