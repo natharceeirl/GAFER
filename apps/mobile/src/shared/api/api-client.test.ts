@@ -30,18 +30,22 @@ describe('MobileApiClient', () => {
     const client = new MobileApiClient('http://test-server:3000', mockFetch as any);
     const res = await client.login('  rgomez_tec  ', 'Gafer2026!NuevaTec');
 
-    expect(mockFetch).toHaveBeenCalledWith('http://test-server:3000/api/auth/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({
-        usuario: 'rgomez_tec',
-        clave: 'Gafer2026!NuevaTec',
-        cliente: 'mobile',
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://test-server:3000/api/auth/login',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          usuario: 'rgomez_tec',
+          clave: 'Gafer2026!NuevaTec',
+          cliente: 'mobile',
+        }),
+        signal: expect.anything(),
       }),
-    });
+    );
 
     expect(res.token).toBe('jwt-token-valido-123');
     expect(res.usuario.cargo).toBe('TECNICO_OPERADOR');
@@ -93,5 +97,27 @@ describe('MobileApiClient', () => {
     const client = new MobileApiClient('http://test-server:3000', mockFetch as any);
 
     await expect(client.login('tecnico', 'clave')).rejects.toThrow(ApiError);
+  });
+
+  it('permite consultar y actualizar la URL base dinámicamente', () => {
+    const client = new MobileApiClient('http://192.168.1.10:3000/');
+    expect(client.getBaseUrl()).toBe('http://192.168.1.10:3000');
+
+    client.setBaseUrl('http://10.0.2.2:3000/');
+    expect(client.getBaseUrl()).toBe('http://10.0.2.2:3000');
+  });
+
+  it('lanza ErrorDeConexion con mensaje claro si la petición expira por timeout', async () => {
+    const mockFetch = vi.fn().mockImplementation(() => {
+      const err = new Error('The operation was aborted');
+      err.name = 'AbortError';
+      return Promise.reject(err);
+    });
+
+    const client = new MobileApiClient('http://test-server:3000', mockFetch as any);
+
+    await expect(client.login('tecnico', 'clave')).rejects.toThrow(
+      /Tiempo de espera agotado al conectar/,
+    );
   });
 });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,6 +7,8 @@ import {
   Platform,
   ScrollView,
   SafeAreaView,
+  TouchableOpacity,
+  NativeModules,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '../model/use-auth-store';
@@ -17,14 +19,47 @@ export interface LoginScreenProps {
   onLoginExitoso?: () => void;
 }
 
+const detectarHostMetro = (): string | null => {
+  try {
+    const scriptURL: string = (NativeModules as any)?.SourceCode?.scriptURL || '';
+    const match = scriptURL.match(/^https?:\/\/([^:/]+)/);
+    if (match && match[1] && match[1] !== 'localhost' && match[1] !== '127.0.0.1') {
+      return `http://${match[1]}:3000`;
+    }
+  } catch {
+    // Entorno no nativo o fallback
+  }
+  return null;
+};
+
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginExitoso }) => {
   const [usuario, setUsuario] = useState('');
   const [clave, setClave] = useState('');
   const [errorUsuario, setErrorUsuario] = useState<string | null>(null);
   const [errorClave, setErrorClave] = useState<string | null>(null);
+  const [mostrarConfigServidor, setMostrarConfigServidor] = useState(false);
 
-  const { estado, error: errorAuth, iniciarSesion, limpiarError } = useAuthStore();
+  const {
+    estado,
+    error: errorAuth,
+    servidorUrl,
+    iniciarSesion,
+    iniciarSesionDemo,
+    actualizarServidorUrl,
+    limpiarError,
+  } = useAuthStore();
+
+  const [inputServidor, setInputServidor] = useState(servidorUrl);
   const estaCargando = estado === 'CARGANDO';
+
+  // Si estamos en un dispositivo físico con Expo Go, detectar automáticamente la IP del host
+  useEffect(() => {
+    const hostDetectado = detectarHostMetro();
+    if (hostDetectado && servidorUrl === 'http://localhost:3000') {
+      actualizarServidorUrl(hostDetectado);
+      setInputServidor(hostDetectado);
+    }
+  }, [servidorUrl, actualizarServidorUrl]);
 
   const handleSubmit = async () => {
     limpiarError();
@@ -40,6 +75,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginExitoso }) => {
     const exito = await iniciarSesion(usuario, clave);
     if (exito && onLoginExitoso) {
       onLoginExitoso();
+    }
+  };
+
+  const handleIngresoDemo = async () => {
+    limpiarError();
+    const exito = await iniciarSesionDemo(usuario || 'demo.tecnico1');
+    if (exito && onLoginExitoso) {
+      onLoginExitoso();
+    }
+  };
+
+  const handleGuardarServidor = () => {
+    if (inputServidor.trim()) {
+      actualizarServidorUrl(inputServidor.trim());
+      setMostrarConfigServidor(false);
     }
   };
 
@@ -79,7 +129,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginExitoso }) => {
             <Input
               testID="input-usuario"
               label="Usuario o Correo"
-              placeholder="ej. jserna o tecnico@gafer.pe"
+              placeholder="ej. demo.tecnico1 o jserna"
               valor={usuario}
               onCambio={(texto) => {
                 setUsuario(texto);
@@ -107,7 +157,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginExitoso }) => {
 
             <Button
               testID="boton-ingresar"
-              titulo="Acceder a Agenda"
+              titulo={estaCargando ? 'Conectando...' : 'Acceder con API'}
               onPress={handleSubmit}
               cargando={estaCargando}
               deshabilitado={estaCargando}
@@ -115,9 +165,55 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginExitoso }) => {
               style={styles.botonAcceso}
             />
 
+            <View style={styles.separadorO}>
+              <View style={styles.lineaSeparador} />
+              <Text style={styles.textoSeparadorO}>O PARA PROBAR AHORA</Text>
+              <View style={styles.lineaSeparador} />
+            </View>
+
+            <Button
+              testID="boton-demo"
+              titulo="Ingresar en Modo Demostración (Offline)"
+              onPress={handleIngresoDemo}
+              deshabilitado={estaCargando}
+              variante="secundario"
+              style={styles.botonDemo}
+            />
+
+            {/* Ajustes del Servidor API para pruebas en red local */}
+            <View style={styles.servidorSeccion}>
+              <TouchableOpacity
+                onPress={() => setMostrarConfigServidor(!mostrarConfigServidor)}
+                style={styles.toggleServidor}
+                accessibilityRole="button"
+              >
+                <Text style={styles.toggleServidorTexto}>
+                  ⚙ Servidor: {servidorUrl} ({mostrarConfigServidor ? 'ocultar' : 'cambiar'})
+                </Text>
+              </TouchableOpacity>
+
+              {mostrarConfigServidor ? (
+                <View style={styles.cajaConfigServidor}>
+                  <Input
+                    label="Dirección del Servidor API"
+                    placeholder="http://192.168.X.X:3000"
+                    valor={inputServidor}
+                    onCambio={setInputServidor}
+                    ayuda="En celular físico, ingrese la IP de su PC en la misma red Wi-Fi."
+                  />
+                  <Button
+                    titulo="Guardar Servidor"
+                    onPress={handleGuardarServidor}
+                    variante="secundario"
+                    style={styles.botonGuardarServidor}
+                  />
+                </View>
+              ) : null}
+            </View>
+
             <View style={styles.footerAviso}>
               <Text style={styles.footerTexto}>
-                Acceso restringido para personal técnico acreditado. Las operaciones se registrarán de forma local para sincronización posterior.
+                Acceso para personal técnico acreditado. Las operaciones de campo se registran localmente para sincronización posterior.
               </Text>
             </View>
           </View>
@@ -194,11 +290,58 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   botonAcceso: {
-    marginTop: 18,
+    marginTop: 14,
+  },
+  separadorO: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 14,
+  },
+  lineaSeparador: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e2e8f0',
+  },
+  textoSeparadorO: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94a3b8',
+    marginHorizontal: 10,
+    letterSpacing: 0.6,
+  },
+  botonDemo: {
+    marginBottom: 10,
+  },
+  servidorSeccion: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  toggleServidor: {
+    paddingVertical: 6,
+    alignItems: 'center',
+  },
+  toggleServidorTexto: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  cajaConfigServidor: {
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  botonGuardarServidor: {
+    height: 40,
+    marginTop: 6,
   },
   footerAviso: {
-    marginTop: 20,
-    paddingTop: 16,
+    marginTop: 16,
+    paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: '#f0f2f5',
   },

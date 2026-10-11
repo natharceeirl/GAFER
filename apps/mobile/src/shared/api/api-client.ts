@@ -26,15 +26,14 @@ export class UsuarioInactivoError extends ApiError {
 }
 
 export class ErrorDeConexion extends Error {
-  constructor(mensaje = 'No se pudo conectar con el servidor. Verifique su conexión a internet.') {
+  constructor(mensaje = 'Sin conexión con el servidor. Verifique su red.') {
     super(mensaje);
     this.name = 'ErrorDeConexion';
   }
 }
 
 /**
- * Resuelve la URL base de la API según las variables de entorno y el entorno de ejecución.
- * Para emuladores Android oficiales de Google, 10.0.2.2 mapea a 127.0.0.1 de la máquina anfitriona.
+ * Resuelve la URL base de la API según variables de entorno o valor por defecto.
  */
 export function obtenerBaseUrl(): string {
   if (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_URL) {
@@ -44,14 +43,28 @@ export function obtenerBaseUrl(): string {
 }
 
 export class MobileApiClient {
+  private activeBaseUrl: string;
+
   constructor(
-    private readonly baseUrl: string = obtenerBaseUrl(),
+    baseUrl: string = obtenerBaseUrl(),
     private readonly fetchFn: typeof fetch = globalThis.fetch ? globalThis.fetch.bind(globalThis) : fetch,
-  ) {}
+    private readonly timeoutMs: number = 6000,
+  ) {
+    this.activeBaseUrl = baseUrl.trim().replace(/\/+$/, '');
+  }
+
+  setBaseUrl(url: string): void {
+    this.activeBaseUrl = url.trim().replace(/\/+$/, '');
+  }
+
+  getBaseUrl(): string {
+    return this.activeBaseUrl;
+  }
 
   /**
    * Autenticación de usuario para cliente móvil (Spec §12, §16 / Decisión C10).
    * Siempre envía cliente: 'mobile' para autorizar el rol TECNICO_OPERADOR.
+   * Cuenta con AbortController de 6s para evitar bloqueos infinitos de red en Android.
    */
   async login(usuario: string, clave: string): Promise<LoginResponse> {
     const payload: LoginRequest = {
@@ -60,18 +73,32 @@ export class MobileApiClient {
       cliente: 'mobile',
     };
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+
     let response: Response;
     try {
-      response = await this.fetchFn(`${this.baseUrl}/api/auth/login`, {
+      response = await this.fetchFn(`${this.activeBaseUrl}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
         body: JSON.stringify(payload),
+        signal: controller.signal as any,
       });
-    } catch {
-      throw new ErrorDeConexion();
+    } catch (err: unknown) {
+      const errorObj = err as { name?: string };
+      if (errorObj?.name === 'AbortError') {
+        throw new ErrorDeConexion(
+          `Tiempo de espera agotado al conectar con ${this.activeBaseUrl}. Verifique que el servidor API esté iniciado y la IP sea accesible desde su red.`,
+        );
+      }
+      throw new ErrorDeConexion(
+        `No se pudo conectar con el servidor en ${this.activeBaseUrl}. Verifique su conexión y la dirección del backend.`,
+      );
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     if (!response.ok) {
