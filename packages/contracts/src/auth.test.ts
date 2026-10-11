@@ -84,5 +84,13 @@ describe('Contratos de Autenticación y Roles (GAF-8 / Spec §12)', () => {
       expect(() => CrearUsuarioSchema.parse({ ...base, cargo: 'OTRO' })).toThrow();
       expect(() => CrearUsuarioSchema.parse({ ...base, usuario: 'con espacio' })).toThrow();
     });
+
+    it('AsignarClavePersonalSchema valida longitud mínima de 12 caracteres', async () => {
+      const { AsignarClavePersonalSchema } = await import('./auth');
+      expect(() => AsignarClavePersonalSchema.parse({ clave: 'corta-11-ch' })).toThrow();
+      const valido = AsignarClavePersonalSchema.parse({ clave: 'MiClaveSegura2026!' });
+      expect(valido.clave).toBe('MiClaveSegura2026!');
+    });
   });
 });
+

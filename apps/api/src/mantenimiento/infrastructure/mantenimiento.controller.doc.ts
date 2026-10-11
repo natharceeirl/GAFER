@@ -390,6 +390,20 @@ export function ApiActivarPersonalDoc() {
   );
 }
 
+export function ApiAsignarClavePersonalDoc() {
+  return applyDecorators(
+    ApiOperation({
+      summary: 'Asignar o restablecer contraseña a un usuario de personal (GAF-96)',
+      description: 'Permite a un Administrador asignar o actualizar la clave de un usuario con hash scrypt.',
+    }),
+    ApiParam({ name: 'id', description: 'UUID del colaborador' }),
+    ApiResponse({ status: 200, description: 'Clave actualizada correctamente' }),
+    ApiResponse({ status: 400, description: 'Clave inválida o personal sin usuario asignado', type: BadRequestErrorDto }),
+    ApiResponse({ status: 404, description: 'Personal no encontrado', type: NotFoundErrorDto }),
+  );
+}
+
+
 // ==========================================
 // STORAGE S3 (MINIO)
 // ==========================================

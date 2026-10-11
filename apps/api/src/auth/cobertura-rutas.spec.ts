@@ -54,6 +54,7 @@ const MATRIZ_ESPERADA: Array<[string, string]> = [
   ['PATCH /api/mantenimiento/personal/:id', 'A'],
   ['PATCH /api/mantenimiento/personal/:id/desactivar', 'A'],
   ['PATCH /api/mantenimiento/personal/:id/activar', 'A'],
+  ['PATCH /api/mantenimiento/personal/:id/clave', 'A'],
   ['POST /api/mantenimiento/storage/upload-url', 'A'],
   ['POST /api/mantenimiento/storage/download-url', 'AT'],
   ['GET /api/mantenimiento/catalogos-texto', 'AST'],

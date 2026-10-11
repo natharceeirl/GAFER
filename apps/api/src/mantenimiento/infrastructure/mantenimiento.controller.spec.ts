@@ -55,6 +55,7 @@ describe('MantenimientoController', () => {
   let mockActualizarPersonalUseCase: jest.Mocked<any>;
   let mockDesactivarPersonalUseCase: jest.Mocked<DesactivarPersonalUseCase>;
   let mockActivarPersonalUseCase: jest.Mocked<any>;
+  let mockAsignarClavePersonalUseCase: jest.Mocked<any>;
   let mockListarCatalogosTextoUseCase: jest.Mocked<any>;
   let mockObtenerCatalogoTextoUseCase: jest.Mocked<any>;
   let mockActualizarCatalogoTextoUseCase: jest.Mocked<any>;
@@ -96,6 +97,7 @@ describe('MantenimientoController', () => {
     mockActualizarPersonalUseCase = { execute: jest.fn() } as any;
     mockDesactivarPersonalUseCase = { execute: jest.fn() } as any;
     mockActivarPersonalUseCase = { execute: jest.fn() } as any;
+    mockAsignarClavePersonalUseCase = { execute: jest.fn() } as any;
     mockListarCatalogosTextoUseCase = { execute: jest.fn() } as any;
     mockObtenerCatalogoTextoUseCase = { execute: jest.fn() } as any;
     mockActualizarCatalogoTextoUseCase = { execute: jest.fn() } as any;
@@ -175,6 +177,7 @@ describe('MantenimientoController', () => {
       mockActualizarPersonalUseCase,
       mockDesactivarPersonalUseCase,
       mockActivarPersonalUseCase,
+      mockAsignarClavePersonalUseCase,
       mockListarCatalogosTextoUseCase,
       mockObtenerCatalogoTextoUseCase,
       mockActualizarCatalogoTextoUseCase,
@@ -684,7 +687,40 @@ describe('MantenimientoController', () => {
       const actRes = await controller.activarPersonal('p-1');
       expect(actRes.estado).toBe('ACTIVO');
     });
+
+    it('debe asignar clave a colaborador desde endpoint del controlador', async () => {
+      const personalConUsuario = new Personal({
+        id: 'p-1',
+        dni: '45892312',
+        nombres: 'Juan',
+        apellidos: 'Perez',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '958123456',
+        usuario: 'JPEREZ',
+        estado: 'ACTIVO',
+      });
+      mockPersonalRepo.buscarPorId.mockResolvedValue(personalConUsuario);
+      mockAsignarClavePersonalUseCase.execute.mockResolvedValue(undefined);
+
+      const res = await controller.asignarClavePersonal(
+        'p-1',
+        { clave: 'Gafer2026!Segura' },
+        { id: 'admin-1', usuario: 'ADMIN', cargo: 'ADMINISTRADOR', tokenVersion: 1 },
+      );
+
+      expect(mockAsignarClavePersonalUseCase.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          personalId: 'p-1',
+          clave: 'Gafer2026!Segura',
+          actorUsuario: 'ADMIN',
+          actorRol: 'ADMINISTRADOR',
+        }),
+      );
+      expect(res.usuario).toBe('JPEREZ');
+      expect(res.mensaje).toBe('Clave actualizada correctamente');
+    });
   });
+
 
   describe('Storage Endpoints', () => {
     it('debe generar presigned upload URL', async () => {

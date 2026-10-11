@@ -1,14 +1,20 @@
 export class ConfiguracionSistema {
   constructor(
     public readonly id: string = 'global',
-    public directorNombre: string = 'Ing. Carlos Medina Ruiz',
-    public directorCip: string = '84512',
+    public directorNombre: string | null = null,
+    public directorCip: string | null = null,
     public directorFirma: string | null = null,
-    public resolucionSanitaria: string = '0023-2024-DESA/MINSA',
+    public resolucionSanitaria: string = '',
     public parametros: Record<string, unknown> = {},
     public actualizadoPor: string | null = null,
     public readonly updatedAt?: Date,
   ) {}
+
+  removerDirector(): void {
+    this.directorNombre = null;
+    this.directorCip = null;
+    this.directorFirma = null;
+  }
 
   actualizarDirector(nombre: string, cip: string, firma?: string | null): void {
     const nombreLimpio = nombre.trim();

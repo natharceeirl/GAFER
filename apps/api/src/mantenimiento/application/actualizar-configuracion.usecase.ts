@@ -11,7 +11,7 @@ export interface ActualizarConfiguracionCommand {
     nombre: string;
     cip: string;
     firma?: string | null;
-  };
+  } | null;
   resolucionSanitaria?: string;
   parametros?: Record<string, unknown>;
   actorId?: string | null;
@@ -37,16 +37,20 @@ export class ActualizarConfiguracionUseCase {
     const config = await this.repository.obtener();
 
     const payloadAnterior = {
-      director: {
-        nombre: config.directorNombre,
-        cip: config.directorCip,
-        firma: config.directorFirma,
-      },
+      director: config.directorNombre
+        ? {
+            nombre: config.directorNombre,
+            cip: config.directorCip,
+            firma: config.directorFirma,
+          }
+        : null,
       resolucionSanitaria: config.resolucionSanitaria,
       parametros: config.parametros,
     };
 
-    if (command.director) {
+    if (command.director === null) {
+      config.removerDirector();
+    } else if (command.director) {
       config.actualizarDirector(
         command.director.nombre,
         command.director.cip,
@@ -75,11 +79,13 @@ export class ActualizarConfiguracionUseCase {
       entidadId: 'global',
       payloadAnterior,
       payloadNuevo: {
-        director: {
-          nombre: config.directorNombre,
-          cip: config.directorCip,
-          firma: config.directorFirma,
-        },
+        director: config.directorNombre
+          ? {
+              nombre: config.directorNombre,
+              cip: config.directorCip,
+              firma: config.directorFirma,
+            }
+          : null,
         resolucionSanitaria: config.resolucionSanitaria,
         parametros: config.parametros,
       },

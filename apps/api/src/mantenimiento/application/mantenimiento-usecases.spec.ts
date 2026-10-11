@@ -451,6 +451,108 @@ describe('Mantenimiento Use Cases (T2.2)', () => {
     });
   });
 
+  describe('ActualizarInsumoUseCase', () => {
+    it('actualiza datos del insumo correctamente', async () => {
+      const { ActualizarInsumoUseCase } = await import('./actualizar-insumo.usecase');
+      const { Insumo } = await import('../domain/insumo');
+      const insumo = new Insumo({
+        id: 'i1',
+        nombreComercial: 'Cipermetrina 25%',
+        principioActivo: 'Cipermetrina',
+        presentacion: 'LIQUIDO',
+        unidadMedida: 'L',
+        registroDigesa: '0487-2021/DCEA/DIGESA/SA',
+        concentracion: '25%',
+        dosisEstandar: '5ml/L',
+        fichaTecnicaKey: 'fichas/ciper.pdf',
+        hojaMsdsKey: 'msds/ciper.pdf',
+      });
+      const mockRepo = {
+        guardar: jest.fn().mockResolvedValue(undefined),
+        buscarPorId: jest.fn().mockResolvedValue(insumo),
+        buscarPorDigesa: jest.fn().mockResolvedValue(null),
+        listarActivos: jest.fn(),
+        listarTodos: jest.fn(),
+      };
+      const useCase = new ActualizarInsumoUseCase(mockRepo);
+      const res = await useCase.execute({
+        id: 'i1',
+        nombreComercial: 'Cipermetrina Plus',
+      });
+      expect(res.nombreComercial).toBe('Cipermetrina Plus');
+      expect(mockRepo.guardar).toHaveBeenCalled();
+    });
+
+    it('debe lanzar ConflictException si el nuevo registro DIGESA pertenece a otro insumo', async () => {
+      const { ActualizarInsumoUseCase } = await import('./actualizar-insumo.usecase');
+      const { ConflictException } = await import('@nestjs/common');
+      const { Insumo } = await import('../domain/insumo');
+      const insumo1 = new Insumo({
+        id: 'i1',
+        nombreComercial: 'Insumo 1',
+        principioActivo: 'Principio 1',
+        presentacion: 'LIQUIDO',
+        unidadMedida: 'L',
+        registroDigesa: '0487-2021/DCEA/DIGESA/SA',
+        concentracion: '25%',
+        dosisEstandar: '5ml/L',
+        fichaTecnicaKey: 'fichas/1.pdf',
+        hojaMsdsKey: 'msds/1.pdf',
+      });
+      const insumo2 = new Insumo({
+        id: 'i2',
+        nombreComercial: 'Insumo 2',
+        principioActivo: 'Principio 2',
+        presentacion: 'LIQUIDO',
+        unidadMedida: 'L',
+        registroDigesa: '9999-2022/DCEA/DIGESA/SA',
+        concentracion: '50%',
+        dosisEstandar: '10ml/L',
+        fichaTecnicaKey: 'fichas/2.pdf',
+        hojaMsdsKey: 'msds/2.pdf',
+      });
+      const mockRepo = {
+        guardar: jest.fn(),
+        buscarPorId: jest.fn().mockResolvedValue(insumo1),
+        buscarPorDigesa: jest.fn().mockResolvedValue(insumo2),
+        listarActivos: jest.fn(),
+        listarTodos: jest.fn(),
+      };
+      const useCase = new ActualizarInsumoUseCase(mockRepo);
+      await expect(
+        useCase.execute({ id: 'i1', registroDigesa: '9999-2022/DCEA/DIGESA/SA' }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('permite actualizar manteniendo su propio registro DIGESA', async () => {
+      const { ActualizarInsumoUseCase } = await import('./actualizar-insumo.usecase');
+      const { Insumo } = await import('../domain/insumo');
+      const insumo1 = new Insumo({
+        id: 'i1',
+        nombreComercial: 'Insumo 1',
+        principioActivo: 'Principio 1',
+        presentacion: 'LIQUIDO',
+        unidadMedida: 'L',
+        registroDigesa: '0487-2021/DCEA/DIGESA/SA',
+        concentracion: '25%',
+        dosisEstandar: '5ml/L',
+        fichaTecnicaKey: 'fichas/1.pdf',
+        hojaMsdsKey: 'msds/1.pdf',
+      });
+      const mockRepo = {
+        guardar: jest.fn().mockResolvedValue(undefined),
+        buscarPorId: jest.fn().mockResolvedValue(insumo1),
+        buscarPorDigesa: jest.fn().mockResolvedValue(insumo1),
+        listarActivos: jest.fn(),
+        listarTodos: jest.fn(),
+      };
+      const useCase = new ActualizarInsumoUseCase(mockRepo);
+      const res = await useCase.execute({ id: 'i1', registroDigesa: '0487-2021/DCEA/DIGESA/SA' });
+      expect(res.registroDigesa).toBe('0487-2021/DCEA/DIGESA/SA');
+      expect(mockRepo.guardar).toHaveBeenCalled();
+    });
+  });
+
   describe('ActualizarEquipoUseCase', () => {
     it('actualiza datos de un equipo existente', async () => {
       const { ActualizarEquipoUseCase } = await import('./actualizar-equipo.usecase');
@@ -598,6 +700,114 @@ describe('Mantenimiento Use Cases (T2.2)', () => {
       const res = await useCase.execute('p1');
       expect(res.getEstado()).toBe('ACTIVO');
       expect(mockRepo.guardar).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('AsignarClavePersonalUseCase', () => {
+    it('asigna clave a un usuario con hash scrypt y registra auditoría', async () => {
+      const { AsignarClavePersonalUseCase } = await import('./asignar-clave-personal.usecase');
+      const { Personal } = await import('../domain/personal');
+      const personal = new Personal({
+        id: 'p1',
+        dni: '45892312',
+        nombres: 'Juan',
+        apellidos: 'Perez',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '958123456',
+        usuario: 'JPEREZ',
+      });
+      const mockPersonalRepo = {
+        guardar: jest.fn(),
+        buscarPorId: jest.fn().mockResolvedValue(personal),
+        buscarPorDni: jest.fn(),
+        buscarPorUsuario: jest.fn(),
+        listarActivos: jest.fn(),
+        listarTodos: jest.fn(),
+      };
+      const mockKyselyDb = {
+        updateTable: jest.fn().mockReturnValue({
+          set: jest.fn().mockReturnValue({
+            where: jest.fn().mockReturnValue({
+              execute: jest.fn().mockResolvedValue(undefined),
+            }),
+          }),
+        }),
+      } as any;
+      const mockAuditoria = {
+        registrarEvento: jest.fn().mockResolvedValue({ id: 'evt-1' }),
+      } as any;
+
+      const useCase = new AsignarClavePersonalUseCase(mockPersonalRepo, mockKyselyDb, mockAuditoria);
+      await useCase.execute({
+        personalId: 'p1',
+        clave: 'Gafer2026!Segura',
+        actorId: 'admin-1',
+        actorUsuario: 'ADMIN',
+        actorRol: 'ADMINISTRADOR',
+      });
+
+      expect(mockKyselyDb.updateTable).toHaveBeenCalledWith('personal');
+      expect(mockAuditoria.registrarEvento).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modulo: 'PERSONAL',
+          accion: 'ASIGNAR_CLAVE_USUARIO',
+          entidadId: 'p1',
+        }),
+      );
+    }, 15000);
+
+    it('lanza NotFoundException si el colaborador no existe', async () => {
+      const { AsignarClavePersonalUseCase } = await import('./asignar-clave-personal.usecase');
+      const { NotFoundException } = await import('@nestjs/common');
+      const mockPersonalRepo = {
+        guardar: jest.fn(),
+        buscarPorId: jest.fn().mockResolvedValue(null),
+        buscarPorDni: jest.fn(),
+        buscarPorUsuario: jest.fn(),
+        listarActivos: jest.fn(),
+        listarTodos: jest.fn(),
+      };
+      const useCase = new AsignarClavePersonalUseCase(mockPersonalRepo, {} as any, {} as any);
+      await expect(
+        useCase.execute({
+          personalId: 'no-existe',
+          clave: 'Gafer2026!Segura',
+          actorUsuario: 'ADMIN',
+          actorRol: 'ADMINISTRADOR',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('lanza BadRequestException si el colaborador no tiene usuario asignado', async () => {
+      const { AsignarClavePersonalUseCase } = await import('./asignar-clave-personal.usecase');
+      const { BadRequestException } = await import('@nestjs/common');
+      const { Personal } = await import('../domain/personal');
+      const personalSinUsuario = new Personal({
+        id: 'p1',
+        dni: '45892312',
+        nombres: 'Sin',
+        apellidos: 'Usuario',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '958123456',
+        usuario: null,
+      });
+      const mockPersonalRepo = {
+        guardar: jest.fn(),
+        buscarPorId: jest.fn().mockResolvedValue(personalSinUsuario),
+        buscarPorDni: jest.fn(),
+        buscarPorUsuario: jest.fn(),
+        listarActivos: jest.fn(),
+        listarTodos: jest.fn(),
+      };
+      const useCase = new AsignarClavePersonalUseCase(mockPersonalRepo, {} as any, {} as any);
+      await expect(
+        useCase.execute({
+          personalId: 'p1',
+          clave: 'Gafer2026!Segura',
+          actorUsuario: 'ADMIN',
+          actorRol: 'ADMINISTRADOR',
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -792,9 +1002,45 @@ describe('Mantenimiento Use Cases (T2.2)', () => {
         );
       });
 
+      it('inicia con director nulo por defecto en el dominio (§13)', async () => {
+        const { ConfiguracionSistema } = await import('../domain/configuracion-sistema');
+        const config = new ConfiguracionSistema();
+        expect(config.directorNombre).toBeNull();
+        expect(config.directorCip).toBeNull();
+        expect(config.directorFirma).toBeNull();
+      });
+
+      it('permite remover el director técnico cuando se envía director: null', async () => {
+        const { ActualizarConfiguracionUseCase } = await import('./actualizar-configuracion.usecase');
+        const { ConfiguracionSistema } = await import('../domain/configuracion-sistema');
+        const config = new ConfiguracionSistema(
+          'global',
+          'Ing. Previo',
+          '12345',
+          null,
+          '0023-2024-DESA/MINSA',
+        );
+
+        const mockRepo = {
+          obtener: jest.fn().mockResolvedValue(config),
+          guardar: jest.fn().mockResolvedValue(undefined),
+        };
+
+        const useCase = new ActualizarConfiguracionUseCase(mockRepo, mockAuditoriaService);
+        const res = await useCase.execute({
+          director: null,
+          actorUsuario: 'ADMIN',
+          actorRol: 'ADMINISTRADOR',
+        });
+
+        expect(res.directorNombre).toBeNull();
+        expect(res.directorCip).toBeNull();
+      });
+
       it('consultar-auditoria exige rol ADMINISTRADOR', async () => {
         const { ConsultarAuditoriaUseCase } = await import('./consultar-auditoria.usecase');
         const useCase = new ConsultarAuditoriaUseCase(mockAuditoriaService);
+
 
         await expect(
           useCase.execute({ filtros: {}, actorRol: 'TECNICO_OPERADOR' }),

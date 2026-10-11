@@ -35,7 +35,9 @@ export type LoginResponse = z.infer<typeof LoginResponseSchema>;
 export const ClaveNuevaSchema = z
   .string()
   .min(12, 'La clave debe tener al menos 12 caracteres')
-  .max(128, 'La clave admite hasta 128 caracteres');
+  .max(128, 'La clave admite hasta 128 caracteres')
+  .describe('Contraseña o clave de acceso de al menos 12 caracteres');
+
 
 /** Alta o actualización de un usuario con clave desde la línea de comandos (`db:crear-usuario`). */
 export const CrearUsuarioSchema = z.object({
@@ -54,3 +56,9 @@ export const CrearUsuarioSchema = z.object({
   clave: ClaveNuevaSchema,
 });
 export type CrearUsuario = z.infer<typeof CrearUsuarioSchema>;
+
+/** Asignación o actualización de contraseña para personal técnico o administrativo desde el API (GAF-96). */
+export const AsignarClavePersonalSchema = z.object({
+  clave: ClaveNuevaSchema,
+});
+export type AsignarClavePersonal = z.infer<typeof AsignarClavePersonalSchema>;

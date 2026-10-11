@@ -4,6 +4,7 @@ import {
   ActualizarConfiguracionDto,
   ActualizarInsumoDto,
   AgregarItemCatalogoTextoDto,
+  AsignarClavePersonalDto,
   CambiarEstadoEquipoDto,
   ConsultaAuditoriaDto,
   CrearClienteDto,
@@ -81,7 +82,9 @@ const documentados: [string, Parameters<typeof metadatosOpenApi>[0], { obligator
     CrearPersonalDto,
     { obligatorios: ['dni', 'nombres', 'apellidos', 'cargo', 'telefono'], opcionales: ['usuario'] },
   ],
+  ['AsignarClavePersonalDto', AsignarClavePersonalDto, { obligatorios: ['clave'], opcionales: [] }],
   ['GenerarUploadUrlDto', GenerarUploadUrlDto, { obligatorios: ['key'], opcionales: ['contentType'] }],
+
   ['GenerarDownloadUrlDto', GenerarDownloadUrlDto, { obligatorios: ['key'], opcionales: [] }],
   ['ActualizarCatalogoTextoDto', ActualizarCatalogoTextoDto, { obligatorios: ['items'], opcionales: [] }],
   ['AgregarItemCatalogoTextoDto', AgregarItemCatalogoTextoDto, { obligatorios: ['item'], opcionales: [] }],
