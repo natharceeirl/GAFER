@@ -73,6 +73,21 @@ describe('DomainExceptionFilter', () => {
     );
   });
 
+  it('debe mapear errores de sede inactiva a HTTP 400 Bad Request', () => {
+    const error = new Error('No se pueden asignar servicios a una sede inactiva');
+
+    filter.catch(error, mockHost);
+
+    expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+    expect(mockResponse.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: HttpStatus.BAD_REQUEST,
+        error: 'Bad Request',
+        message: 'No se pueden asignar servicios a una sede inactiva',
+      }),
+    );
+  });
+
   it('debe preservar excepciones HTTP propias de NestJS (ValidationPipe, etc.)', () => {
     const httpEx = new BadRequestException(['El RUC debe ser una cadena válida']);
 

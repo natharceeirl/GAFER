@@ -74,6 +74,10 @@ export class DomainExceptionFilter implements ExceptionFilter {
         message.toLowerCase().includes('no válido') ||
         message.toLowerCase().includes('inválido') ||
         message.toLowerCase().includes('no puede') ||
+        message.toLowerCase().includes('no se puede') ||
+        message.toLowerCase().includes('no se pueden') ||
+        message.toLowerCase().includes('sede inactiva') ||
+        message.toLowerCase().includes('cliente inactivo') ||
         message.toLowerCase().includes('mayor a 0')
       ) {
         return response.status(HttpStatus.BAD_REQUEST).json({

@@ -405,6 +405,57 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
       });
       expect(badAreaRes.status).toBe(400);
     });
+
+    it('rechaza servicio contratado si la sede no existe (404)', async () => {
+      const res = await http.post('/mantenimiento/servicios-contratados', {
+        proyectoId: '00000000-0000-4000-8000-000000000000',
+        tipoServicio: 'DRT',
+        frecuencia: 'MENSUAL',
+        areaTotalM2: 500,
+        areaTratarM2: 300,
+      });
+      expect(res.status).toBe(404);
+      expect(res.body.message).toContain('No se encontró la sede/proyecto');
+    });
+
+    it('rechaza servicio contratado si la sede está inactiva (400)', async () => {
+      const clienteRes = await http.post('/mantenimiento/clientes', {
+        razonSocial: 'Empresa Sede Inactiva S.A.',
+        ruc: '20509990002',
+        codigoCorto: 'EMPINAC',
+        direccionFiscal: 'Av. Las Begonias 123',
+        giroNegocio: 'Servicios',
+        contactoNombre: 'Carlos',
+        contactoCargo: 'Admin',
+        contactoTelefono: '958123001',
+        contactoCorreo: 'admin@empinac.pe',
+      });
+      const sedeRes = await http.post('/mantenimiento/proyectos', {
+        clienteId: clienteRes.body.id,
+        nombre: 'SEDE_A_DESACTIVAR',
+        direccionSede: 'Av. Las Begonias 123',
+        distrito: 'San Isidro',
+        provincia: 'Lima',
+        departamento: 'Lima',
+        contactoNombre: 'Carlos',
+        contactoCargo: 'Admin',
+        contactoTelefono: '958123001',
+      });
+      const sedeId = sedeRes.body.id;
+
+      // Desactivar la sede
+      await http.patch(`/mantenimiento/proyectos/${sedeId}/desactivar`);
+
+      const res = await http.post('/mantenimiento/servicios-contratados', {
+        proyectoId: sedeId,
+        tipoServicio: 'DRT',
+        frecuencia: 'MENSUAL',
+        areaTotalM2: 500,
+        areaTratarM2: 300,
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain('No se pueden asignar servicios a una sede inactiva');
+    });
   });
 
   describe('Flujo de Catálogo de Insumos (GAF-22)', () => {

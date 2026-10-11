@@ -279,6 +279,109 @@ describe('Mantenimiento Use Cases (T2.2)', () => {
     });
   });
 
+  describe('RegistrarServicioContratadoUseCase', () => {
+    it('debe registrar un servicio contratado si la sede existe y está activa', async () => {
+      const { RegistrarServicioContratadoUseCase } = await import(
+        './registrar-servicio-contratado.usecase'
+      );
+      const mockServicioRepo = {
+        guardar: jest.fn().mockResolvedValue(undefined),
+        buscarPorId: jest.fn(),
+        buscarPorProyectoId: jest.fn(),
+      };
+      const mockProyecto = new Proyecto({
+        id: 'p1',
+        clienteId: 'c1',
+        nombre: 'SEDE_CENTRAL',
+        direccionSede: 'Av. Industrial 123',
+        distrito: 'Cerro Colorado',
+        provincia: 'Arequipa',
+        departamento: 'Arequipa',
+        contactoNombre: 'Juan',
+        contactoCargo: 'Jefe',
+        contactoTelefono: '958111222',
+        estado: 'ACTIVO',
+      });
+      mockProyectoRepo.buscarPorId.mockResolvedValue(mockProyecto);
+
+      const useCase = new RegistrarServicioContratadoUseCase(mockServicioRepo, mockProyectoRepo);
+      const res = await useCase.execute({
+        id: 's1',
+        proyectoId: 'p1',
+        tipoServicio: 'DSF',
+        frecuencia: 'MENSUAL',
+        areaTotalM2: 1000,
+        areaTratarM2: 500,
+      });
+
+      expect(res.id).toBe('s1');
+      expect(mockServicioRepo.guardar).toHaveBeenCalled();
+    });
+
+    it('debe lanzar NotFoundException si la sede no existe', async () => {
+      const { RegistrarServicioContratadoUseCase } = await import(
+        './registrar-servicio-contratado.usecase'
+      );
+      const { NotFoundException } = await import('@nestjs/common');
+      const mockServicioRepo = {
+        guardar: jest.fn().mockResolvedValue(undefined),
+        buscarPorId: jest.fn(),
+        buscarPorProyectoId: jest.fn(),
+      };
+      mockProyectoRepo.buscarPorId.mockResolvedValue(null);
+
+      const useCase = new RegistrarServicioContratadoUseCase(mockServicioRepo, mockProyectoRepo);
+      await expect(
+        useCase.execute({
+          id: 's1',
+          proyectoId: 'p-inexistente',
+          tipoServicio: 'DSF',
+          frecuencia: 'MENSUAL',
+          areaTotalM2: 1000,
+          areaTratarM2: 500,
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('debe lanzar BadRequestException si la sede está inactiva', async () => {
+      const { RegistrarServicioContratadoUseCase } = await import(
+        './registrar-servicio-contratado.usecase'
+      );
+      const { BadRequestException } = await import('@nestjs/common');
+      const mockServicioRepo = {
+        guardar: jest.fn().mockResolvedValue(undefined),
+        buscarPorId: jest.fn(),
+        buscarPorProyectoId: jest.fn(),
+      };
+      const mockProyectoInactivo = new Proyecto({
+        id: 'p1',
+        clienteId: 'c1',
+        nombre: 'SEDE_INACTIVA',
+        direccionSede: 'Av. Industrial 123',
+        distrito: 'Cerro Colorado',
+        provincia: 'Arequipa',
+        departamento: 'Arequipa',
+        contactoNombre: 'Juan',
+        contactoCargo: 'Jefe',
+        contactoTelefono: '958111222',
+        estado: 'INACTIVO',
+      });
+      mockProyectoRepo.buscarPorId.mockResolvedValue(mockProyectoInactivo);
+
+      const useCase = new RegistrarServicioContratadoUseCase(mockServicioRepo, mockProyectoRepo);
+      await expect(
+        useCase.execute({
+          id: 's1',
+          proyectoId: 'p1',
+          tipoServicio: 'DSF',
+          frecuencia: 'MENSUAL',
+          areaTotalM2: 1000,
+          areaTratarM2: 500,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
   describe('ActualizarServicioContratadoUseCase', () => {
     it('actualiza datos del servicio contratado correctamente', async () => {
       const { ActualizarServicioContratadoUseCase } = await import(
