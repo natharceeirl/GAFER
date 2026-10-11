@@ -28,14 +28,23 @@ export class KyselyConfiguracionRepository implements ConfiguracionRepository {
         ? JSON.parse(row.parametros)
         : (row.parametros as Record<string, unknown>) ?? {};
 
+    const directorNombre =
+      row.director_nombre && row.director_nombre.trim() !== ''
+        ? row.director_nombre.trim()
+        : null;
+    const directorCip =
+      row.director_cip && row.director_cip.trim() !== ''
+        ? row.director_cip.trim()
+        : null;
+
     return new ConfiguracionSistema(
       row.id,
-      row.director_nombre,
-      row.director_cip,
-      row.director_firma,
-      row.resolucion_sanitaria,
+      directorNombre,
+      directorCip,
+      row.director_firma ?? null,
+      row.resolucion_sanitaria ?? '',
       parametros,
-      row.actualizado_por,
+      row.actualizado_por ?? null,
       row.updated_at,
     );
   }
@@ -52,21 +61,21 @@ export class KyselyConfiguracionRepository implements ConfiguracionRepository {
       .insertInto('configuracion_sistema')
       .values({
         id: config.id,
-        director_nombre: config.directorNombre,
-        director_cip: config.directorCip,
-        director_firma: config.directorFirma,
-        resolucion_sanitaria: config.resolucionSanitaria,
-        parametros: JSON.stringify(config.parametros) as any,
+        director_nombre: config.directorNombre ?? '',
+        director_cip: config.directorCip ?? '',
+        director_firma: config.directorFirma ?? null,
+        resolucion_sanitaria: config.resolucionSanitaria ?? '',
+        parametros: JSON.stringify(config.parametros ?? {}) as any,
         actualizado_por: actualizadoPor,
         updated_at: new Date() as any,
       })
       .onConflict((oc) =>
         oc.column('id').doUpdateSet({
-          director_nombre: config.directorNombre,
-          director_cip: config.directorCip,
-          director_firma: config.directorFirma,
-          resolucion_sanitaria: config.resolucionSanitaria,
-          parametros: JSON.stringify(config.parametros) as any,
+          director_nombre: config.directorNombre ?? '',
+          director_cip: config.directorCip ?? '',
+          director_firma: config.directorFirma ?? null,
+          resolucion_sanitaria: config.resolucionSanitaria ?? '',
+          parametros: JSON.stringify(config.parametros ?? {}) as any,
           actualizado_por: actualizadoPor,
           updated_at: new Date() as any,
         }),

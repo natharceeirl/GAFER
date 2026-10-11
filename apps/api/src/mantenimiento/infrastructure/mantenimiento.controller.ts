@@ -39,6 +39,8 @@ import { ActualizarEstadoEquipoUseCase } from '../application/actualizar-estado-
 import { ActualizarPersonalUseCase } from '../application/actualizar-personal.usecase';
 import { DesactivarPersonalUseCase } from '../application/desactivar-personal.usecase';
 import { ActivarPersonalUseCase } from '../application/activar-personal.usecase';
+import { AsignarClavePersonalUseCase } from '../application/asignar-clave-personal.usecase';
+
 
 // Use Cases - Catálogos de Texto, Configuración y Auditoría
 import { ListarCatalogosTextoUseCase } from '../application/listar-catalogos-texto.usecase';
@@ -97,6 +99,8 @@ import {
   CambiarEstadoEquipoDto,
   CrearPersonalDto,
   ActualizarPersonalDto,
+  AsignarClavePersonalDto,
+
   GenerarUploadUrlDto,
   GenerarDownloadUrlDto,
   ActualizarCatalogoTextoDto,
@@ -164,6 +168,8 @@ import {
   ApiActualizarPersonalDoc,
   ApiDesactivarPersonalDoc,
   ApiActivarPersonalDoc,
+  ApiAsignarClavePersonalDoc,
+
   ApiGenerarUploadUrlDoc,
   ApiGenerarDownloadUrlDoc,
   ApiListarCatalogosTextoDoc,
@@ -203,6 +209,8 @@ export class MantenimientoController {
     private readonly actualizarPersonalUseCase: ActualizarPersonalUseCase,
     private readonly desactivarPersonalUseCase: DesactivarPersonalUseCase,
     private readonly activarPersonalUseCase: ActivarPersonalUseCase,
+    private readonly asignarClavePersonalUseCase: AsignarClavePersonalUseCase,
+
     private readonly listarCatalogosTextoUseCase: ListarCatalogosTextoUseCase,
     private readonly obtenerCatalogoTextoUseCase: ObtenerCatalogoTextoUseCase,
     private readonly actualizarCatalogoTextoUseCase: ActualizarCatalogoTextoUseCase,
@@ -949,6 +957,31 @@ export class MantenimientoController {
     return { id: personal.id, estado: personal.getEstado() };
   }
 
+  @Patch('personal/:id/clave')
+  @Roles('ADMINISTRADOR')
+  @ApiAsignarClavePersonalDoc()
+  async asignarClavePersonal(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: AsignarClavePersonalDto,
+    @UsuarioActual() usuario: TokenPayload,
+  ): Promise<{ id: string; usuario: string | null; mensaje: string }> {
+    const actor = this.resolverActor(usuario);
+    await this.asignarClavePersonalUseCase.execute({
+      personalId: id,
+      clave: dto.clave,
+      actorId: actor.actorId,
+      actorUsuario: actor.actorUsuario,
+      actorRol: actor.actorRol,
+    });
+    const personal = await this.personalRepo.buscarPorId(id);
+    return {
+      id,
+      usuario: personal?.usuario ?? null,
+      mensaje: 'Clave actualizada correctamente',
+    };
+  }
+
+
   // ==========================================
   // STORAGE S3 (MINIO)
   // ==========================================
@@ -1075,13 +1108,16 @@ export class MantenimientoController {
     const config = await this.obtenerConfiguracionUseCase.execute();
     return {
       id: config.id,
-      director: {
-        nombre: config.directorNombre,
-        cip: config.directorCip,
-        firma: config.directorFirma,
-      },
+      director:
+        config.directorNombre && config.directorCip
+          ? {
+              nombre: config.directorNombre,
+              cip: config.directorCip,
+              firma: config.directorFirma,
+            }
+          : null,
       resolucionSanitaria: config.resolucionSanitaria,
-      parametros: config.parametros,
+      parametros: config.parametros ?? {},
       actualizadoPor: config.actualizadoPor,
       updatedAt: config.updatedAt ? new Date(config.updatedAt).toISOString() : undefined,
     };
@@ -1105,13 +1141,16 @@ export class MantenimientoController {
     });
     return {
       id: config.id,
-      director: {
-        nombre: config.directorNombre,
-        cip: config.directorCip,
-        firma: config.directorFirma,
-      },
+      director:
+        config.directorNombre && config.directorCip
+          ? {
+              nombre: config.directorNombre,
+              cip: config.directorCip,
+              firma: config.directorFirma,
+            }
+          : null,
       resolucionSanitaria: config.resolucionSanitaria,
-      parametros: config.parametros,
+      parametros: config.parametros ?? {},
       actualizadoPor: config.actualizadoPor,
       updatedAt: config.updatedAt ? new Date(config.updatedAt).toISOString() : undefined,
     };

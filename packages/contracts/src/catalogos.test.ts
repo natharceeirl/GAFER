@@ -263,6 +263,11 @@ describe('DirectorTecnicoSchema y ConfiguracionSistemaSchema (Spec §6.1, C7 / G
         parametros: { diasAnticipacionAlertaCertificado: 45 },
       }).success,
     ).toBe(true);
+    expect(
+      ConfiguracionSistemaActualizacionSchema.safeParse({
+        director: null,
+      }).success,
+    ).toBe(true);
   });
 });
 

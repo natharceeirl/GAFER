@@ -28,6 +28,8 @@ import { ActualizarEstadoEquipoUseCase } from './application/actualizar-estado-e
 import { ActualizarPersonalUseCase } from './application/actualizar-personal.usecase';
 import { DesactivarPersonalUseCase } from './application/desactivar-personal.usecase';
 import { ActivarPersonalUseCase } from './application/activar-personal.usecase';
+import { AsignarClavePersonalUseCase } from './application/asignar-clave-personal.usecase';
+
 
 // Ports
 import { CLIENTE_REPOSITORY } from './domain/ports/cliente.repository';
@@ -87,6 +89,8 @@ import { AuthModule } from '../auth/auth.module';
     ActualizarPersonalUseCase,
     DesactivarPersonalUseCase,
     ActivarPersonalUseCase,
+    AsignarClavePersonalUseCase,
+
 
     // Casos de Uso - Catálogos de Texto, Configuración y Auditoría
     ListarCatalogosTextoUseCase,

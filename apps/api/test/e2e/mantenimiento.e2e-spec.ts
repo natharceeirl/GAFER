@@ -486,7 +486,39 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
       });
       expect(dupRes.status).toBe(409);
     });
+
+    it('rechaza edición de insumo si nuevo código DIGESA ya pertenece a otro insumo (409)', async () => {
+      const insumo1Res = await http.post('/mantenimiento/insumos', {
+        nombreComercial: 'Insumo Original 1',
+        principioActivo: 'Principio 1',
+        presentacion: 'LIQUIDO',
+        unidadMedida: 'L',
+        registroDigesa: 'RD-ORIG-101',
+        concentracion: '10%',
+        dosisEstandar: '1 ml/L',
+        fichaTecnicaKey: 'fichas/1.pdf',
+        hojaMsdsKey: 'msds/1.pdf',
+      });
+      const insumo2Res = await http.post('/mantenimiento/insumos', {
+        nombreComercial: 'Insumo Original 2',
+        principioActivo: 'Principio 2',
+        presentacion: 'POLVO',
+        unidadMedida: 'KG',
+        registroDigesa: 'RD-ORIG-202',
+        concentracion: '20%',
+        dosisEstandar: '2 g/L',
+        fichaTecnicaKey: 'fichas/2.pdf',
+        hojaMsdsKey: 'msds/2.pdf',
+      });
+
+      const patchDupRes = await http.patch(`/mantenimiento/insumos/${insumo1Res.body.id}`, {
+        registroDigesa: 'RD-ORIG-202',
+      });
+      expect(patchDupRes.status).toBe(409);
+      expect(patchDupRes.body.message).toContain('Ya existe un insumo registrado con el código DIGESA');
+    });
   });
+
 
   describe('Flujo de Catálogo de Equipos (GAF-22)', () => {
     it('crea, consulta, lista, actualiza y gestiona estado operativo de un equipo', async () => {
@@ -662,7 +694,62 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
       });
       expect(dupUserRes.status).toBe(409);
     });
+
+    it('permite a ADMINISTRADOR asignar clave a un personal con usuario y valida login inmediato', async () => {
+      const crearRes = await http.post('/mantenimiento/personal', {
+        dni: '48765432',
+        nombres: 'Roberto',
+        apellidos: 'Gomez',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '958777888',
+        usuario: 'RGOMEZ_TEC',
+      });
+      expect(crearRes.status).toBe(201);
+      const personalId = crearRes.body.id;
+
+      // 1. Asignar clave vía PATCH /personal/:id/clave
+      const adminAuth = await autorizacionDePersonal(t.db, 'ADMINISTRADOR', 'R.AGARATE');
+      const claveRes = await http.patch(
+        `/mantenimiento/personal/${personalId}/clave`,
+        {
+          clave: 'Gafer2026!NuevaTec',
+        },
+        adminAuth,
+      );
+      expect(claveRes.status).toBe(200);
+      expect(claveRes.body.mensaje).toBe('Clave actualizada correctamente');
+
+      // 2. Iniciar sesión de inmediato con la nueva clave
+      const loginRes = await http.post('/auth/login', {
+        usuario: 'RGOMEZ_TEC',
+        clave: 'Gafer2026!NuevaTec',
+        cliente: 'mobile',
+      });
+      expect(loginRes.status).toBe(200);
+      expect(loginRes.body.token).toBeDefined();
+      expect(loginRes.body.usuario.cargo).toBe('TECNICO_OPERADOR');
+
+      // 3. Validar rechazo si personal no tiene usuario asignado
+      const sinUserRes = await http.post('/mantenimiento/personal', {
+        dni: '48765433',
+        nombres: 'Sin',
+        apellidos: 'User',
+        cargo: 'TECNICO_OPERADOR',
+        telefono: '958777889',
+        usuario: null,
+      });
+      const patchSinUserRes = await http.patch(
+        `/mantenimiento/personal/${sinUserRes.body.id}/clave`,
+        {
+          clave: 'Gafer2026!NuevaTec',
+        },
+        adminAuth,
+      );
+      expect(patchSinUserRes.status).toBe(400);
+      expect(patchSinUserRes.body.message).toContain('debe tener un nombre de usuario');
+    });
   });
+
 
   describe('Catálogos de Texto, Configuración y Bitácora de Auditoría (GAF-23)', () => {
     it('lista catálogos de texto filtrando los restringidos si no es ADMINISTRADOR', async () => {
@@ -797,6 +884,22 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
       const resGetActualizado = await http.get('/mantenimiento/configuracion');
       expect(resGetActualizado.body.director.firma).toBe(firmaMock);
       expect(resGetActualizado.body.parametros.diasVigenciaCertificado).toBe(30);
+
+      // 5. Permite remover el director técnico seteando director: null
+      const resPatchNull = await http.patch(
+        '/mantenimiento/configuracion',
+        {
+          director: null,
+        },
+        await autorizacionDePersonal(t.db, 'ADMINISTRADOR', 'R.AGARATE'),
+      );
+      expect(resPatchNull.status).toBe(200);
+      expect(resPatchNull.body.director).toBeNull();
+
+      // 6. Comprobar que lectura refleja director: null
+      const resGetNull = await http.get('/mantenimiento/configuracion');
+      expect(resGetNull.status).toBe(200);
+      expect(resGetNull.body.director).toBeNull();
     });
 
     it('permite consulta de auditoría exclusivamente a ADMINISTRADOR y registra trazabilidad', async () => {

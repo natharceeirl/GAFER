@@ -1,5 +1,6 @@
 import {
   AgregarItemCatalogoTextoSchema,
+  AsignarClavePersonalSchema,
   CambioEstadoEquipoSchema,
   CatalogoTextoActualizacionSchema,
   ClienteActualizacionSchema,
@@ -160,6 +161,11 @@ export class ActualizarPersonalDto extends createZodDtoDocumentado(PersonalActua
   cargo: 'SUPERVISOR',
   telefono: '958999111',
 }) {}
+
+export class AsignarClavePersonalDto extends createZodDtoDocumentado(AsignarClavePersonalSchema, {
+  clave: 'Gafer2026!Segura',
+}) {}
+
 
 export class GenerarUploadUrlDto extends createZodDtoDocumentado(GenerarUploadUrlSchema, {
   key: 'insumos/fichas/ficha-cipermetrina.pdf',
