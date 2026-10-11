@@ -32,14 +32,21 @@ export class ErrorDeConexion extends Error {
   }
 }
 
+export const DEFAULT_DEV_API_URL = 'http://192.168.18.205:3000';
+
 /**
  * Resuelve la URL base de la API según variables de entorno o valor por defecto.
+ * En desarrollo local por Wi-Fi, prefiere la IP de la máquina de desarrollo sobre 10.0.2.2.
  */
 export function obtenerBaseUrl(): string {
   if (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
+    const envUrl = process.env.EXPO_PUBLIC_API_URL.trim();
+    if (envUrl.includes('10.0.2.2') || envUrl.includes('localhost')) {
+      return DEFAULT_DEV_API_URL;
+    }
+    return envUrl;
   }
-  return 'http://localhost:3000';
+  return DEFAULT_DEV_API_URL;
 }
 
 export class MobileApiClient {
