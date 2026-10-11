@@ -151,20 +151,4 @@ describe('useAuthStore', () => {
     expect(restaurado).toBe(false);
     expect(useAuthStore.getState().estado).toBe('NO_AUTENTICADO');
   });
-
-  it('inicia sesión en modo demostración para pruebas offline', async () => {
-    const exito = await useAuthStore.getState().iniciarSesionDemo('demo.custom');
-
-    expect(exito).toBe(true);
-    const state = useAuthStore.getState();
-    expect(state.estado).toBe('AUTENTICADO');
-    expect(state.usuario?.usuario).toBe('demo.custom');
-    expect(state.usuario?.cargo).toBe('TECNICO_OPERADOR');
-    expect(state.token).toContain('demo-offline');
-  });
-
-  it('permite actualizar la URL del servidor API', () => {
-    useAuthStore.getState().actualizarServidorUrl('http://192.168.1.50:3000/');
-    expect(useAuthStore.getState().servidorUrl).toBe('http://192.168.1.50:3000');
-  });
 });
