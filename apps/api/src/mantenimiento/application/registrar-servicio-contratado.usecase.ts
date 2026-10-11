@@ -1,4 +1,9 @@
-import { Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ServicioContratado, ServicioContratadoProps } from '../domain/servicio-contratado';
 import { SERVICIO_CONTRATADO_REPOSITORY, ServicioContratadoRepository } from '../domain/ports/servicio-contratado.repository';
 import { PROYECTO_REPOSITORY, ProyectoRepository } from '../domain/ports/proyecto.repository';
@@ -17,11 +22,11 @@ export class RegistrarServicioContratadoUseCase {
   async execute(command: RegistrarServicioContratadoCommand): Promise<ServicioContratado> {
     const proyecto = await this.proyectoRepository.buscarPorId(command.proyectoId);
     if (!proyecto) {
-      throw new Error(`No se encontró la sede/proyecto con ID: ${command.proyectoId}`);
+      throw new NotFoundException(`No se encontró la sede/proyecto con ID: ${command.proyectoId}`);
     }
 
     if (proyecto.getEstado() !== 'ACTIVO') {
-      throw new Error('No se pueden asignar servicios a una sede inactiva');
+      throw new BadRequestException('No se pueden asignar servicios a una sede inactiva');
     }
 
     const servicio = new ServicioContratado(command);
