@@ -21,8 +21,14 @@ export class DocumentosController {
     description: 'Endpoint preliminar para creación y numeración de certificados de saneamiento.',
   })
   async crear(@Body('clienteId') clienteId: string, @Body('tipo') tipo: string) {
-    const tipoValidado = TipoDocumentoSchema.parse(tipo);
-    const documento = await this.crearDocumento.ejecutar(clienteId, tipoValidado);
+    if (!clienteId || typeof clienteId !== 'string' || clienteId.trim() === '') {
+      throw new BadRequestException('El campo clienteId es obligatorio');
+    }
+    const parseoTipo = TipoDocumentoSchema.safeParse(tipo);
+    if (!parseoTipo.success) {
+      throw new BadRequestException('El campo tipo es obligatorio y debe ser INFORME o REPORTE');
+    }
+    const documento = await this.crearDocumento.ejecutar(clienteId, parseoTipo.data);
     return {
       id: documento.id,
       numeroCorrelativo: documento.numeroCorrelativo,
