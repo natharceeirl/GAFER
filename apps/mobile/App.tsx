@@ -1,55 +1,88 @@
-import React from 'react';
-import { StyleSheet, Text, View, SafeAreaView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, View, Text, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { useBorradorStore } from './src/features/operaciones/model/use-borrador-store';
+import { useAuthStore } from './src/features/auth/model/use-auth-store';
+import { LoginScreen } from './src/features/auth/ui';
+import { AgendaScreen } from './src/features/agenda/ui';
 
 export default function App() {
-  const borrador = useBorradorStore((state) => state.borrador);
+  const { estado, restaurarSesion } = useAuthStore();
+  const [iniciando, setIniciando] = useState(true);
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
-      <View style={styles.header}>
-        <Text style={styles.title}>GAFER Saneamiento Ambiental</Text>
-        <Text style={styles.subtitle}>Operaciones de Campo (Offline-First)</Text>
+  useEffect(() => {
+    let montado = true;
+    (async () => {
+      try {
+        await restaurarSesion();
+      } finally {
+        if (montado) {
+          setIniciando(false);
+        }
+      }
+    })();
+
+    return () => {
+      montado = false;
+    };
+  }, [restaurarSesion]);
+
+  if (iniciando) {
+    return (
+      <View style={styles.splashContenedor}>
+        <StatusBar style="light" />
+        <View style={styles.logoBadge}>
+          <Text style={styles.logoTexto}>GAFER</Text>
+        </View>
+        <Text style={styles.tituloSplash}>Saneamiento Ambiental</Text>
+        <Text style={styles.subtituloSplash}>Operaciones de Campo</Text>
+        <ActivityIndicator size="small" color="#a3e9d2" style={styles.spinner} />
       </View>
-      <View style={styles.content}>
-        <Text style={styles.statusLabel}>
-          Estado: {borrador ? `Inspección activa (${borrador.servicioId})` : 'Sin inspección iniciada'}
-        </Text>
-      </View>
-    </SafeAreaView>
-  );
+    );
+  }
+
+  if (estado !== 'AUTENTICADO') {
+    return <LoginScreen />;
+  }
+
+  return <AgendaScreen />;
 }
 
 const styles = StyleSheet.create({
-  container: {
+  splashContenedor: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  header: {
     backgroundColor: '#1f4d3d',
-    padding: 20,
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  subtitle: {
-    fontSize: 13,
-    color: '#d4edda',
-    marginTop: 4,
-  },
-  content: {
-    flex: 1,
-    padding: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 24,
   },
-  statusLabel: {
-    fontSize: 15,
-    color: '#333333',
+  logoBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 24,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  logoTexto: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#ffffff',
+    letterSpacing: 3,
+  },
+  tituloSplash: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#ffffff',
+    textAlign: 'center',
+  },
+  subtituloSplash: {
+    fontSize: 13,
+    color: '#d4edda',
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  spinner: {
+    marginTop: 28,
   },
 });
