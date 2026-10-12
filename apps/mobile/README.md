@@ -13,17 +13,17 @@ Aplicación móvil offline-first para técnicos operadores de GAFER Saneamiento 
 
 ---
 
-## Credenciales de Desarrollo Estandarizadas
+## Usuarios de ejemplo para pruebas locales
 
-Para pruebas locales, los usuarios del seed cuentan con contraseñas estandarizadas (cumpliendo la regla contractual de al menos 12 caracteres):
+El repositorio **no guarda ninguna contraseña**. Los usuarios los crea el seed de datos de ejemplo (`pnpm db:seed:demo`, ver el README de la raíz), que genera una clave **aleatoria** para cada uno y la imprime **una sola vez** en la consola. Cópiala en ese momento; si la pierdes, regenérala con `pnpm db:seed:demo --regenerar-claves`.
 
-| Usuario | Rol / Cargo | Contraseña | Destino Autorizado |
-| :--- | :--- | :--- | :--- |
-| `demo.tecnico1` | TECNICO_OPERADOR | `Tecnico123456!` | App Móvil (`cliente: 'mobile'`) |
-| `demo.tecnico2` | TECNICO_OPERADOR | `Tecnico123456!` | App Móvil (`cliente: 'mobile'`) |
-| `demo.tecnico3` | TECNICO_OPERADOR | `Tecnico123456!` | App Móvil (`cliente: 'mobile'`) |
-| `demo.supervisor`| SUPERVISOR | `Supervisor12!` | Panel Web (`cliente: 'web'`) |
-| `demo.admin` | ADMINISTRADOR | `Admin12345678!` | Panel Web (`cliente: 'web'`) |
+| Usuario | Rol / Cargo | Dónde puede ingresar |
+| :--- | :--- | :--- |
+| `demo.tecnico1`, `demo.tecnico2`, `demo.tecnico3` | TECNICO_OPERADOR | Solo la app móvil (`cliente: 'mobile'`) |
+| `demo.supervisor` | SUPERVISOR | Web y app móvil |
+| `demo.admin` | ADMINISTRADOR | Web y app móvil |
+
+Los nombres de usuario no distinguen mayúsculas, pero las claves sí.
 
 > [!NOTE]
 > Según la Decisión C10 / Spec §16, el rol `TECNICO_OPERADOR` solo tiene acceso autorizado a través de la app móvil; la web rechaza el inicio de sesión con 403 Forbidden.
