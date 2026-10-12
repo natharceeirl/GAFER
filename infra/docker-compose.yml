@@ -7,7 +7,8 @@ services:
       POSTGRES_PASSWORD: gafer
       POSTGRES_DB: gafer
     ports:
-      - '5432:5432'
+      # Si el 5432 está ocupado por otra base: POSTGRES_PORT=55432 pnpm infra:up
+      - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - gafer_postgres_data:/var/lib/postgresql/data
 
@@ -20,7 +21,11 @@ services:
       - gafer_redis_data:/data
 
   minio:
-    image: quay.io/minio/minio:latest
+    # quay.io/minio/minio y minio/minio (Docker Hub) ya no se pueden descargar (401 / acceso denegado).
+    # Se usa la compilación de la comunidad de coollabsio, fijada por huella: es MinIO RELEASE.2025-10-15,
+    # la última versión comunitaria (AGPLv3), sin parches futuros. Solo para desarrollo local;
+    # producción usa Cloudflare R2.
+    image: ghcr.io/coollabsio/minio@sha256:69b55a1c1c5dc285ce04db96689f5b2102317fc77a50680a1874ca6efd1c87f9
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
