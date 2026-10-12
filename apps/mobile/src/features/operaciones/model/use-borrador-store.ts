@@ -1,14 +1,25 @@
 import { create } from 'zustand';
 
-interface BorradorInspeccion {
+export interface MetadataBorrador {
+  clienteRazonSocial?: string;
+  sedeNombre?: string;
+  numeroOrden?: string;
+  servicioTipo?: string;
+}
+
+export interface BorradorInspeccion {
   servicioId: string;
   observaciones: string;
+  clienteRazonSocial?: string;
+  sedeNombre?: string;
+  numeroOrden?: string;
+  servicioTipo?: string;
 }
 
 interface BorradorStore {
   borrador: BorradorInspeccion | null;
   colaEnvioPendiente: boolean;
-  iniciarBorrador: (servicioId: string) => void;
+  iniciarBorrador: (servicioId: string, metadata?: MetadataBorrador) => void;
   actualizarObservaciones: (observaciones: string) => void;
   marcarComoPendienteDeSincronizar: () => void;
   limpiar: () => void;
@@ -17,8 +28,18 @@ interface BorradorStore {
 export const useBorradorStore = create<BorradorStore>((set) => ({
   borrador: null,
   colaEnvioPendiente: false,
-  iniciarBorrador: (servicioId) =>
-    set({ borrador: { servicioId, observaciones: '' }, colaEnvioPendiente: false }),
+  iniciarBorrador: (servicioId, metadata) =>
+    set({
+      borrador: {
+        servicioId,
+        observaciones: '',
+        clienteRazonSocial: metadata?.clienteRazonSocial,
+        sedeNombre: metadata?.sedeNombre,
+        numeroOrden: metadata?.numeroOrden,
+        servicioTipo: metadata?.servicioTipo,
+      },
+      colaEnvioPendiente: false,
+    }),
   actualizarObservaciones: (observaciones) =>
     set((state) => ({
       borrador: state.borrador ? { ...state.borrador, observaciones } : state.borrador,
