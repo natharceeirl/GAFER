@@ -74,6 +74,12 @@ pnpm infra:up
 - **MinIO Console (S3):** `http://localhost:9001` (usuario: `gafer`, pass: `gafersecret`)
 - *(Para apagar los contenedores: `pnpm infra:down`)*
 
+**Problemas frecuentes**
+
+- **El puerto 5432 está ocupado** (por ejemplo, otra base de datos local): levanta con otro puerto, `POSTGRES_PORT=55432 pnpm infra:up`, y apunta la API a ese puerto con `DATABASE_URL=postgresql://gafer:gafer@localhost:55432/gafer`. Sin esto, la API se conectaría a la base de la otra aplicación.
+- **MinIO:** las imágenes oficiales (`quay.io/minio/minio` y `minio/minio`) ya no se pueden descargar (401 o acceso denegado), por eso el compose usa la compilación de la comunidad de coollabsio, fijada por huella: MinIO `RELEASE.2025-10-15`, la última versión comunitaria (AGPLv3) y sin parches futuros. Es solo para desarrollo local; en producción el almacenamiento será Cloudflare R2.
+- **Subida de PDF:** la API espera un bucket llamado `gafer-docs` y no lo crea. Créalo desde la consola de MinIO (`http://localhost:9001`) antes de probar la subida de fichas técnicas.
+
 ### 4. Migraciones de Base de Datos (PostgreSQL 16 + Kysely)
 
 Una vez levantada la infraestructura Docker, ejecuta las migraciones para crear las tablas maestras de la Fase 1:
