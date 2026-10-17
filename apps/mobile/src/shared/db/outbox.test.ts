@@ -84,4 +84,76 @@ describe('OutboxQueue (Móvil Offline-First con sync.v1 - GAP-05)', () => {
     expect(pendientes[0].intentos).toBe(1);
     expect(pendientes[0].ultimoError).toContain('HTTP 500');
   });
+
+  describe('OutboxQueue con persistencia nativa SQLite (Guía Rev 2 §6.1)', () => {
+    it('persiste operaciones en sync_outbox con los 18 campos y sobrevive al reinicio de la app', async () => {
+      const { MemorySqliteAdapter, ejecutarMigraciones } = await import('./sqlite');
+      const db = new MemorySqliteAdapter();
+      await ejecutarMigraciones(db);
+
+      const queue1 = new OutboxQueue(db);
+      await queue1.encolar(dummyOperacion, {
+        deviceId: 'terminal-android-01',
+        aggregateType: 'INSPECCION',
+        aggregateSeq: 1,
+        priority: 'HIGH',
+      });
+
+      // Verificar directamente en SQLite que se guardó en la tabla sync_outbox
+      const fila = await db.getFirstAsync<{
+        operation_id: string;
+        device_id: string;
+        user_id: string;
+        status: string;
+        priority: string;
+      }>('SELECT * FROM sync_outbox WHERE operation_id = ?;', [dummyOperacion.operationId]);
+
+      expect(fila).not.toBeNull();
+      expect(fila?.operation_id).toBe(dummyOperacion.operationId);
+      expect(fila?.device_id).toBe('terminal-android-01');
+      expect(fila?.user_id).toBe(dummyOperacion.actorId);
+      expect(fila?.status).toBe('PENDING');
+      expect(fila?.priority).toBe('HIGH');
+
+      // Simular reinicio de la aplicación (crear nueva cola leyendo desde la base de datos)
+      const queue2 = new OutboxQueue(db);
+      await queue2.inicializar();
+      const pendientes = queue2.obtenerPendientes();
+
+      expect(pendientes).toHaveLength(1);
+      expect(pendientes[0].operacion.operationId).toBe(dummyOperacion.operationId);
+      expect(pendientes[0].operacion.tipo).toBe('REGISTRO_ESTACION');
+      expect(pendientes[0].sincronizado).toBe(false);
+    });
+
+    it('actualiza estado a SYNCED en SQLite y limpia operaciones tras envio exitoso', async () => {
+      const { MemorySqliteAdapter, ejecutarMigraciones } = await import('./sqlite');
+      const db = new MemorySqliteAdapter();
+      await ejecutarMigraciones(db);
+
+      const queue = new OutboxQueue(db);
+      await queue.encolar(dummyOperacion);
+
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          inspeccionId: dummyOperacion.agregadoId,
+          procesadas: [dummyOperacion.operationId],
+          omitidasIdempotentes: [],
+          conflictos: [],
+          serverReceivedAt: '2026-09-20T18:00:01.000Z',
+        }),
+      });
+
+      await queue.enviarLote('http://localhost:3000', dummyOperacion.agregadoId, mockFetch as any);
+
+      // Debe haberse eliminado de sync_outbox por limpieza de confirmados
+      const fila = await db.getFirstAsync('SELECT * FROM sync_outbox WHERE operation_id = ?;', [
+        dummyOperacion.operationId,
+      ]);
+      expect(fila).toBeNull();
+      expect(queue.obtenerPendientes()).toHaveLength(0);
+    });
+  });
 });
