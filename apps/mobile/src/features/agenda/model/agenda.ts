@@ -234,8 +234,15 @@ export const useAgendaStore = create<AgendaState>((set, get) => ({
         },
       ];
 
+      const borradorActivo = useBorradorStore.getState().borrador;
+      const visitasConEstado = visitasSimuladas.map((v) =>
+        borradorActivo && v.servicioId === borradorActivo.servicioId
+          ? { ...v, estadoCampo: 'EN_CURSO' as EstadoCampo }
+          : v,
+      );
+
       set({
-        items: ordenarAgendaPorHora(visitasSimuladas),
+        items: ordenarAgendaPorHora(visitasConEstado),
         fechaAgenda: hoy,
         cargando: false,
         error: null,
