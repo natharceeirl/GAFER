@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,9 +10,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { SpikeCamaraSeccion } from './SpikeCamaraSeccion';
 import { SpikePlanoSkiaSeccion } from './SpikePlanoSkiaSeccion';
+import { SpikeDurabilidadSeccion } from './SpikeDurabilidadSeccion';
+import { obtenerBaseDeDatos } from '../../../shared/db/sqlite';
 import { TOKENS } from '../../../shared/theme/tokens';
 
-type PestanaSpike = 'CAMARA' | 'PLANO' | 'CRITERIOS';
+type PestanaSpike = 'PLANO' | 'CAMARA' | 'DURABILIDAD' | 'CRITERIOS';
 
 interface Props {
   onVolver: () => void;
@@ -21,12 +23,44 @@ interface Props {
 export const SpikeLaboratorioScreen: React.FC<Props> = ({ onVolver }) => {
   const [pestana, setPestana] = useState<PestanaSpike>('PLANO');
 
+  useEffect(() => {
+    // Registrar que el usuario está dentro del laboratorio en SQLite
+    // para recuperar la vista ante muerte forzada del proceso
+    const marcarActivo = async () => {
+      try {
+        const db = obtenerBaseDeDatos();
+        await db.runAsync(
+          `INSERT OR REPLACE INTO sync_metadata (key, value, updated_at) 
+           VALUES ('spike_activo', 'true', ?);`,
+          [new Date().toISOString()],
+        );
+      } catch {
+        // En caso de que la db esté en inicialización
+      }
+    };
+    marcarActivo();
+  }, []);
+
+  const handleVolver = async () => {
+    try {
+      const db = obtenerBaseDeDatos();
+      await db.runAsync(
+        `INSERT OR REPLACE INTO sync_metadata (key, value, updated_at) 
+         VALUES ('spike_activo', 'false', ?);`,
+        [new Date().toISOString()],
+      );
+    } catch {
+      // Ignorar
+    }
+    onVolver();
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="light" />
       {/* Encabezado */}
       <View style={styles.encabezado}>
-        <TouchableOpacity style={styles.botonVolver} onPress={onVolver}>
+        <TouchableOpacity style={styles.botonVolver} onPress={handleVolver}>
           <Text style={styles.volverTexto}>← Volver a Agenda</Text>
         </TouchableOpacity>
         <Text style={styles.tituloHeader}>🔬 Laboratorio Spike Técnico</Text>
@@ -35,7 +69,7 @@ export const SpikeLaboratorioScreen: React.FC<Props> = ({ onVolver }) => {
         </Text>
       </View>
 
-      {/* Selector de Pestañas */}
+      {/* Selector de Pestañas (4 áreas de riesgo de §22.2) */}
       <View style={styles.pestanasFila}>
         <TouchableOpacity
           style={[styles.pestana, pestana === 'PLANO' && styles.pestanaActiva]}
@@ -44,7 +78,7 @@ export const SpikeLaboratorioScreen: React.FC<Props> = ({ onVolver }) => {
           <Text
             style={[styles.pestanaTexto, pestana === 'PLANO' && styles.pestanaTextoActivo]}
           >
-            🗺️ Plano 100 Skia
+            🗺️ Plano 100
           </Text>
         </TouchableOpacity>
 
@@ -55,7 +89,18 @@ export const SpikeLaboratorioScreen: React.FC<Props> = ({ onVolver }) => {
           <Text
             style={[styles.pestanaTexto, pestana === 'CAMARA' && styles.pestanaTextoActivo]}
           >
-            📷 Cámara & Memoria
+            📷 Cámara & 20F
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.pestana, pestana === 'DURABILIDAD' && styles.pestanaActiva]}
+          onPress={() => setPestana('DURABILIDAD')}
+        >
+          <Text
+            style={[styles.pestanaTexto, pestana === 'DURABILIDAD' && styles.pestanaTextoActivo]}
+          >
+            ⚡ Outbox & WAL
           </Text>
         </TouchableOpacity>
 
@@ -66,7 +111,7 @@ export const SpikeLaboratorioScreen: React.FC<Props> = ({ onVolver }) => {
           <Text
             style={[styles.pestanaTexto, pestana === 'CRITERIOS' && styles.pestanaTextoActivo]}
           >
-            📋 Compuerta §22
+            📋 Compuerta
           </Text>
         </TouchableOpacity>
       </View>
@@ -75,47 +120,59 @@ export const SpikeLaboratorioScreen: React.FC<Props> = ({ onVolver }) => {
       <View style={styles.contenido}>
         {pestana === 'PLANO' && <SpikePlanoSkiaSeccion />}
         {pestana === 'CAMARA' && <SpikeCamaraSeccion />}
+        {pestana === 'DURABILIDAD' && <SpikeDurabilidadSeccion />}
         {pestana === 'CRITERIOS' && (
           <ScrollView style={styles.criteriosContenedor}>
             <Text style={styles.criteriosTitulo}>
-              Compuerta de Decisión (Guía Rev 2 §22.7)
+              Compuerta de Decisión Oficial (Guía Rev 2 §22.7)
             </Text>
             <Text style={styles.criteriosDescripcion}>
-              Medir en el Redmi Note 9 de 4 GB bajo MIUI 13. Registrar datos reales, no impresiones.
+              Medición estricta en el Redmi Note 9 de 4 GB bajo MIUI 13. Criterios no negociables
+              para autorizar o descartar React Native en la Fase 1:
             </Text>
 
             <View style={styles.tarjetaCriterio}>
-              <Text style={styles.criterioNombre}>1. Fluidez del Plano Murino</Text>
+              <Text style={styles.criterioNombre}>1. Plano Skia (100 Estaciones)</Text>
               <Text style={styles.criterioDetalle}>
-                • Pan & zoom continuos durante 2 minutos con 100 estaciones.{'\n'}
-                • No debe congelarse la UI ni generar ANR.{'\n'}
-                • Meta: Sensación fluida sin hipo en el hilo UI.
+                • Probar pan y zoom continuo en la pestaña 🗺️ Plano 100.{'\n'}
+                • Comprobar el contador de FPS en vivo en pantalla.{'\n'}
+                • <Text style={styles.negrita}>Aprobado:</Text> 55 a 60 FPS estables con las 100 estaciones y el plano industrial de fondo.
               </Text>
             </View>
 
             <View style={styles.tarjetaCriterio}>
-              <Text style={styles.criterioNombre}>2. Resistencia a Muerte de Proceso</Text>
+              <Text style={styles.criterioNombre}>2. Resistencia a Muerte de Proceso de Android</Text>
               <Text style={styles.criterioDetalle}>
-                • Activar "No conservar actividades" en Ajustes de desarrollador.{'\n'}
-                • Tomar fotos con la cámara nativa.{'\n'}
-                • Al regresar a la app, la foto debe estar guardada en `files_local` y el borrador intacto.
+                • Activar "No conservar actividades" en opciones de desarrollador.{'\n'}
+                • Tomar una foto con la cámara nativa.{'\n'}
+                • Comprobar que al regresar, la app reviva sin pantalla blanca, recupere la foto vía getPendingResultAsync() y la asegure en SQLite.
               </Text>
             </View>
 
             <View style={styles.tarjetaCriterio}>
-              <Text style={styles.criterioNombre}>3. Durabilidad SQLite (Ya Blindado)</Text>
+              <Text style={styles.criterioNombre}>3. Estrés de 20 Fotos en Memoria (§22.6)</Text>
               <Text style={styles.criterioDetalle}>
-                • Iniciar inspección, forzar detención de la app desde ajustes.{'\n'}
-                • Reabrir: la base SQLite con WAL y synchronous=FULL restaura todo.
+                • Presionar "Generar 20 Fotos de Estrés" en la pestaña 📷 Cámara.{'\n'}
+                • Alternar entre el plano de 100 estaciones y las 20 fotos.{'\n'}
+                • <Text style={styles.negrita}>Criterio de Fallo:</Text> Cierre por OOM o ANR activa el Plan C (migración a nativo).
+              </Text>
+            </View>
+
+            <View style={styles.tarjetaCriterio}>
+              <Text style={styles.criterioNombre}>4. Durabilidad Outbox y Checkpoint WAL</Text>
+              <Text style={styles.criterioDetalle}>
+                • Insertar 50 operaciones transaccionales en ⚡ Outbox & WAL.{'\n'}
+                • Forzar cierre con force-stop o swiping en recientes.{'\n'}
+                • Al reabrir, verificar que PRAGMA integrity_check devuelve OK y las 50 operaciones siguen intactas.
               </Text>
             </View>
 
             <View style={styles.cajaDecision}>
-              <Text style={styles.decisionTitulo}>Matriz de Decisión:</Text>
+              <Text style={styles.decisionTitulo}>Matriz de Decisión (§22.7):</Text>
               <Text style={styles.decisionTexto}>
-                ✅ <Text style={styles.negrita}>Aprobado:</Text> Ambos pasan fluidos $\rightarrow$ Fase 1 en React Native.{'\n\n'}
-                ⚠️ <Text style={styles.negrita}>Plan B:</Text> Falla solo background o cámara $\rightarrow$ Módulo Kotlin nativo para esa pieza.{'\n\n'}
-                🛑 <Text style={styles.negrita}>Plan C:</Text> Falla Skia y memoria $\rightarrow$ Migración a Android nativo (conservando backend y contratos).
+                ✅ <Text style={styles.negrita}>Aprobado:</Text> Pasan los 4 criterios $\rightarrow$ Autoriza Fase 1 en React Native.{'\n\n'}
+                ⚠️ <Text style={styles.negrita}>Plan B Parcial:</Text> Falla solo background o cámara $\rightarrow$ Módulo Kotlin nativo dentro de RN.{'\n\n'}
+                🛑 <Text style={styles.negrita}>Plan C:</Text> Falla Skia o se producen cierres por memoria $\rightarrow$ Migración a Android nativo con Jetpack Compose y Room (conservando contratos, API y sync protocol).
               </Text>
             </View>
           </ScrollView>
@@ -128,53 +185,57 @@ export const SpikeLaboratorioScreen: React.FC<Props> = ({ onVolver }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: TOKENS.marca,
+    backgroundColor: '#0f172a',
   },
   encabezado: {
+    backgroundColor: '#0f172a',
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 14,
-    backgroundColor: TOKENS.marca,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
   },
   botonVolver: {
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
     marginBottom: 6,
   },
   volverTexto: {
-    color: '#d4edda',
+    color: '#38bdf8',
     fontSize: 12,
     fontWeight: '700',
   },
   tituloHeader: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     color: '#ffffff',
   },
   subtituloHeader: {
     fontSize: 11,
-    color: '#d4edda',
+    color: '#94a3b8',
     marginTop: 2,
   },
   pestanasFila: {
     flexDirection: 'row',
-    backgroundColor: '#1b4332',
+    backgroundColor: '#1e293b',
     paddingHorizontal: 8,
-    paddingTop: 4,
+    paddingVertical: 6,
+    gap: 6,
   },
   pestana: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 8,
+    borderRadius: 6,
     alignItems: 'center',
-    borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
+    backgroundColor: 'transparent',
   },
   pestanaActiva: {
-    borderBottomColor: TOKENS.hoja,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: TOKENS.marca,
   },
   pestanaTexto: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '700',
-    color: '#a7f3d0',
+    color: '#94a3b8',
   },
   pestanaTextoActivo: {
     color: '#ffffff',
@@ -188,7 +249,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   criteriosTitulo: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: TOKENS.ink,
     marginBottom: 4,
@@ -197,45 +258,46 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: TOKENS.inkSoft,
     marginBottom: 16,
+    lineHeight: 18,
   },
   tarjetaCriterio: {
     backgroundColor: '#ffffff',
-    padding: 14,
+    padding: 12,
     borderRadius: TOKENS.radiusSm,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   criterioNombre: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
     color: TOKENS.ink,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   criterioDetalle: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#475569',
-    lineHeight: 18,
+    lineHeight: 17,
   },
   cajaDecision: {
     backgroundColor: '#f0fdf4',
     borderColor: '#bbf7d0',
     borderWidth: 1,
     borderRadius: TOKENS.radiusSm,
-    padding: 14,
-    marginTop: 8,
+    padding: 12,
+    marginTop: 6,
     marginBottom: 32,
   },
   decisionTitulo: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
     color: '#166534',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   decisionTexto: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#14532d',
-    lineHeight: 20,
+    lineHeight: 18,
   },
   negrita: {
     fontWeight: '800',

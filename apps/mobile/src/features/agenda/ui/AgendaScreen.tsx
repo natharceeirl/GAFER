@@ -20,6 +20,8 @@ import {
   SedeActiva,
   ModoFiltroAgenda,
 } from '../model/agenda';
+import * as ImagePicker from 'expo-image-picker';
+import { obtenerBaseDeDatos } from '../../../shared/db/sqlite';
 import { useBorradorStore } from '../../operaciones/model/use-borrador-store';
 import { SpikeLaboratorioScreen } from '../../spike';
 import { Button, AlertBanner } from '../../../shared/ui';
@@ -51,6 +53,31 @@ export const AgendaScreen: React.FC = () => {
   useEffect(() => {
     cargarAgenda(tecnicoId);
   }, [cargarAgenda, tecnicoId]);
+
+  // Recuperación automática ante muerte de proceso en Android (§21.7 y §22.4)
+  useEffect(() => {
+    const verificarRecuperacionProceso = async () => {
+      try {
+        const pending = await ImagePicker.getPendingResultAsync();
+        if (pending) {
+          setMostrarSpike(true);
+          return;
+        }
+
+        const db = obtenerBaseDeDatos();
+        const fila = await db.getFirstAsync<{ value: string }>(
+          `SELECT value FROM sync_metadata WHERE key = 'spike_activo';`,
+        );
+        if (fila?.value === 'true') {
+          setMostrarSpike(true);
+        }
+      } catch {
+        // Si la DB aún se encuentra inicializando, continuar normalmente
+      }
+    };
+
+    verificarRecuperacionProceso();
+  }, []);
 
   // Guarda de cierre de sesión para prevención de pérdida de datos offline
   const handleCerrarSesion = () => {

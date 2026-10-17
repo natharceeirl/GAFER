@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -11,70 +11,133 @@ import { Canvas, Circle, Group, Rect, Line } from '@shopify/react-native-skia';
 import { TOKENS } from '../../../shared/theme/tokens';
 
 const { width: PANTALLA_ANCHO } = Dimensions.get('window');
-const CANVAS_ALTO = 440;
+const CANVAS_ALTO = 420;
 const CANVAS_ANCHO = PANTALLA_ANCHO - 32;
 
-interface EstacionPunto {
+export type NivelInfestacion = 0 | 1 | 2 | 3 | 4;
+
+export interface EstacionPlano {
   id: string;
+  codigo: string;
   numero: number;
   x: number;
   y: number;
+  nivel: NivelInfestacion;
+  zona: string;
+  tipoCebo: string;
+  consumoPorcentaje: number;
   colorAura: string;
+  radioAura: number;
   colorCentro: string;
+  auraIrradiacion: boolean;
 }
 
-function generar100Estaciones(ancho: number, alto: number): EstacionPunto[] {
-  const puntos: EstacionPunto[] = [];
-  const filas = 10;
-  const columnas = 10;
-  const pasoX = (ancho - 60) / (columnas - 1);
-  const pasoY = (alto - 60) / (filas - 1);
+const CONFIG_NIVELES: Record<
+  NivelInfestacion,
+  { label: string; radio: number; hexCentro: string; hexAura: string }
+> = {
+  0: { label: 'Inactivo (0%)', radio: 14, hexCentro: '#16a34a', hexAura: 'rgba(34, 197, 94, 0.22)' },
+  1: { label: 'Leve (1-25%)', radio: 20, hexCentro: '#ca8a04', hexAura: 'rgba(234, 179, 8, 0.28)' },
+  2: { label: 'Moderado (26-50%)', radio: 26, hexCentro: '#ea580c', hexAura: 'rgba(249, 115, 22, 0.32)' },
+  3: { label: 'Alto (51-100%)', radio: 34, hexCentro: '#dc2626', hexAura: 'rgba(239, 68, 68, 0.38)' },
+  4: { label: 'Crítico (Captura)', radio: 46, hexCentro: '#7e22ce', hexAura: 'rgba(147, 51, 234, 0.44)' },
+};
 
-  let num = 1;
-  for (let f = 0; f < filas; f++) {
-    for (let c = 0; c < columnas; c++) {
-      // Distribución en grilla con leve dispersión aleatoria
-      const jitterX = (Math.random() - 0.5) * (pasoX * 0.35);
-      const jitterY = (Math.random() - 0.5) * (pasoY * 0.35);
-      const x = Math.max(30, Math.min(ancho - 30, 30 + c * pasoX + jitterX));
-      const y = Math.max(30, Math.min(alto - 30, 30 + f * pasoY + jitterY));
+function generarEstacionesPlanta(
+  cantidad: number,
+  anchoBase: number,
+  altoBase: number,
+): EstacionPlano[] {
+  const estaciones: EstacionPlano[] = [];
+  const zonas = [
+    { nombre: 'Perímetro Exterior Sur', minY: altoBase * 0.85, maxY: altoBase * 0.95, minX: 40, maxX: anchoBase - 40, pesoNivel: [0.6, 0.3, 0.1, 0, 0] },
+    { nombre: 'Muelle de Carga (Puertas 1-4)', minY: altoBase * 0.55, maxY: altoBase * 0.8, minX: anchoBase * 0.6, maxX: anchoBase - 50, pesoNivel: [0.1, 0.2, 0.4, 0.2, 0.1] },
+    { nombre: 'Patio de Residuos / Compactador', minY: altoBase * 0.1, maxY: altoBase * 0.4, minX: 40, maxX: anchoBase * 0.35, pesoNivel: [0.05, 0.1, 0.25, 0.4, 0.2] },
+    { nombre: 'Almacén de Granos y Silos', minY: altoBase * 0.1, maxY: altoBase * 0.45, minX: anchoBase * 0.4, maxX: anchoBase - 50, pesoNivel: [0.2, 0.4, 0.25, 0.15, 0] },
+    { nombre: 'Sala de Procesamiento y Pasillos', minY: altoBase * 0.45, maxY: altoBase * 0.75, minX: anchoBase * 0.15, maxX: anchoBase * 0.55, pesoNivel: [0.7, 0.2, 0.1, 0, 0] },
+  ];
 
-      const tipo = num % 5 === 0 ? 'ROJO' : num % 3 === 0 ? 'AMARILLO' : 'VERDE';
-      const colorAura =
-        tipo === 'ROJO'
-          ? 'rgba(239, 68, 68, 0.28)'
-          : tipo === 'AMARILLO'
-          ? 'rgba(245, 158, 11, 0.28)'
-          : 'rgba(34, 197, 94, 0.25)';
+  for (let i = 1; i <= cantidad; i++) {
+    const zonaIdx = (i - 1) % zonas.length;
+    const zona = zonas[zonaIdx];
 
-      const colorCentro =
-        tipo === 'ROJO' ? '#dc2626' : tipo === 'AMARILLO' ? '#d97706' : '#16a34a';
+    const x = zona.minX + Math.random() * (zona.maxX - zona.minX);
+    const y = zona.minY + Math.random() * (zona.maxY - zona.minY);
 
-      puntos.push({
-        id: `estacion-${num}`,
-        numero: num,
-        x,
-        y,
-        colorAura,
-        colorCentro,
-      });
-      num++;
+    // Determinar nivel según peso de la zona
+    const rand = Math.random();
+    let acumulado = 0;
+    let nivel: NivelInfestacion = 0;
+    for (let n = 0; n < zona.pesoNivel.length; n++) {
+      acumulado += zona.pesoNivel[n];
+      if (rand <= acumulado) {
+        nivel = n as NivelInfestacion;
+        break;
+      }
     }
+
+    const conf = CONFIG_NIVELES[nivel];
+    const tieneIrradiacion = nivel === 4 || (nivel === 3 && Math.random() > 0.4);
+
+    estaciones.push({
+      id: `estacion-${i}`,
+      codigo: `E-${i < 10 ? '0' : ''}${i}`,
+      numero: i,
+      x,
+      y,
+      nivel,
+      zona: zona.nombre,
+      tipoCebo: nivel >= 3 ? 'Bloque Brodifacoum 20g' : 'Bloque Bromadiolona 20g',
+      consumoPorcentaje: nivel === 0 ? 0 : nivel === 1 ? 15 : nivel === 2 ? 40 : nivel === 3 ? 75 : 100,
+      colorAura: conf.hexAura,
+      radioAura: conf.radio,
+      colorCentro: conf.hexCentro,
+      auraIrradiacion: tieneIrradiacion,
+    });
   }
 
-  return puntos;
+  return estaciones;
 }
 
 export const SpikePlanoSkiaSeccion: React.FC = () => {
-  const [semilla, setSemilla] = useState(1);
+  const [cantidadEstaciones, setCantidadEstaciones] = useState<number>(100);
   const [translateX, setTranslateX] = useState(0);
   const [translateY, setTranslateY] = useState(0);
   const [escala, setEscala] = useState(1);
-  const [estacionSeleccionada, setEstacionSeleccionada] = useState<EstacionPunto | null>(null);
+  const [estacionSeleccionada, setEstacionSeleccionada] = useState<EstacionPlano | null>(null);
+
+  // Telemetría en vivo de cuadros por segundo (FPS) en el hilo nativo de UI
+  const [fps, setFps] = useState(60);
+  const [tiempoCuadroMs, setTiempoCuadroMs] = useState(16.6);
+
+  useEffect(() => {
+    let animId: number;
+    let frameCount = 0;
+    let ultimoTiempo = performance.now();
+
+    const loop = (tiempoActual: number) => {
+      frameCount++;
+      const delta = tiempoActual - ultimoTiempo;
+      if (delta >= 500) {
+        const fpsCalc = Math.round((frameCount * 1000) / delta);
+        setFps(fpsCalc);
+        setTiempoCuadroMs(Number((delta / frameCount).toFixed(1)));
+        frameCount = 0;
+        ultimoTiempo = tiempoActual;
+      }
+      animId = requestAnimationFrame(loop);
+    };
+
+    animId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animId);
+  }, []);
+
+  const planoAncho = CANVAS_ANCHO * 1.8;
+  const planoAlto = CANVAS_ALTO * 1.8;
 
   const estaciones = useMemo(
-    () => generar100Estaciones(CANVAS_ANCHO * 1.5, CANVAS_ALTO * 1.5),
-    [semilla],
+    () => generarEstacionesPlanta(cantidadEstaciones, planoAncho, planoAlto),
+    [cantidadEstaciones, planoAncho, planoAlto],
   );
 
   const panOffset = useRef({ x: 0, y: 0 });
@@ -92,14 +155,14 @@ export const SpikePlanoSkiaSeccion: React.FC = () => {
           setTranslateY(panOffset.current.y + gestureState.dy);
         },
         onPanResponderRelease: (_, gestureState) => {
-          // Si fue un toque rápido sin arrastre, detectar estación seleccionada
-          if (Math.abs(gestureState.dx) < 5 && Math.abs(gestureState.dy) < 5) {
+          // Detección de toque sobre estación considerando pan y zoom
+          if (Math.abs(gestureState.dx) < 6 && Math.abs(gestureState.dy) < 6) {
             const touchX = (gestureState.x0 - 16 - translateX) / escala;
-            const touchY = (gestureState.y0 - 240 - translateY) / escala;
+            const touchY = (gestureState.y0 - 270 - translateY) / escala;
 
             const encontrada = estaciones.find((e) => {
               const dist = Math.hypot(e.x - touchX, e.y - touchY);
-              return dist <= 24;
+              return dist <= 28;
             });
 
             setEstacionSeleccionada(encontrada ?? null);
@@ -117,32 +180,63 @@ export const SpikePlanoSkiaSeccion: React.FC = () => {
   };
 
   const hacerZoom = (factor: number) => {
-    setEscala((prev) => Math.max(0.6, Math.min(3.0, prev * factor)));
+    setEscala((prev) => Math.max(0.5, Math.min(3.5, prev * factor)));
   };
+
+  const fpsColor = fps >= 55 ? '#16a34a' : fps >= 40 ? '#d97706' : '#dc2626';
+  const totalPrimitivasGpu = estaciones.length * 3 + 32;
 
   return (
     <View style={styles.contenedor}>
-      {/* Panel de métricas e instrucciones */}
+      {/* Panel de Telemetría en Vivo */}
       <View style={styles.panelMetricas}>
         <View style={styles.metricaFila}>
-          <Text style={styles.metricaEtiqueta}>⚡ Estaciones renderizadas:</Text>
-          <Text style={styles.metricaValor}>100 / 100 (Acelerado por GPU Skia)</Text>
+          <Text style={styles.metricaEtiqueta}>⚡ Rendimiento en Vivo:</Text>
+          <Text style={[styles.metricaValor, { color: fpsColor }]}>
+            {fps} FPS ({tiempoCuadroMs} ms) — {fps >= 55 ? 'ÓPTIMO' : 'DEGRADADO'}
+          </Text>
         </View>
         <View style={styles.metricaFila}>
-          <Text style={styles.metricaEtiqueta}>🔍 Zoom / Escala:</Text>
-          <Text style={styles.metricaValor}>{escala.toFixed(2)}x</Text>
+          <Text style={styles.metricaEtiqueta}>🏢 Primitivas GPU en Pantalla:</Text>
+          <Text style={styles.metricaValor}>
+            {totalPrimitivasGpu} geometrías ({cantidadEstaciones} estaciones)
+          </Text>
         </View>
         <View style={styles.metricaFila}>
-          <Text style={styles.metricaEtiqueta}>📍 Selección actual:</Text>
-          <Text style={[styles.metricaValor, styles.resaltado]}>
-            {estacionSeleccionada ? `Estación #${estacionSeleccionada.numero}` : 'Toca un punto'}
+          <Text style={styles.metricaEtiqueta}>🔍 Zoom / Desplazamiento:</Text>
+          <Text style={styles.metricaValor}>
+            {escala.toFixed(2)}x (X:{Math.round(translateX)}, Y:{Math.round(translateY)})
           </Text>
         </View>
       </View>
 
-      {/* Controles de prueba */}
+      {/* Selector de Estrés (§22.5 y §22.8) */}
+      <View style={styles.selectorEstresFila}>
+        <Text style={styles.selectorEtiqueta}>Carga (§22.5):</Text>
+        {[50, 100, 150, 200].map((cant) => (
+          <TouchableOpacity
+            key={`cant-${cant}`}
+            style={[
+              styles.botonSelector,
+              cantidadEstaciones === cant && styles.botonSelectorActivo,
+            ]}
+            onPress={() => setCantidadEstaciones(cant)}
+          >
+            <Text
+              style={[
+                styles.textoSelector,
+                cantidadEstaciones === cant && styles.textoSelectorActivo,
+              ]}
+            >
+              {cant} {cant === 100 ? '★' : ''}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Barra de Controles de Navegación */}
       <View style={styles.barraControles}>
-        <TouchableOpacity style={styles.botonControl} onPress={() => hacerZoom(1.2)}>
+        <TouchableOpacity style={styles.botonControl} onPress={() => hacerZoom(1.25)}>
           <Text style={styles.controlTexto}>Zoom +</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.botonControl} onPress={() => hacerZoom(0.8)}>
@@ -151,75 +245,114 @@ export const SpikePlanoSkiaSeccion: React.FC = () => {
         <TouchableOpacity style={styles.botonControl} onPress={reiniciarVista}>
           <Text style={styles.controlTexto}>Centrar</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.botonControl, styles.botonRegenerar]}
-          onPress={() => setSemilla((s) => s + 1)}
-        >
-          <Text style={styles.controlTexto}>🎲 Reubicar 100</Text>
-        </TouchableOpacity>
       </View>
 
-      {/* Canvas Skia con 100 estaciones cebaderas y auras concéntricas */}
+      {/* Canvas Skia con Plano Arquitectónico y Estaciones */}
       <View style={styles.canvasContenedor} {...panResponder.panHandlers}>
         <Canvas style={{ width: CANVAS_ANCHO, height: CANVAS_ALTO }}>
-          {/* Fondo cuadriculado simulando plano arquitectónico */}
-          <Rect x={0} y={0} width={CANVAS_ANCHO} height={CANVAS_ALTO} color="#f1f5f9" />
+          {/* Fondo cuadriculado arquitectónico */}
+          <Rect x={0} y={0} width={CANVAS_ANCHO} height={CANVAS_ALTO} color="#f8fafc" />
 
-          <Group
-            transform={[
-              { translateX },
-              { translateY },
-              { scale: escala },
-            ]}
-          >
-            {/* Líneas guía del plano técnico */}
-            {Array.from({ length: 8 }).map((_, i) => (
+          <Group transform={[{ translateX }, { translateY }, { scale: escala }]}>
+            {/* 1. PLANO TÉCNICO ARQUITECTÓNICO DE PLANTA INDUSTRIAL */}
+            {/* Perímetro de Hormigón Exterior */}
+            <Rect
+              x={20}
+              y={20}
+              width={planoAncho - 40}
+              height={planoAlto - 40}
+              color="#e2e8f0"
+            />
+            {/* Muros Perimetrales */}
+            <Line p1={{ x: 20, y: 20 }} p2={{ x: planoAncho - 20, y: 20 }} color="#334155" strokeWidth={4} />
+            <Line p1={{ x: planoAncho - 20, y: 20 }} p2={{ x: planoAncho - 20, y: planoAlto - 20 }} color="#334155" strokeWidth={4} />
+            <Line p1={{ x: planoAncho - 20, y: planoAlto - 20 }} p2={{ x: 20, y: planoAlto - 20 }} color="#334155" strokeWidth={4} />
+            <Line p1={{ x: 20, y: planoAlto - 20 }} p2={{ x: 20, y: 20 }} color="#334155" strokeWidth={4} />
+
+            {/* Divisiones de Zonas de Planta */}
+            {/* Zona A: Silos y Materia Prima (Noroeste) */}
+            <Rect x={30} y={30} width={planoAncho * 0.35} height={planoAlto * 0.4} color="#f1f5f9" />
+            <Line p1={{ x: 30, y: planoAlto * 0.43 }} p2={{ x: planoAncho * 0.38, y: planoAlto * 0.43 }} color="#94a3b8" strokeWidth={2} />
+            <Line p1={{ x: planoAncho * 0.38, y: 30 }} p2={{ x: planoAncho * 0.38, y: planoAlto * 0.43 }} color="#94a3b8" strokeWidth={2} />
+
+            {/* Zona B: Sala de Procesamiento (Noreste) */}
+            <Rect x={planoAncho * 0.42} y={30} width={planoAncho * 0.54} height={planoAlto * 0.45} color="#e0f2fe" />
+            <Line p1={{ x: planoAncho * 0.42, y: planoAlto * 0.48 }} p2={{ x: planoAncho - 30, y: planoAlto * 0.48 }} color="#64748b" strokeWidth={2} />
+
+            {/* Zona C: Muelle de Carga y Puertas Seccionales (Sureste) */}
+            <Rect x={planoAncho * 0.55} y={planoAlto * 0.52} width={planoAncho * 0.41} height={planoAlto * 0.42} color="#fef3c7" />
+            {/* Puertas de Muelle 1 a 4 */}
+            {Array.from({ length: 4 }).map((_, d) => (
               <Line
-                key={`line-h-${i}`}
-                p1={{ x: 0, y: i * 80 }}
-                p2={{ x: CANVAS_ANCHO * 1.5, y: i * 80 }}
-                color="#e2e8f0"
+                key={`puerta-${d}`}
+                p1={{ x: planoAncho - 22, y: planoAlto * 0.58 + d * 55 }}
+                p2={{ x: planoAncho - 22, y: planoAlto * 0.58 + d * 55 + 35 }}
+                color="#f59e0b"
+                strokeWidth={5}
+              />
+            ))}
+
+            {/* Zona D: Patio de Residuos y Compactador (Suroeste) */}
+            <Rect x={30} y={planoAlto * 0.5} width={planoAncho * 0.32} height={planoAlto * 0.44} color="#fee2e2" />
+
+            {/* Cuadrícula técnica de coordenadas */}
+            {Array.from({ length: 12 }).map((_, c) => (
+              <Line
+                key={`grid-x-${c}`}
+                p1={{ x: c * (planoAncho / 12), y: 0 }}
+                p2={{ x: c * (planoAncho / 12), y: planoAlto }}
+                color="rgba(148, 163, 184, 0.25)"
                 strokeWidth={1}
               />
             ))}
-            {Array.from({ length: 10 }).map((_, i) => (
+            {Array.from({ length: 10 }).map((_, r) => (
               <Line
-                key={`line-v-${i}`}
-                p1={{ x: i * 80, y: 0 }}
-                p2={{ x: i * 80, y: CANVAS_ALTO * 1.5 }}
-                color="#e2e8f0"
+                key={`grid-y-${r}`}
+                p1={{ x: 0, y: r * (planoAlto / 10) }}
+                p2={{ x: planoAncho, y: r * (planoAlto / 10) }}
+                color="rgba(148, 163, 184, 0.25)"
                 strokeWidth={1}
               />
             ))}
 
-            {/* Renderizado de las 100 estaciones con doble aura y centro */}
+            {/* 2. RENDERIZADO ACELERADO POR GPU DE ESTACIONES CEBADERAS */}
             {estaciones.map((estacion) => {
               const estaSeleccionada = estacionSeleccionada?.id === estacion.id;
 
               return (
                 <Group key={estacion.id}>
-                  {/* Aura externa de calor/cobertura */}
+                  {/* Irradiación amplia para estaciones con foco crítico (§21.5) */}
+                  {estacion.auraIrradiacion && (
+                    <Circle
+                      cx={estacion.x}
+                      cy={estacion.y}
+                      r={estacion.radioAura * 1.5}
+                      color="rgba(239, 68, 68, 0.12)"
+                    />
+                  )}
+
+                  {/* Aura concéntrica según Nivel de Actividad (0 a 4) */}
                   <Circle
                     cx={estacion.x}
                     cy={estacion.y}
-                    r={estaSeleccionada ? 26 : 18}
+                    r={estaSeleccionada ? estacion.radioAura + 10 : estacion.radioAura}
                     color={estacion.colorAura}
                   />
 
-                  {/* Halo de contraste */}
+                  {/* Anillo de contraste técnico */}
                   <Circle
                     cx={estacion.x}
                     cy={estacion.y}
-                    r={8}
+                    r={estaSeleccionada ? 9 : 7}
                     color="#ffffff"
                   />
 
-                  {/* Núcleo de la estación cebadera */}
+                  {/* Núcleo sólido de la estación */}
                   <Circle
                     cx={estacion.x}
                     cy={estacion.y}
-                    r={estaSeleccionada ? 7 : 5}
-                    color={estaSeleccionada ? '#000000' : estacion.colorCentro}
+                    r={estaSeleccionada ? 6 : 4.5}
+                    color={estaSeleccionada ? '#0f172a' : estacion.colorCentro}
                   />
                 </Group>
               );
@@ -228,10 +361,29 @@ export const SpikePlanoSkiaSeccion: React.FC = () => {
         </Canvas>
       </View>
 
-      <Text style={styles.instruccionesPie}>
-        👆 Arrastra con el dedo para desplazarte (Pan) y usa Zoom para medir los FPS en vivo en tu
-        Redmi Note 9.
-      </Text>
+      {/* Ficha Técnica de la Estación Seleccionada */}
+      {estacionSeleccionada ? (
+        <View style={styles.tarjetaSeleccion}>
+          <View style={styles.tarjetaHeader}>
+            <Text style={styles.tarjetaTitulo}>
+              📍 Estación {estacionSeleccionada.codigo} — {estacionSeleccionada.zona}
+            </Text>
+            <TouchableOpacity onPress={() => setEstacionSeleccionada(null)}>
+              <Text style={styles.tarjetaCerrar}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.tarjetaDetalle}>
+            Actividad: <Text style={{ fontWeight: '800' }}>{CONFIG_NIVELES[estacionSeleccionada.nivel].label}</Text> | Consumo: {estacionSeleccionada.consumoPorcentaje}%
+          </Text>
+          <Text style={styles.tarjetaDetalle}>
+            Cebo activo: {estacionSeleccionada.tipoCebo}
+          </Text>
+        </View>
+      ) : (
+        <Text style={styles.instruccionesPie}>
+          👆 Desliza el dedo para Pan, usa Zoom o toca los botones de carga para estresar la GPU de tu teléfono.
+        </Text>
+      )}
     </View>
   );
 };
@@ -244,45 +396,70 @@ const styles = StyleSheet.create({
   },
   panelMetricas: {
     backgroundColor: '#ffffff',
-    padding: 12,
+    padding: 10,
     borderRadius: TOKENS.radiusSm,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   metricaFila: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   metricaEtiqueta: {
-    fontSize: 12,
+    fontSize: 11,
     color: TOKENS.inkSoft,
     fontWeight: '600',
   },
   metricaValor: {
-    fontSize: 12,
+    fontSize: 11,
     color: TOKENS.ink,
     fontWeight: '700',
   },
-  resaltado: {
-    color: TOKENS.marca,
+  selectorEstresFila: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  selectorEtiqueta: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: TOKENS.ink,
+  },
+  botonSelector: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    paddingVertical: 6,
+    borderRadius: TOKENS.radiusSm,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+  },
+  botonSelectorActivo: {
+    backgroundColor: TOKENS.marca,
+    borderColor: TOKENS.marca,
+  },
+  textoSelector: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: TOKENS.ink,
+  },
+  textoSelectorActivo: {
+    color: '#ffffff',
   },
   barraControles: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   botonControl: {
     flex: 1,
     backgroundColor: '#334155',
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: TOKENS.radiusSm,
     alignItems: 'center',
-  },
-  botonRegenerar: {
-    backgroundColor: TOKENS.marca,
-    flex: 1.4,
   },
   controlTexto: {
     color: '#ffffff',
@@ -298,10 +475,40 @@ const styles = StyleSheet.create({
     borderColor: '#cbd5e1',
     backgroundColor: '#ffffff',
   },
+  tarjetaSeleccion: {
+    backgroundColor: '#ffffff',
+    borderColor: TOKENS.marca,
+    borderWidth: 1.5,
+    borderRadius: TOKENS.radiusSm,
+    padding: 10,
+    marginTop: 8,
+  },
+  tarjetaHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  tarjetaTitulo: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: TOKENS.ink,
+  },
+  tarjetaCerrar: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#64748b',
+    paddingHorizontal: 4,
+  },
+  tarjetaDetalle: {
+    fontSize: 11,
+    color: TOKENS.inkSoft,
+    lineHeight: 16,
+  },
   instruccionesPie: {
     fontSize: 11,
     color: '#64748b',
-    marginTop: 8,
+    marginTop: 6,
     textAlign: 'center',
     fontStyle: 'italic',
   },

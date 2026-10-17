@@ -179,4 +179,107 @@ export class ArchivoRepository {
       });
     }
   }
+
+  /**
+   * Genera un archivo de foto de prueba con carga útil realista para pruebas de estrés.
+   */
+  async generarFotoDePrueba(
+    inspectionId: string,
+    indice: number,
+  ): Promise<ArchivoLocalEntity> {
+    const db = this.getDb();
+    const fileId = `estres-foto-${indice}-${Date.now()}`;
+    const ahora = new Date().toISOString();
+
+    const carpetaRelativa = `inspecciones/${inspectionId}/fotos/`;
+    const dir = new Directory(Paths.document, 'inspecciones', inspectionId, 'fotos');
+    if (!dir.exists) {
+      await dir.create();
+    }
+
+    const nombreArchivo = `${fileId}.jpg`;
+    const pathRelativo = `${carpetaRelativa}${nombreArchivo}`;
+    const destino = new File(dir, nombreArchivo);
+
+    // Carga útil realista de ~150 KB para simular compresión JPEG de cámara móvil
+    const bloqueSimulado = 'GAFER_SPIKE_IMG_PAYLOAD_EVIDENCE_STRESS_TEST_BUFFER_BLOCK_';
+    const contenido = bloqueSimulado.repeat(2600);
+    await destino.write(contenido);
+
+    const sizeBytes = destino.exists ? (destino.size ?? contenido.length) : contenido.length;
+    const sha256Simulado = `sha256-stress-${fileId}-${sizeBytes}`;
+
+    await db.withExclusiveTransactionAsync(async (tx) => {
+      await tx.runAsync(
+        `INSERT INTO files_local (
+          file_id,
+          inspection_id,
+          file_type,
+          local_path_relative,
+          pinned,
+          remote_file_id,
+          sha256,
+          size_bytes,
+          mime_type,
+          upload_status,
+          retention_state,
+          pdf_selection_status,
+          captured_at
+        ) VALUES (?, ?, 'FOTO_EVIDENCIA', ?, 1, NULL, ?, ?, 'image/jpeg', 'PENDING', 'ACTIVE', 'SELECTED', ?);`,
+        [fileId, inspectionId, pathRelativo, sha256Simulado, sizeBytes, ahora],
+      );
+    });
+
+    return {
+      fileId,
+      inspectionId,
+      fileType: 'FOTO_EVIDENCIA',
+      localPathRelative: pathRelativo,
+      sizeBytes,
+      mimeType: 'image/jpeg',
+      sha256: sha256Simulado,
+      uploadStatus: 'PENDING',
+      capturedAt: ahora,
+    };
+  }
+
+  /**
+   * Genera 20 fotos físicas en documentDirectory y las registra en SQLite para prueba §22.6.
+   */
+  async generarLoteDe20FotosEstres(inspectionId: string): Promise<number> {
+    for (let i = 1; i <= 20; i++) {
+      await this.generarFotoDePrueba(inspectionId, i);
+    }
+    return 20;
+  }
+
+  /**
+   * Elimina todos los archivos físicos y registros SQLite de una inspección de prueba.
+   */
+  async limpiarArchivosDeInspeccion(inspectionId: string): Promise<void> {
+    const archivos = await this.listarArchivos(inspectionId);
+    for (const a of archivos) {
+      await this.eliminarArchivo(a.fileId);
+    }
+  }
+
+  /**
+   * Calcula el peso total en bytes y cantidad de fotos de una inspección.
+   */
+  async obtenerMetricasAlmacenamiento(
+    inspectionId: string,
+  ): Promise<{ totalArchivos: number; totalBytes: number }> {
+    const db = this.getDb();
+    const res = await db.getFirstAsync<{ total_archivos: number; total_bytes: number | null }>(
+      `SELECT COUNT(*) as total_archivos, SUM(size_bytes) as total_bytes 
+       FROM files_local 
+       WHERE inspection_id = ?;`,
+      [inspectionId],
+    );
+
+    return {
+      totalArchivos: res?.total_archivos ?? 0,
+      totalBytes: res?.total_bytes ?? 0,
+    };
+  }
 }
