@@ -21,6 +21,7 @@ import {
   ModoFiltroAgenda,
 } from '../model/agenda';
 import { useBorradorStore } from '../../operaciones/model/use-borrador-store';
+import { SpikeLaboratorioScreen } from '../../spike';
 import { Button, AlertBanner } from '../../../shared/ui';
 import { TOKENS } from '../../../shared/theme/tokens';
 
@@ -43,6 +44,7 @@ export const AgendaScreen: React.FC = () => {
 
   const [vistaActiva, setVistaActiva] = useState<VistaAgenda>('MIS_VISITAS');
   const [busquedaSede, setBusquedaSede] = useState('');
+  const [mostrarSpike, setMostrarSpike] = useState(false);
 
   const tecnicoId = usuario?.id || 'tecnico-defecto-id';
 
@@ -221,6 +223,10 @@ export const AgendaScreen: React.FC = () => {
     );
   };
 
+  if (mostrarSpike) {
+    return <SpikeLaboratorioScreen onVolver={() => setMostrarSpike(false)} />;
+  }
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <StatusBar style="light" />
@@ -241,15 +247,27 @@ export const AgendaScreen: React.FC = () => {
           </Text>
         </View>
 
-        <TouchableOpacity
-          testID="boton-logout"
-          style={styles.botonSalir}
-          onPress={handleCerrarSesion}
-          accessibilityRole="button"
-          accessibilityLabel="Cerrar sesión de campo"
-        >
-          <Text style={styles.textoSalir}>SALIR</Text>
-        </TouchableOpacity>
+        <View style={styles.headerBotones}>
+          <TouchableOpacity
+            testID="boton-spike"
+            style={styles.botonSpike}
+            onPress={() => setMostrarSpike(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Abrir Laboratorio Spike"
+          >
+            <Text style={styles.textoSpike}>🔬 SPIKE</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            testID="boton-logout"
+            style={styles.botonSalir}
+            onPress={handleCerrarSesion}
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar sesión de campo"
+          >
+            <Text style={styles.textoSalir}>SALIR</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Placa de Inspección Activa en Garita */}
@@ -420,6 +438,25 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
     textTransform: 'capitalize',
+  },
+  headerBotones: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  botonSpike: {
+    backgroundColor: '#b45309',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: TOKENS.radiusSm,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  textoSpike: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   botonSalir: {
     backgroundColor: 'rgba(255, 255, 255, 0.12)',
