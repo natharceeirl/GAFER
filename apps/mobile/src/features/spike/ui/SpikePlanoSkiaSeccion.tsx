@@ -7,7 +7,17 @@ import {
   PanResponder,
   Dimensions,
 } from 'react-native';
-import { Canvas, Circle, Group, Rect, Line } from '@shopify/react-native-skia';
+import {
+  Canvas,
+  Circle,
+  Group,
+  Rect,
+  Line,
+  Picture,
+  createPicture,
+  Skia,
+  PaintStyle,
+} from '@shopify/react-native-skia';
 import { TOKENS } from '../../../shared/theme/tokens';
 
 const { width: PANTALLA_ANCHO } = Dimensions.get('window');
@@ -140,27 +150,204 @@ export const SpikePlanoSkiaSeccion: React.FC = () => {
     [cantidadEstaciones, planoAncho, planoAlto],
   );
 
+  // Pre-grabado en GPU del Plano Técnico Arquitectónico (§22.5)
+  // Almacenado como SkPicture inmutable: CERO diffing ni reconciliación en Virtual DOM durante Pan/Zoom
+  const planoPicture = useMemo(() => {
+    if (typeof Skia === 'undefined' || typeof createPicture !== 'function') return null;
+
+    return createPicture((canvas) => {
+      // 1. Perímetro de Hormigón Exterior
+      const paintPerimetro = Skia.Paint();
+      paintPerimetro.setColor(Skia.Color('#e2e8f0'));
+      paintPerimetro.setStyle(PaintStyle.Fill);
+      canvas.drawRect(Skia.XYWHRect(20, 20, planoAncho - 40, planoAlto - 40), paintPerimetro);
+
+      // 2. Muros Perimetrales
+      const paintMuro = Skia.Paint();
+      paintMuro.setColor(Skia.Color('#334155'));
+      paintMuro.setStyle(PaintStyle.Stroke);
+      paintMuro.setStrokeWidth(4);
+      paintMuro.setAntiAlias(true);
+      canvas.drawLine(20, 20, planoAncho - 20, 20, paintMuro);
+      canvas.drawLine(planoAncho - 20, 20, planoAncho - 20, planoAlto - 20, paintMuro);
+      canvas.drawLine(planoAncho - 20, planoAlto - 20, 20, planoAlto - 20, paintMuro);
+      canvas.drawLine(20, planoAlto - 20, 20, 20, paintMuro);
+
+      // 3. Divisiones de Zonas de Planta
+      // Zona A: Silos y Materia Prima (Noroeste)
+      const paintZonaA = Skia.Paint();
+      paintZonaA.setColor(Skia.Color('#f1f5f9'));
+      paintZonaA.setStyle(PaintStyle.Fill);
+      canvas.drawRect(Skia.XYWHRect(30, 30, planoAncho * 0.35, planoAlto * 0.4), paintZonaA);
+
+      const paintDivA = Skia.Paint();
+      paintDivA.setColor(Skia.Color('#94a3b8'));
+      paintDivA.setStyle(PaintStyle.Stroke);
+      paintDivA.setStrokeWidth(2);
+      paintDivA.setAntiAlias(true);
+      canvas.drawLine(30, planoAlto * 0.43, planoAncho * 0.38, planoAlto * 0.43, paintDivA);
+      canvas.drawLine(planoAncho * 0.38, 30, planoAncho * 0.38, planoAlto * 0.43, paintDivA);
+
+      // Zona B: Sala de Procesamiento (Noreste)
+      const paintZonaB = Skia.Paint();
+      paintZonaB.setColor(Skia.Color('#e0f2fe'));
+      paintZonaB.setStyle(PaintStyle.Fill);
+      canvas.drawRect(Skia.XYWHRect(planoAncho * 0.42, 30, planoAncho * 0.54, planoAlto * 0.45), paintZonaB);
+
+      const paintDivB = Skia.Paint();
+      paintDivB.setColor(Skia.Color('#64748b'));
+      paintDivB.setStyle(PaintStyle.Stroke);
+      paintDivB.setStrokeWidth(2);
+      paintDivB.setAntiAlias(true);
+      canvas.drawLine(planoAncho * 0.42, planoAlto * 0.48, planoAncho - 30, planoAlto * 0.48, paintDivB);
+
+      // Zona C: Muelle de Carga y Puertas Seccionales (Sureste)
+      const paintZonaC = Skia.Paint();
+      paintZonaC.setColor(Skia.Color('#fef3c7'));
+      paintZonaC.setStyle(PaintStyle.Fill);
+      canvas.drawRect(Skia.XYWHRect(planoAncho * 0.55, planoAlto * 0.52, planoAncho * 0.41, planoAlto * 0.42), paintZonaC);
+
+      const paintPuerta = Skia.Paint();
+      paintPuerta.setColor(Skia.Color('#f59e0b'));
+      paintPuerta.setStyle(PaintStyle.Stroke);
+      paintPuerta.setStrokeWidth(5);
+      paintPuerta.setAntiAlias(true);
+      for (let d = 0; d < 4; d++) {
+        canvas.drawLine(
+          planoAncho - 22,
+          planoAlto * 0.58 + d * 55,
+          planoAncho - 22,
+          planoAlto * 0.58 + d * 55 + 35,
+          paintPuerta,
+        );
+      }
+
+      // Zona D: Patio de Residuos y Compactador (Suroeste)
+      const paintZonaD = Skia.Paint();
+      paintZonaD.setColor(Skia.Color('#fee2e2'));
+      paintZonaD.setStyle(PaintStyle.Fill);
+      canvas.drawRect(Skia.XYWHRect(30, planoAlto * 0.5, planoAncho * 0.32, planoAlto * 0.44), paintZonaD);
+
+      // Cuadrícula técnica de coordenadas
+      const paintGrid = Skia.Paint();
+      paintGrid.setColor(Skia.Color('rgba(148, 163, 184, 0.25)'));
+      paintGrid.setStyle(PaintStyle.Stroke);
+      paintGrid.setStrokeWidth(1);
+
+      for (let c = 0; c < 12; c++) {
+        canvas.drawLine(c * (planoAncho / 12), 0, c * (planoAncho / 12), planoAlto, paintGrid);
+      }
+      for (let r = 0; r < 10; r++) {
+        canvas.drawLine(0, r * (planoAlto / 10), planoAncho, r * (planoAlto / 10), paintGrid);
+      }
+    }, Skia.XYWHRect(0, 0, planoAncho, planoAlto));
+  }, [planoAncho, planoAlto]);
+
+  // Pre-grabado en GPU del conjunto de Estaciones Cebaderas
+  // Pinta las 100/200 estaciones por lote de pinturas pre-instanciadas en memoria nativa
+  const estacionesPicture = useMemo(() => {
+    if (typeof Skia === 'undefined' || typeof createPicture !== 'function') return null;
+
+    return createPicture((canvas) => {
+      const paintIrradiacion = Skia.Paint();
+      paintIrradiacion.setColor(Skia.Color('rgba(239, 68, 68, 0.12)'));
+      paintIrradiacion.setStyle(PaintStyle.Fill);
+      paintIrradiacion.setAntiAlias(true);
+
+      const paintAnilloBlanco = Skia.Paint();
+      paintAnilloBlanco.setColor(Skia.Color('#ffffff'));
+      paintAnilloBlanco.setStyle(PaintStyle.Fill);
+      paintAnilloBlanco.setAntiAlias(true);
+
+      const paintsAura: Record<number, ReturnType<typeof Skia.Paint>> = {};
+      const paintsCentro: Record<number, ReturnType<typeof Skia.Paint>> = {};
+
+      for (let lvl = 0; lvl <= 4; lvl++) {
+        const conf = CONFIG_NIVELES[lvl as NivelInfestacion];
+        const pAura = Skia.Paint();
+        pAura.setColor(Skia.Color(conf.hexAura));
+        pAura.setStyle(PaintStyle.Fill);
+        pAura.setAntiAlias(true);
+        paintsAura[lvl] = pAura;
+
+        const pCentro = Skia.Paint();
+        pCentro.setColor(Skia.Color(conf.hexCentro));
+        pCentro.setStyle(PaintStyle.Fill);
+        pCentro.setAntiAlias(true);
+        paintsCentro[lvl] = pCentro;
+      }
+
+      for (const est of estaciones) {
+        if (est.auraIrradiacion) {
+          canvas.drawCircle(est.x, est.y, est.radioAura * 1.5, paintIrradiacion);
+        }
+        canvas.drawCircle(est.x, est.y, est.radioAura, paintsAura[est.nivel]);
+        canvas.drawCircle(est.x, est.y, 7, paintAnilloBlanco);
+        canvas.drawCircle(est.x, est.y, 4.5, paintsCentro[est.nivel]);
+      }
+    }, Skia.XYWHRect(0, 0, planoAncho, planoAlto));
+  }, [estaciones, planoAncho, planoAlto]);
+
   const panOffset = useRef({ x: 0, y: 0 });
+  const animFramePan = useRef<number | null>(null);
+
+  // Mantener referencias actualizadas para desacoplar el PanResponder del ciclo de render de React
+  const coordsRef = useRef({ translateX, translateY, escala });
+  coordsRef.current = { translateX, translateY, escala };
+
+  const estacionesRef = useRef(estaciones);
+  estacionesRef.current = estaciones;
+
+  useEffect(() => {
+    return () => {
+      if (animFramePan.current !== null) {
+        cancelAnimationFrame(animFramePan.current);
+      }
+    };
+  }, []);
 
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2,
         onPanResponderGrant: () => {
-          panOffset.current = { x: translateX, y: translateY };
+          panOffset.current = {
+            x: coordsRef.current.translateX,
+            y: coordsRef.current.translateY,
+          };
         },
         onPanResponderMove: (_, gestureState) => {
-          setTranslateX(panOffset.current.x + gestureState.dx);
-          setTranslateY(panOffset.current.y + gestureState.dy);
+          const targetX = panOffset.current.x + gestureState.dx;
+          const targetY = panOffset.current.y + gestureState.dy;
+
+          // Coalescencia mediante requestAnimationFrame: máximo 1 actualización de estado por frame
+          if (animFramePan.current === null) {
+            animFramePan.current = requestAnimationFrame(() => {
+              setTranslateX(targetX);
+              setTranslateY(targetY);
+              animFramePan.current = null;
+            });
+          }
         },
         onPanResponderRelease: (_, gestureState) => {
+          if (animFramePan.current !== null) {
+            cancelAnimationFrame(animFramePan.current);
+            animFramePan.current = null;
+          }
+          const finalX = panOffset.current.x + gestureState.dx;
+          const finalY = panOffset.current.y + gestureState.dy;
+          setTranslateX(finalX);
+          setTranslateY(finalY);
+
           // Detección de toque sobre estación considerando pan y zoom
           if (Math.abs(gestureState.dx) < 6 && Math.abs(gestureState.dy) < 6) {
-            const touchX = (gestureState.x0 - 16 - translateX) / escala;
-            const touchY = (gestureState.y0 - 270 - translateY) / escala;
+            const curEscala = coordsRef.current.escala;
+            const touchX = (gestureState.x0 - 16 - finalX) / curEscala;
+            const touchY = (gestureState.y0 - 270 - finalY) / curEscala;
 
-            const encontrada = estaciones.find((e) => {
+            const encontrada = estacionesRef.current.find((e) => {
               const dist = Math.hypot(e.x - touchX, e.y - touchY);
               return dist <= 28;
             });
@@ -169,7 +356,7 @@ export const SpikePlanoSkiaSeccion: React.FC = () => {
           }
         },
       }),
-    [translateX, translateY, escala, estaciones],
+    [],
   );
 
   const reiniciarVista = () => {
@@ -199,7 +386,7 @@ export const SpikePlanoSkiaSeccion: React.FC = () => {
         <View style={styles.metricaFila}>
           <Text style={styles.metricaEtiqueta}>🏢 Primitivas GPU en Pantalla:</Text>
           <Text style={styles.metricaValor}>
-            {totalPrimitivasGpu} geometrías ({cantidadEstaciones} estaciones)
+            {totalPrimitivasGpu} geometrías ({cantidadEstaciones} estaciones) {planoPicture ? '⚡ GPU SkPicture' : ''}
           </Text>
         </View>
         <View style={styles.metricaFila}>
@@ -254,109 +441,137 @@ export const SpikePlanoSkiaSeccion: React.FC = () => {
           <Rect x={0} y={0} width={CANVAS_ANCHO} height={CANVAS_ALTO} color="#f8fafc" />
 
           <Group transform={[{ translateX }, { translateY }, { scale: escala }]}>
-            {/* 1. PLANO TÉCNICO ARQUITECTÓNICO DE PLANTA INDUSTRIAL */}
-            {/* Perímetro de Hormigón Exterior */}
-            <Rect
-              x={20}
-              y={20}
-              width={planoAncho - 40}
-              height={planoAlto - 40}
-              color="#e2e8f0"
-            />
-            {/* Muros Perimetrales */}
-            <Line p1={{ x: 20, y: 20 }} p2={{ x: planoAncho - 20, y: 20 }} color="#334155" strokeWidth={4} />
-            <Line p1={{ x: planoAncho - 20, y: 20 }} p2={{ x: planoAncho - 20, y: planoAlto - 20 }} color="#334155" strokeWidth={4} />
-            <Line p1={{ x: planoAncho - 20, y: planoAlto - 20 }} p2={{ x: 20, y: planoAlto - 20 }} color="#334155" strokeWidth={4} />
-            <Line p1={{ x: 20, y: planoAlto - 20 }} p2={{ x: 20, y: 20 }} color="#334155" strokeWidth={4} />
+            {planoPicture && estacionesPicture ? (
+              <>
+                {/* 1. PLANO Y ESTACIONES PRE-GRABADOS EN GPU (CERO DIFF DE VIRTUAL DOM) */}
+                <Picture picture={planoPicture} />
+                <Picture picture={estacionesPicture} />
 
-            {/* Divisiones de Zonas de Planta */}
-            {/* Zona A: Silos y Materia Prima (Noroeste) */}
-            <Rect x={30} y={30} width={planoAncho * 0.35} height={planoAlto * 0.4} color="#f1f5f9" />
-            <Line p1={{ x: 30, y: planoAlto * 0.43 }} p2={{ x: planoAncho * 0.38, y: planoAlto * 0.43 }} color="#94a3b8" strokeWidth={2} />
-            <Line p1={{ x: planoAncho * 0.38, y: 30 }} p2={{ x: planoAncho * 0.38, y: planoAlto * 0.43 }} color="#94a3b8" strokeWidth={2} />
-
-            {/* Zona B: Sala de Procesamiento (Noreste) */}
-            <Rect x={planoAncho * 0.42} y={30} width={planoAncho * 0.54} height={planoAlto * 0.45} color="#e0f2fe" />
-            <Line p1={{ x: planoAncho * 0.42, y: planoAlto * 0.48 }} p2={{ x: planoAncho - 30, y: planoAlto * 0.48 }} color="#64748b" strokeWidth={2} />
-
-            {/* Zona C: Muelle de Carga y Puertas Seccionales (Sureste) */}
-            <Rect x={planoAncho * 0.55} y={planoAlto * 0.52} width={planoAncho * 0.41} height={planoAlto * 0.42} color="#fef3c7" />
-            {/* Puertas de Muelle 1 a 4 */}
-            {Array.from({ length: 4 }).map((_, d) => (
-              <Line
-                key={`puerta-${d}`}
-                p1={{ x: planoAncho - 22, y: planoAlto * 0.58 + d * 55 }}
-                p2={{ x: planoAncho - 22, y: planoAlto * 0.58 + d * 55 + 35 }}
-                color="#f59e0b"
-                strokeWidth={5}
-              />
-            ))}
-
-            {/* Zona D: Patio de Residuos y Compactador (Suroeste) */}
-            <Rect x={30} y={planoAlto * 0.5} width={planoAncho * 0.32} height={planoAlto * 0.44} color="#fee2e2" />
-
-            {/* Cuadrícula técnica de coordenadas */}
-            {Array.from({ length: 12 }).map((_, c) => (
-              <Line
-                key={`grid-x-${c}`}
-                p1={{ x: c * (planoAncho / 12), y: 0 }}
-                p2={{ x: c * (planoAncho / 12), y: planoAlto }}
-                color="rgba(148, 163, 184, 0.25)"
-                strokeWidth={1}
-              />
-            ))}
-            {Array.from({ length: 10 }).map((_, r) => (
-              <Line
-                key={`grid-y-${r}`}
-                p1={{ x: 0, y: r * (planoAlto / 10) }}
-                p2={{ x: planoAncho, y: r * (planoAlto / 10) }}
-                color="rgba(148, 163, 184, 0.25)"
-                strokeWidth={1}
-              />
-            ))}
-
-            {/* 2. RENDERIZADO ACELERADO POR GPU DE ESTACIONES CEBADERAS */}
-            {estaciones.map((estacion) => {
-              const estaSeleccionada = estacionSeleccionada?.id === estacion.id;
-
-              return (
-                <Group key={estacion.id}>
-                  {/* Irradiación amplia para estaciones con foco crítico (§21.5) */}
-                  {estacion.auraIrradiacion && (
+                {/* 2. RESALTE DE ESTACIÓN SELECCIONADA */}
+                {estacionSeleccionada && (
+                  <Group>
+                    {estacionSeleccionada.auraIrradiacion && (
+                      <Circle
+                        cx={estacionSeleccionada.x}
+                        cy={estacionSeleccionada.y}
+                        r={(estacionSeleccionada.radioAura + 10) * 1.5}
+                        color="rgba(239, 68, 68, 0.2)"
+                      />
+                    )}
                     <Circle
-                      cx={estacion.x}
-                      cy={estacion.y}
-                      r={estacion.radioAura * 1.5}
-                      color="rgba(239, 68, 68, 0.12)"
+                      cx={estacionSeleccionada.x}
+                      cy={estacionSeleccionada.y}
+                      r={estacionSeleccionada.radioAura + 10}
+                      color={estacionSeleccionada.colorAura}
                     />
-                  )}
+                    <Circle
+                      cx={estacionSeleccionada.x}
+                      cy={estacionSeleccionada.y}
+                      r={9}
+                      color="#ffffff"
+                    />
+                    <Circle
+                      cx={estacionSeleccionada.x}
+                      cy={estacionSeleccionada.y}
+                      r={6}
+                      color="#0f172a"
+                    />
+                  </Group>
+                )}
+              </>
+            ) : (
+              /* Fallback declarativo en caso de entorno sin JSI */
+              <>
+                {/* Perímetro de Hormigón Exterior */}
+                <Rect
+                  x={20}
+                  y={20}
+                  width={planoAncho - 40}
+                  height={planoAlto - 40}
+                  color="#e2e8f0"
+                />
+                {/* Muros Perimetrales */}
+                <Line p1={{ x: 20, y: 20 }} p2={{ x: planoAncho - 20, y: 20 }} color="#334155" strokeWidth={4} />
+                <Line p1={{ x: planoAncho - 20, y: 20 }} p2={{ x: planoAncho - 20, y: planoAlto - 20 }} color="#334155" strokeWidth={4} />
+                <Line p1={{ x: planoAncho - 20, y: planoAlto - 20 }} p2={{ x: 20, y: planoAlto - 20 }} color="#334155" strokeWidth={4} />
+                <Line p1={{ x: 20, y: planoAlto - 20 }} p2={{ x: 20, y: 20 }} color="#334155" strokeWidth={4} />
 
-                  {/* Aura concéntrica según Nivel de Actividad (0 a 4) */}
-                  <Circle
-                    cx={estacion.x}
-                    cy={estacion.y}
-                    r={estaSeleccionada ? estacion.radioAura + 10 : estacion.radioAura}
-                    color={estacion.colorAura}
-                  />
+                {/* Divisiones de Zonas de Planta */}
+                <Rect x={30} y={30} width={planoAncho * 0.35} height={planoAlto * 0.4} color="#f1f5f9" />
+                <Line p1={{ x: 30, y: planoAlto * 0.43 }} p2={{ x: planoAncho * 0.38, y: planoAlto * 0.43 }} color="#94a3b8" strokeWidth={2} />
+                <Line p1={{ x: planoAncho * 0.38, y: 30 }} p2={{ x: planoAncho * 0.38, y: planoAlto * 0.43 }} color="#94a3b8" strokeWidth={2} />
 
-                  {/* Anillo de contraste técnico */}
-                  <Circle
-                    cx={estacion.x}
-                    cy={estacion.y}
-                    r={estaSeleccionada ? 9 : 7}
-                    color="#ffffff"
-                  />
+                <Rect x={planoAncho * 0.42} y={30} width={planoAncho * 0.54} height={planoAlto * 0.45} color="#e0f2fe" />
+                <Line p1={{ x: planoAncho * 0.42, y: planoAlto * 0.48 }} p2={{ x: planoAncho - 30, y: planoAlto * 0.48 }} color="#64748b" strokeWidth={2} />
 
-                  {/* Núcleo sólido de la estación */}
-                  <Circle
-                    cx={estacion.x}
-                    cy={estacion.y}
-                    r={estaSeleccionada ? 6 : 4.5}
-                    color={estaSeleccionada ? '#0f172a' : estacion.colorCentro}
+                <Rect x={planoAncho * 0.55} y={planoAlto * 0.52} width={planoAncho * 0.41} height={planoAlto * 0.42} color="#fef3c7" />
+                {Array.from({ length: 4 }).map((_, d) => (
+                  <Line
+                    key={`puerta-${d}`}
+                    p1={{ x: planoAncho - 22, y: planoAlto * 0.58 + d * 55 }}
+                    p2={{ x: planoAncho - 22, y: planoAlto * 0.58 + d * 55 + 35 }}
+                    color="#f59e0b"
+                    strokeWidth={5}
                   />
-                </Group>
-              );
-            })}
+                ))}
+
+                <Rect x={30} y={planoAlto * 0.5} width={planoAncho * 0.32} height={planoAlto * 0.44} color="#fee2e2" />
+
+                {Array.from({ length: 12 }).map((_, c) => (
+                  <Line
+                    key={`grid-x-${c}`}
+                    p1={{ x: c * (planoAncho / 12), y: 0 }}
+                    p2={{ x: c * (planoAncho / 12), y: planoAlto }}
+                    color="rgba(148, 163, 184, 0.25)"
+                    strokeWidth={1}
+                  />
+                ))}
+                {Array.from({ length: 10 }).map((_, r) => (
+                  <Line
+                    key={`grid-y-${r}`}
+                    p1={{ x: 0, y: r * (planoAlto / 10) }}
+                    p2={{ x: planoAncho, y: r * (planoAlto / 10) }}
+                    color="rgba(148, 163, 184, 0.25)"
+                    strokeWidth={1}
+                  />
+                ))}
+
+                {estaciones.map((estacion) => {
+                  const estaSeleccionada = estacionSeleccionada?.id === estacion.id;
+
+                  return (
+                    <Group key={estacion.id}>
+                      {estacion.auraIrradiacion && (
+                        <Circle
+                          cx={estacion.x}
+                          cy={estacion.y}
+                          r={estacion.radioAura * 1.5}
+                          color="rgba(239, 68, 68, 0.12)"
+                        />
+                      )}
+                      <Circle
+                        cx={estacion.x}
+                        cy={estacion.y}
+                        r={estaSeleccionada ? estacion.radioAura + 10 : estacion.radioAura}
+                        color={estacion.colorAura}
+                      />
+                      <Circle
+                        cx={estacion.x}
+                        cy={estacion.y}
+                        r={estaSeleccionada ? 9 : 7}
+                        color="#ffffff"
+                      />
+                      <Circle
+                        cx={estacion.x}
+                        cy={estacion.y}
+                        r={estaSeleccionada ? 6 : 4.5}
+                        color={estaSeleccionada ? '#0f172a' : estacion.colorCentro}
+                      />
+                    </Group>
+                  );
+                })}
+              </>
+            )}
           </Group>
         </Canvas>
       </View>
