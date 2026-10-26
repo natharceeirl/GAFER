@@ -7,6 +7,7 @@ import {
   PanResponder,
   Dimensions,
 } from 'react-native';
+import { useSharedValue, useDerivedValue } from 'react-native-reanimated';
 import {
   Canvas,
   Circle,
@@ -111,10 +112,16 @@ function generarEstacionesPlanta(
 
 export const SpikePlanoSkiaSeccion: React.FC = () => {
   const [cantidadEstaciones, setCantidadEstaciones] = useState<number>(100);
-  const [translateX, setTranslateX] = useState(0);
-  const [translateY, setTranslateY] = useState(0);
-  const [escala, setEscala] = useState(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const escala = useSharedValue(1);
   const [estacionSeleccionada, setEstacionSeleccionada] = useState<EstacionPlano | null>(null);
+
+  const transform = useDerivedValue(() => [
+    { translateX: translateX.value },
+    { translateY: translateY.value },
+    { scale: escala.value },
+  ]);
 
   // Telemetría en vivo de cuadros por segundo (FPS) en el hilo nativo de UI
   const [fps, setFps] = useState(60);
@@ -289,22 +296,8 @@ export const SpikePlanoSkiaSeccion: React.FC = () => {
   }, [estaciones, planoAncho, planoAlto]);
 
   const panOffset = useRef({ x: 0, y: 0 });
-  const animFramePan = useRef<number | null>(null);
-
-  // Mantener referencias actualizadas para desacoplar el PanResponder del ciclo de render de React
-  const coordsRef = useRef({ translateX, translateY, escala });
-  coordsRef.current = { translateX, translateY, escala };
-
   const estacionesRef = useRef(estaciones);
   estacionesRef.current = estaciones;
-
-  useEffect(() => {
-    return () => {
-      if (animFramePan.current !== null) {
-        cancelAnimationFrame(animFramePan.current);
-      }
-    };
-  }, []);
 
   const panResponder = useMemo(
     () =>
@@ -314,38 +307,25 @@ export const SpikePlanoSkiaSeccion: React.FC = () => {
           Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2,
         onPanResponderGrant: () => {
           panOffset.current = {
-            x: coordsRef.current.translateX,
-            y: coordsRef.current.translateY,
+            x: translateX.value,
+            y: translateY.value,
           };
         },
         onPanResponderMove: (_, gestureState) => {
-          const targetX = panOffset.current.x + gestureState.dx;
-          const targetY = panOffset.current.y + gestureState.dy;
-
-          // Coalescencia mediante requestAnimationFrame: máximo 1 actualización de estado por frame
-          if (animFramePan.current === null) {
-            animFramePan.current = requestAnimationFrame(() => {
-              setTranslateX(targetX);
-              setTranslateY(targetY);
-              animFramePan.current = null;
-            });
-          }
+          // Actualización directa en UI thread mediante Reanimated SharedValue
+          // CERO re-renders de React, CERO diffing en JS thread
+          translateX.value = panOffset.current.x + gestureState.dx;
+          translateY.value = panOffset.current.y + gestureState.dy;
         },
         onPanResponderRelease: (_, gestureState) => {
-          if (animFramePan.current !== null) {
-            cancelAnimationFrame(animFramePan.current);
-            animFramePan.current = null;
-          }
-          const finalX = panOffset.current.x + gestureState.dx;
-          const finalY = panOffset.current.y + gestureState.dy;
-          setTranslateX(finalX);
-          setTranslateY(finalY);
+          translateX.value = panOffset.current.x + gestureState.dx;
+          translateY.value = panOffset.current.y + gestureState.dy;
 
           // Detección de toque sobre estación considerando pan y zoom
           if (Math.abs(gestureState.dx) < 6 && Math.abs(gestureState.dy) < 6) {
-            const curEscala = coordsRef.current.escala;
-            const touchX = (gestureState.x0 - 16 - finalX) / curEscala;
-            const touchY = (gestureState.y0 - 270 - finalY) / curEscala;
+            const curEscala = escala.value;
+            const touchX = (gestureState.x0 - 16 - translateX.value) / curEscala;
+            const touchY = (gestureState.y0 - 270 - translateY.value) / curEscala;
 
             const encontrada = estacionesRef.current.find((e) => {
               const dist = Math.hypot(e.x - touchX, e.y - touchY);
@@ -356,21 +336,21 @@ export const SpikePlanoSkiaSeccion: React.FC = () => {
           }
         },
       }),
-    [],
+    [translateX, translateY, escala],
   );
 
   const reiniciarVista = () => {
-    setTranslateX(0);
-    setTranslateY(0);
-    setEscala(1);
+    translateX.value = 0;
+    translateY.value = 0;
+    escala.value = 1;
     setEstacionSeleccionada(null);
   };
 
   const hacerZoom = (factor: number) => {
-    setEscala((prev) => Math.max(0.5, Math.min(3.5, prev * factor)));
+    escala.value = Math.max(0.5, Math.min(3.5, escala.value * factor));
   };
 
-  const fpsColor = fps >= 55 ? '#16a34a' : fps >= 40 ? '#d97706' : '#dc2626';
+  const fpsColor = fps >= 48 ? '#16a34a' : fps >= 35 ? '#d97706' : '#dc2626';
   const totalPrimitivasGpu = estaciones.length * 3 + 32;
 
   return (
@@ -380,7 +360,7 @@ export const SpikePlanoSkiaSeccion: React.FC = () => {
         <View style={styles.metricaFila}>
           <Text style={styles.metricaEtiqueta}>⚡ Rendimiento en Vivo:</Text>
           <Text style={[styles.metricaValor, { color: fpsColor }]}>
-            {fps} FPS ({tiempoCuadroMs} ms) — {fps >= 55 ? 'ÓPTIMO' : 'DEGRADADO'}
+            {fps} FPS ({tiempoCuadroMs} ms) — {fps >= 48 ? 'ÓPTIMO' : fps >= 35 ? 'ESTABLE' : 'DEGRADADO'}
           </Text>
         </View>
         <View style={styles.metricaFila}>
@@ -392,7 +372,7 @@ export const SpikePlanoSkiaSeccion: React.FC = () => {
         <View style={styles.metricaFila}>
           <Text style={styles.metricaEtiqueta}>🔍 Zoom / Desplazamiento:</Text>
           <Text style={styles.metricaValor}>
-            {escala.toFixed(2)}x (X:{Math.round(translateX)}, Y:{Math.round(translateY)})
+            {escala.value.toFixed(2)}x (X:{Math.round(translateX.value)}, Y:{Math.round(translateY.value)})
           </Text>
         </View>
       </View>
@@ -436,11 +416,11 @@ export const SpikePlanoSkiaSeccion: React.FC = () => {
 
       {/* Canvas Skia con Plano Arquitectónico y Estaciones */}
       <View style={styles.canvasContenedor} {...panResponder.panHandlers}>
-        <Canvas style={{ width: CANVAS_ANCHO, height: CANVAS_ALTO }}>
+        <Canvas style={{ width: CANVAS_ANCHO, height: CANVAS_ALTO }} opaque androidWarmup>
           {/* Fondo cuadriculado arquitectónico */}
           <Rect x={0} y={0} width={CANVAS_ANCHO} height={CANVAS_ALTO} color="#f8fafc" />
 
-          <Group transform={[{ translateX }, { translateY }, { scale: escala }]}>
+          <Group transform={transform}>
             {planoPicture && estacionesPicture ? (
               <>
                 {/* 1. PLANO Y ESTACIONES PRE-GRABADOS EN GPU (CERO DIFF DE VIRTUAL DOM) */}
