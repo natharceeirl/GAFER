@@ -43,11 +43,22 @@ Desde la raíz del monorepo:
 pnpm --filter @gafer/mobile start
 ```
 
-### 2. Probar en un celular físico con Expo Go (Recomendado)
-1. Instala **Expo Go** desde Google Play Store.
-2. Conecta tu teléfono a la misma red Wi-Fi de tu computadora.
-3. Asegúrate de que en `apps/mobile/.env` la variable `EXPO_PUBLIC_API_URL` apunte a la IP de tu PC en la red local (ejemplo: `http://192.168.18.205:3000`).
-4. Escanea el código QR que muestra la terminal en Expo Go.
+### 2. Probar en un celular físico con Expo Go
+
+> [!IMPORTANT]
+> **Versión de Expo Go (SDK 57):**
+> Como este proyecto utiliza **Expo SDK 57**, **NO instales Expo Go directamente de Google Play Store** si tu tienda ya actualizó a SDK 58 (provocará error de incompatibilidad).
+> - **Descarga el APK oficial de Expo Go compatible con SDK 57:**
+>   👉 **[https://expo.dev/go?sdkVersion=57&platform=android&device=true](https://expo.dev/go?sdkVersion=57&platform=android&device=true)**
+> - Instala el APK en el teléfono Android y ábrelo.
+
+1. Conecta tu teléfono a la misma red Wi-Fi de tu computadora.
+2. La app auto-detecta la IP del host Metro donde compilas; si necesitas forzar una IP fija, configúrala en `apps/mobile/.env` (`EXPO_PUBLIC_API_URL=http://<TU_IP_LOCAL>:3000`).
+3. Escanea el código QR que muestra la terminal en Expo Go.
+
+> [!TIP]
+> **Para QA y Pruebas Formales de Entrega:**
+> En entornos de homologación y testing formal no se usa Expo Go; se genera directamente el binario compilado de pre-producción (`gafer-mobile-qa.apk` vía `eas build` o `npx expo run:android`) para probar permisos reales de hardware, cámara y almacenamiento nativo sin intermediarios.
 
 ### 3. Probar en Emulador de Android Studio
 1. Abre tu AVD (Android Virtual Device) desde Android Studio.
