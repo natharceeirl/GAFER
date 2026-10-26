@@ -62,12 +62,28 @@ export const SpikeDurabilidadSeccion: React.FC = () => {
         for (let i = 1; i <= lote; i++) {
           const opId = `op-estres-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 6)}`;
           await tx.runAsync(
-            `INSERT INTO sync_outbox (
-              operation_id, device_id, user_id, aggregate_type, aggregate_id,
-              operation_type, base_version, payload_kind, payload_json,
-              aggregate_seq, priority, sync_status, retry_count,
-              occurred_at_local, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+            `INSERT OR REPLACE INTO sync_outbox (
+              operation_id,
+              device_id,
+              user_id,
+              aggregate_type,
+              aggregate_id,
+              operation_type,
+              base_version,
+              payload_kind,
+              changed_fields_json,
+              payload_json,
+              aggregate_seq,
+              priority,
+              depends_on_operation_id,
+              created_at_local,
+              attempt_count,
+              last_attempt_at,
+              next_retry_at,
+              status,
+              last_error_code,
+              last_error_message_sanitized
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, NULL, ?, 0, NULL, NULL, 'PENDING', NULL, NULL);`,
             [
               opId,
               'redmi-note9-hardware-id',
@@ -80,10 +96,6 @@ export const SpikeDurabilidadSeccion: React.FC = () => {
               JSON.stringify({ cebo_consumido_pct: i * 2, tipo_trampa: 'CEBADERO' }),
               i,
               'HIGH',
-              'PENDING',
-              0,
-              new Date().toISOString(),
-              new Date().toISOString(),
               new Date().toISOString(),
             ],
           );

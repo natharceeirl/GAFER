@@ -66,11 +66,11 @@ export class ArchivoRepository {
     const fileId = `foto-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     const ahora = new Date().toISOString();
 
-    // 1. Crear directorio permanente dentro de Paths.document
+    // 1. Crear directorio permanente dentro de Paths.document asegurando intermedios
     const carpetaRelativa = `inspecciones/${inspectionId}/fotos/`;
     const dir = new Directory(Paths.document, 'inspecciones', inspectionId, 'fotos');
     if (!dir.exists) {
-      await dir.create();
+      dir.create({ intermediates: true, idempotent: true });
     }
 
     // 2. Copiar archivo desde el URI temporal al destino permanente
@@ -194,7 +194,7 @@ export class ArchivoRepository {
     const carpetaRelativa = `inspecciones/${inspectionId}/fotos/`;
     const dir = new Directory(Paths.document, 'inspecciones', inspectionId, 'fotos');
     if (!dir.exists) {
-      await dir.create();
+      dir.create({ intermediates: true, idempotent: true });
     }
 
     const nombreArchivo = `${fileId}.jpg`;
