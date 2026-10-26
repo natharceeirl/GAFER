@@ -115,6 +115,7 @@ export const SpikePlanoSkiaSeccion: React.FC = () => {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const escala = useSharedValue(1);
+  const [telemetriaVista, setTelemetriaVista] = useState({ x: 0, y: 0, escala: 1 });
   const [estacionSeleccionada, setEstacionSeleccionada] = useState<EstacionPlano | null>(null);
 
   const transform = useDerivedValue(() => [
@@ -318,14 +319,17 @@ export const SpikePlanoSkiaSeccion: React.FC = () => {
           translateY.value = panOffset.current.y + gestureState.dy;
         },
         onPanResponderRelease: (_, gestureState) => {
-          translateX.value = panOffset.current.x + gestureState.dx;
-          translateY.value = panOffset.current.y + gestureState.dy;
+          const finalX = panOffset.current.x + gestureState.dx;
+          const finalY = panOffset.current.y + gestureState.dy;
+          translateX.value = finalX;
+          translateY.value = finalY;
+          setTelemetriaVista((prev) => ({ ...prev, x: finalX, y: finalY }));
 
           // Detección de toque sobre estación considerando pan y zoom
           if (Math.abs(gestureState.dx) < 6 && Math.abs(gestureState.dy) < 6) {
             const curEscala = escala.value;
-            const touchX = (gestureState.x0 - 16 - translateX.value) / curEscala;
-            const touchY = (gestureState.y0 - 270 - translateY.value) / curEscala;
+            const touchX = (gestureState.x0 - 16 - finalX) / curEscala;
+            const touchY = (gestureState.y0 - 270 - finalY) / curEscala;
 
             const encontrada = estacionesRef.current.find((e) => {
               const dist = Math.hypot(e.x - touchX, e.y - touchY);
@@ -343,11 +347,14 @@ export const SpikePlanoSkiaSeccion: React.FC = () => {
     translateX.value = 0;
     translateY.value = 0;
     escala.value = 1;
+    setTelemetriaVista({ x: 0, y: 0, escala: 1 });
     setEstacionSeleccionada(null);
   };
 
   const hacerZoom = (factor: number) => {
-    escala.value = Math.max(0.5, Math.min(3.5, escala.value * factor));
+    const nuevaEscala = Math.max(0.5, Math.min(3.5, escala.value * factor));
+    escala.value = nuevaEscala;
+    setTelemetriaVista((prev) => ({ ...prev, escala: nuevaEscala }));
   };
 
   const fpsColor = fps >= 48 ? '#16a34a' : fps >= 35 ? '#d97706' : '#dc2626';
@@ -372,7 +379,7 @@ export const SpikePlanoSkiaSeccion: React.FC = () => {
         <View style={styles.metricaFila}>
           <Text style={styles.metricaEtiqueta}>🔍 Zoom / Desplazamiento:</Text>
           <Text style={styles.metricaValor}>
-            {escala.value.toFixed(2)}x (X:{Math.round(translateX.value)}, Y:{Math.round(translateY.value)})
+            {telemetriaVista.escala.toFixed(2)}x (X:{Math.round(telemetriaVista.x)}, Y:{Math.round(telemetriaVista.y)})
           </Text>
         </View>
       </View>
