@@ -2,6 +2,8 @@
 
 Este documento formaliza las decisiones de arquitectura consensuadas para el proyecto de automatización de informes, reportes y mapa murino de **GAFER Saneamiento Ambiental E.I.R.L.**
 
+> Para ver y exportar los diagramas visuales en Mermaid (Nivel 0, Backend Hexagonal, Frontend Web, Sincronización Offline y Flujo de Seguridad), consultar [Catálogo Oficial de Diagramas de Arquitectura](./DIAGRAMAS_ARQUITECTURA.md). El modelo físico de datos (DER) se gestiona centralizadamente en **dbdiagram.io**.
+
 ---
 
 ## 1. Topología del Monorepo
