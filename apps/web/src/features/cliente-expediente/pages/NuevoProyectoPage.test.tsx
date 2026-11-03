@@ -105,4 +105,22 @@ describe('NuevoProyectoPage — edición de sede', () => {
 
     expect(onRegistrar).toHaveBeenCalledWith({ ...existente, distrito: 'Yanahuara' });
   });
+
+  it('permite registrar monto presupuestado y moneda opcionales (GAF-105)', () => {
+    const onRegistrar = vi.fn();
+    render(<NuevoProyectoPage cliente={cliente} nombresExistentes={[]} onRegistrar={onRegistrar} onCancelar={() => {}} />);
+    completarAlta();
+    escribir('Monto presupuestado (opcional)', '25000.50');
+    fireEvent.change(screen.getByLabelText('Moneda'), { target: { value: 'USD' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar sede' }));
+
+    expect(onRegistrar).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nombre: 'PLANTA_NORTE',
+        montoPresupuestado: '25000.50',
+        moneda: 'USD',
+      }),
+    );
+  });
 });

@@ -75,17 +75,19 @@ describe('NuevoServicioPage — alta de servicio', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Registrar servicio' }));
 
-    expect(onRegistrar).toHaveBeenCalledWith({
-      tipo: 'DRT',
-      frecuencia: 'QUINCENAL',
-      areaTotal: '1200',
-      areaTratar: '800',
-      insumos: ['i1'],
-      dosis: { i1: '1 bloque por estación' },
-      equipos: ['e1'],
-      requiereCertificado: true,
-      vigenciaDias: '180',
-    });
+    expect(onRegistrar).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tipo: 'DRT',
+        frecuencia: 'QUINCENAL',
+        areaTotal: '1200',
+        areaTratar: '800',
+        insumos: ['i1'],
+        dosis: { i1: '1 bloque por estación' },
+        equipos: ['e1'],
+        requiereCertificado: true,
+        vigenciaDias: '180',
+      }),
+    );
   });
 
   it('muestra la regla cruzada del esquema (área a tratar mayor al total) en el campo del área a tratar', () => {
@@ -159,6 +161,24 @@ describe('NuevoServicioPage — edición de servicio', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Guardar servicio' }));
 
     expect(onRegistrar).toHaveBeenCalledWith({ ...existente, frecuencia: 'MENSUAL' });
+  });
+
+  it('permite registrar monto del servicio y moneda opcionales (GAF-105)', () => {
+    const onRegistrar = vi.fn();
+    render(<NuevoServicioPage {...propsBase} onRegistrar={onRegistrar} />);
+    completarAlta();
+    escribir('Monto del servicio (opcional)', '750.00');
+    fireEvent.change(screen.getByLabelText('Moneda'), { target: { value: 'USD' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar servicio' }));
+
+    expect(onRegistrar).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tipo: 'DRT',
+        monto: '750.00',
+        moneda: 'USD',
+      }),
+    );
   });
 
   it('muestra un insumo ya elegido que el catálogo marca inactivo, para poder quitarlo', () => {

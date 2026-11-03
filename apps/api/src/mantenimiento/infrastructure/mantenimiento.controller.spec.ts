@@ -356,6 +356,41 @@ describe('MantenimientoController', () => {
       });
       expect(res.nombre).toBe('PLANTA_SUR_MOD');
     });
+
+    it('debe registrar y retornar montoPresupuestado y moneda opcionales (GAF-105)', async () => {
+      const mockProyecto = new Proyecto({
+        id: 'p-1',
+        clienteId: 'c-1',
+        nombre: 'PLANTA_SUR',
+        direccionSede: 'Carretera Costanera Km 12',
+        distrito: 'Mollendo',
+        provincia: 'Islay',
+        departamento: 'Arequipa',
+        contactoNombre: 'Mario Vargas',
+        contactoCargo: 'Supervisor de Planta',
+        contactoTelefono: '954987654',
+        montoPresupuestado: 25000,
+        moneda: 'PEN',
+      });
+      mockProyectoUseCase.execute.mockResolvedValue(mockProyecto);
+
+      const res = await controller.crearProyecto({
+        clienteId: 'c-1',
+        nombre: 'PLANTA_SUR',
+        direccionSede: 'Carretera Costanera Km 12',
+        distrito: 'Mollendo',
+        provincia: 'Islay',
+        departamento: 'Arequipa',
+        contactoNombre: 'Mario Vargas',
+        contactoCargo: 'Supervisor de Planta',
+        contactoTelefono: '954987654',
+        montoPresupuestado: 25000,
+        moneda: 'PEN',
+      });
+
+      expect(res.montoPresupuestado).toBe(25000);
+      expect(res.moneda).toBe('PEN');
+    });
   });
 
   describe('Servicios Contratados Endpoints', () => {
@@ -415,6 +450,34 @@ describe('MantenimientoController', () => {
       expect(res.tipoServicio).toBe('DRT');
       expect(res.insumosAutorizados).toEqual(['i-2']);
       expect(res.dosisReferencial).toEqual({ 'i-2': '1 bloque' });
+    });
+
+    it('debe registrar y retornar monto y moneda opcionales (GAF-105)', async () => {
+      const { ServicioContratado } = await import('../domain/servicio-contratado');
+      const mockServicio = new ServicioContratado({
+        id: 's-1',
+        proyectoId: 'p-1',
+        tipoServicio: 'DSF',
+        frecuencia: 'MENSUAL',
+        areaTotalM2: 5000,
+        areaTratarM2: 3500,
+        monto: 1200.5,
+        moneda: 'USD',
+      });
+      mockServicioUseCase.execute.mockResolvedValue(mockServicio);
+
+      const res = await controller.crearServicioContratado({
+        proyectoId: 'p-1',
+        tipoServicio: 'DSF',
+        frecuencia: 'MENSUAL',
+        areaTotalM2: 5000,
+        areaTratarM2: 3500,
+        monto: 1200.5,
+        moneda: 'USD',
+      });
+
+      expect(res.monto).toBe(1200.5);
+      expect(res.moneda).toBe('USD');
     });
   });
 

@@ -32,6 +32,8 @@ const INICIAL: DatosProyecto = {
   contactoCargo: '',
   contactoTelefono: '',
   observaciones: '',
+  montoPresupuestado: '',
+  moneda: 'PEN',
 };
 
 /**
@@ -191,6 +193,36 @@ export function NuevoProyectoPage({
             onChange={(e) => set('observaciones', e.target.value)}
             placeholder="Ingreso solo con casco y chaleco; coordinar con vigilancia."
           />
+        </Campo>
+      </Bloque>
+
+      <Bloque titulo="Presupuesto y Monto (Opcional)">
+        <Campo
+          id="pro-monto-presupuestado"
+          label="Monto presupuestado (opcional)"
+          error={visibles.montoPresupuestado}
+          ayuda="Monto referencial del proyecto. Puede dejarse vacío si la facturación es externa."
+        >
+          <input
+            {...ariaError('pro-monto-presupuestado', visibles.montoPresupuestado)}
+            type="number"
+            min={0}
+            step="0.01"
+            inputMode="decimal"
+            value={datos.montoPresupuestado ?? ''}
+            onChange={(e) => set('montoPresupuestado', e.target.value)}
+            placeholder="0.00"
+          />
+        </Campo>
+        <Campo id="pro-moneda" label="Moneda" error={visibles.moneda}>
+          <select
+            {...ariaError('pro-moneda', visibles.moneda)}
+            value={datos.moneda ?? 'PEN'}
+            onChange={(e) => set('moneda', e.target.value)}
+          >
+            <option value="PEN">Soles (PEN S/)</option>
+            <option value="USD">Dólares (USD $)</option>
+          </select>
         </Campo>
       </Bloque>
     </AltaFormLayout>

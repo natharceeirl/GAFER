@@ -15,6 +15,8 @@ export interface ActualizarServicioContratadoCommand {
   dosisReferencial?: Record<string, string>;
   requiereCertificado?: boolean;
   vigenciaDias?: number | null;
+  monto?: number | null;
+  moneda?: string | null;
 }
 
 @Injectable()

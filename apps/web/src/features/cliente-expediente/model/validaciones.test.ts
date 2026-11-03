@@ -134,6 +134,14 @@ describe('validarProyecto (§7.2)', () => {
     expect(validarProyecto({ ...proyectoValido, nombre: 'ABC' }, [], { edicion: true })).toEqual({});
     expect(validarProyecto({ ...proyectoValido, nombre: 'AB' }, [], { edicion: true }).nombre).toBeDefined();
   });
+
+  it('acepta montoPresupuestado opcional o vacío y valida números no negativos (GAF-105)', () => {
+    expect(validarProyecto({ ...proyectoValido, montoPresupuestado: '' }, [])).toEqual({});
+    expect(validarProyecto({ ...proyectoValido, montoPresupuestado: '15000', moneda: 'PEN' }, [])).toEqual({});
+    expect(validarProyecto({ ...proyectoValido, montoPresupuestado: '0', moneda: 'USD' }, [])).toEqual({});
+    expect(validarProyecto({ ...proyectoValido, montoPresupuestado: '-10' }, []).montoPresupuestado).toBeDefined();
+    expect(validarProyecto({ ...proyectoValido, montoPresupuestado: 'abc' }, []).montoPresupuestado).toBeDefined();
+  });
 });
 
 const servicioValido: DatosServicio = {
@@ -192,5 +200,13 @@ describe('validarServicio (§7.3)', () => {
 
   it('sin certificado, no pide vigencia', () => {
     expect(validarServicio({ ...servicioValido, requiereCertificado: false, vigenciaDias: '' })).toEqual({});
+  });
+
+  it('acepta monto opcional o vacío y valida números no negativos (GAF-105)', () => {
+    expect(validarServicio({ ...servicioValido, monto: '' })).toEqual({});
+    expect(validarServicio({ ...servicioValido, monto: '450.50', moneda: 'PEN' })).toEqual({});
+    expect(validarServicio({ ...servicioValido, monto: '0', moneda: 'USD' })).toEqual({});
+    expect(validarServicio({ ...servicioValido, monto: '-20' }).monto).toBeDefined();
+    expect(validarServicio({ ...servicioValido, monto: 'invalido' }).monto).toBeDefined();
   });
 });

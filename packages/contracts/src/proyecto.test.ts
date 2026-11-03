@@ -79,3 +79,38 @@ describe('ProyectoActualizacionSchema', () => {
     esperarFallaEn(ProyectoActualizacionSchema, { nombre: 'planta baja' }, 'nombre');
   });
 });
+
+describe('Montos y presupuestos opcionales en proyectos/sedes (GAF-105)', () => {
+  it('acepta montoPresupuestado opcional con moneda PEN o USD', () => {
+    expect(
+      ProyectoRegistroSchema.safeParse({
+        ...registro,
+        montoPresupuestado: 35000,
+        moneda: 'PEN',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('permite dejar el presupuesto vacío o nulo sin errores', () => {
+    expect(
+      ProyectoRegistroSchema.safeParse({
+        ...registro,
+        montoPresupuestado: null,
+        moneda: null,
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rechaza presupuestos negativos o monedas inválidas', () => {
+    esperarFallaEn(
+      ProyectoRegistroSchema,
+      { ...registro, montoPresupuestado: -50 },
+      'montoPresupuestado',
+    );
+    esperarFallaEn(
+      ProyectoRegistroSchema,
+      { ...registro, moneda: 'ARS' },
+      'moneda',
+    );
+  });
+});

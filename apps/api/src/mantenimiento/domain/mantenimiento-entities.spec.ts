@@ -80,6 +80,24 @@ describe('Mantenimiento Domain Entities — Business Rules (T2.2)', () => {
         'El nombre de la sede/proyecto debe tener entre 3 y 50 caracteres alfanuméricos en mayúsculas sin espacios',
       );
     });
+
+    it('debe aceptar presupuesto y moneda opcionales o nulos (GAF-105)', () => {
+      const p1 = new Proyecto(validProps);
+      expect(p1.montoPresupuestado).toBeNull();
+      expect(p1.moneda).toBeNull();
+
+      const p2 = new Proyecto({ ...validProps, montoPresupuestado: 12500.5, moneda: 'USD' });
+      expect(p2.montoPresupuestado).toBe(12500.5);
+      expect(p2.moneda).toBe('USD');
+
+      p2.actualizarDatos({ montoPresupuestado: 15000, moneda: 'PEN' });
+      expect(p2.montoPresupuestado).toBe(15000);
+      expect(p2.moneda).toBe('PEN');
+
+      expect(() => new Proyecto({ ...validProps, montoPresupuestado: -10 })).toThrow(
+        'El presupuesto no puede ser negativo',
+      );
+    });
   });
 
   describe('ServicioContratado Entity', () => {
@@ -116,6 +134,24 @@ describe('Mantenimiento Domain Entities — Business Rules (T2.2)', () => {
             vigenciaDias: null,
           }),
       ).toThrow('Si el servicio requiere certificado ambiental, debe especificarse una vigencia en días mayor a 0');
+    });
+
+    it('debe aceptar monto y moneda opcionales o nulos (GAF-105)', () => {
+      const s1 = new ServicioContratado(validProps);
+      expect(s1.monto).toBeNull();
+      expect(s1.moneda).toBeNull();
+
+      const s2 = new ServicioContratado({ ...validProps, monto: 450.5, moneda: 'PEN' });
+      expect(s2.monto).toBe(450.5);
+      expect(s2.moneda).toBe('PEN');
+
+      s2.actualizarDatos({ monto: 600, moneda: 'USD' });
+      expect(s2.monto).toBe(600);
+      expect(s2.moneda).toBe('USD');
+
+      expect(() => new ServicioContratado({ ...validProps, monto: -50 })).toThrow(
+        'El monto no puede ser negativo',
+      );
     });
   });
 

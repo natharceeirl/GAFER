@@ -17,6 +17,8 @@ export interface ServicioContratadoProps {
   dosisReferencial?: Record<string, string>;
   requiereCertificado?: boolean;
   vigenciaDias?: number | null;
+  monto?: number | null;
+  moneda?: string | null;
   estado?: EstadoGeneral;
 }
 
@@ -32,6 +34,8 @@ export class ServicioContratado {
   public dosisReferencial: Record<string, string>;
   public requiereCertificado: boolean;
   public vigenciaDias: number | null;
+  public monto: number | null;
+  public moneda: string | null;
   private estado: EstadoGeneral;
 
   constructor(props: ServicioContratadoProps) {
@@ -56,6 +60,10 @@ export class ServicioContratado {
       throw new Error('Si el servicio requiere certificado ambiental, debe especificarse una vigencia en días mayor a 0');
     }
 
+    if (props.monto !== undefined && props.monto !== null && props.monto < 0) {
+      throw new Error('El monto no puede ser negativo');
+    }
+
     this.id = props.id ?? randomUUID();
     this.proyectoId = props.proyectoId;
     this.tipoServicio = props.tipoServicio;
@@ -67,6 +75,8 @@ export class ServicioContratado {
     this.dosisReferencial = props.dosisReferencial ?? {};
     this.requiereCertificado = props.requiereCertificado ?? false;
     this.vigenciaDias = props.vigenciaDias ?? null;
+    this.monto = props.monto ?? null;
+    this.moneda = props.moneda ?? null;
     this.estado = props.estado ?? 'ACTIVO';
   }
 
@@ -79,6 +89,8 @@ export class ServicioContratado {
     dosisReferencial?: Record<string, string>;
     requiereCertificado?: boolean;
     vigenciaDias?: number | null;
+    monto?: number | null;
+    moneda?: string | null;
   }): void {
     const nuevaAreaTotal = props.areaTotalM2 !== undefined ? props.areaTotalM2 : this.areaTotalM2;
     const nuevaAreaTratar = props.areaTratarM2 !== undefined ? props.areaTratarM2 : this.areaTratarM2;
@@ -97,6 +109,9 @@ export class ServicioContratado {
     if (nuevoReqCert && (!nuevaVigencia || nuevaVigencia <= 0)) {
       throw new Error('Si el servicio requiere certificado ambiental, debe especificarse una vigencia en días mayor a 0');
     }
+    if (props.monto !== undefined && props.monto !== null && props.monto < 0) {
+      throw new Error('El monto no puede ser negativo');
+    }
 
     if (props.frecuencia !== undefined) this.frecuencia = props.frecuencia;
     if (props.areaTotalM2 !== undefined) this.areaTotalM2 = props.areaTotalM2;
@@ -106,6 +121,8 @@ export class ServicioContratado {
     if (props.dosisReferencial !== undefined) this.dosisReferencial = props.dosisReferencial;
     if (props.requiereCertificado !== undefined) this.requiereCertificado = props.requiereCertificado;
     if (props.vigenciaDias !== undefined) this.vigenciaDias = props.vigenciaDias;
+    if (props.monto !== undefined) this.monto = props.monto;
+    if (props.moneda !== undefined) this.moneda = props.moneda;
   }
 
   desactivar(): void {

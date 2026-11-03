@@ -14,6 +14,8 @@ export interface ProyectoProps {
   contactoTelefono: string;
   estado?: EstadoGeneral;
   observaciones?: string | null;
+  montoPresupuestado?: number | null;
+  moneda?: string | null;
 }
 
 export class Proyecto {
@@ -27,6 +29,8 @@ export class Proyecto {
   public contactoNombre: string;
   public contactoCargo: string;
   public contactoTelefono: string;
+  public montoPresupuestado: number | null;
+  public moneda: string | null;
   private estado: EstadoGeneral;
   public observaciones: string | null;
 
@@ -43,6 +47,10 @@ export class Proyecto {
       throw new Error('La dirección física de la sede es obligatoria');
     }
 
+    if (props.montoPresupuestado !== undefined && props.montoPresupuestado !== null && props.montoPresupuestado < 0) {
+      throw new Error('El presupuesto no puede ser negativo');
+    }
+
     this.id = props.id ?? randomUUID();
     this.clienteId = props.clienteId;
     this.nombre = props.nombre;
@@ -55,6 +63,8 @@ export class Proyecto {
     this.contactoTelefono = props.contactoTelefono.trim();
     this.estado = props.estado ?? 'ACTIVO';
     this.observaciones = props.observaciones ?? null;
+    this.montoPresupuestado = props.montoPresupuestado ?? null;
+    this.moneda = props.moneda ?? null;
   }
 
   actualizarDatos(props: {
@@ -67,6 +77,8 @@ export class Proyecto {
     contactoCargo?: string;
     contactoTelefono?: string;
     observaciones?: string | null;
+    montoPresupuestado?: number | null;
+    moneda?: string | null;
   }): void {
     if (props.nombre !== undefined) {
       if (!/^[A-Z0-9_]{3,50}$/.test(props.nombre)) {
@@ -100,6 +112,15 @@ export class Proyecto {
     }
     if (props.observaciones !== undefined) {
       this.observaciones = props.observaciones;
+    }
+    if (props.montoPresupuestado !== undefined) {
+      if (props.montoPresupuestado !== null && props.montoPresupuestado < 0) {
+        throw new Error('El presupuesto no puede ser negativo');
+      }
+      this.montoPresupuestado = props.montoPresupuestado;
+    }
+    if (props.moneda !== undefined) {
+      this.moneda = props.moneda;
     }
   }
 

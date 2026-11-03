@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TelefonoSchema } from './comun';
+import { TelefonoSchema, MonedaSchema } from './comun';
 import { EstadoActivoInactivoSchema } from './cliente';
 
 export const ProyectoSchema = z.object({
@@ -26,6 +26,8 @@ export const ProyectoRegistroSchema = z.object({
   contactoCargo: z.string().min(1).describe('Cargo del responsable en sede'),
   contactoTelefono: TelefonoSchema.describe('Teléfono de la sede'),
   observaciones: z.string().nullish().describe('Observaciones de acceso o seguridad de la sede'),
+  montoPresupuestado: z.number().nonnegative().nullish().describe('Monto presupuestado de la sede/proyecto (opcional, GAF-105)'),
+  moneda: MonedaSchema.nullish().describe('Moneda del presupuesto (PEN o USD, opcional, GAF-105)'),
 });
 export type ProyectoRegistro = z.infer<typeof ProyectoRegistroSchema>;
 
@@ -52,5 +54,7 @@ export const ProyectoActualizacionSchema = z.object({
   contactoCargo: z.string().min(1).optional().describe('Cargo del responsable en sede'),
   contactoTelefono: TelefonoSchema.optional().describe('Teléfono de la sede'),
   observaciones: z.string().nullish().describe('Observaciones de acceso o seguridad de la sede'),
+  montoPresupuestado: z.number().nonnegative().nullish().describe('Monto presupuestado de la sede/proyecto (opcional, GAF-105)'),
+  moneda: MonedaSchema.nullish().describe('Moneda del presupuesto (PEN o USD, opcional, GAF-105)'),
 });
 export type ProyectoActualizacion = z.infer<typeof ProyectoActualizacionSchema>;

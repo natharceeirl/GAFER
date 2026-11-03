@@ -13,6 +13,8 @@ export interface ActualizarProyectoCommand {
   contactoCargo?: string;
   contactoTelefono?: string;
   observaciones?: string | null;
+  montoPresupuestado?: number | null;
+  moneda?: string | null;
 }
 
 @Injectable()

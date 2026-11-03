@@ -22,6 +22,10 @@ export const TelefonoSchema = z
   .regex(/^[0-9 +()-]+$/, 'El teléfono solo admite dígitos y + ( ) -')
   .refine((valor) => valor.replace(/\D/g, '').length >= 6, 'El teléfono debe tener al menos 6 dígitos');
 
+/** Moneda para cotizaciones, montos y presupuestos (PEN: Soles, USD: Dólares - GAF-105). */
+export const MonedaSchema = z.enum(['PEN', 'USD']);
+export type Moneda = z.infer<typeof MonedaSchema>;
+
 /** Consulta paginada de los listados: 20 registros por defecto, hasta 100; los números llegan como texto en la URL. */
 export const PaginacionQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20).describe('Número de registros a retornar (1 a 100)'),

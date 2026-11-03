@@ -87,6 +87,8 @@ export interface DatosProyecto {
   contactoCargo: string;
   contactoTelefono: string;
   observaciones: string;
+  montoPresupuestado?: string;
+  moneda?: string;
 }
 
 /** Id de cliente de relleno: el esquema de alta lo exige, pero el cliente ya está elegido y no se valida aquí. */
@@ -111,7 +113,11 @@ export function validarProyecto(
     for (const incidencia of resultado.error.issues) {
       const campo = campoDeRutaProyecto(String(incidencia.path[0]));
       if (!campo || e[campo]) continue;
-      e[campo] = vacio(d[campo]) ? OBLIGATORIO : incidencia.message;
+      if (campo === 'montoPresupuestado') {
+        e[campo] = 'Ingrese un monto numérico válido mayor o igual a 0.';
+      } else {
+        e[campo] = vacio(d[campo] ?? '') ? OBLIGATORIO : incidencia.message;
+      }
     }
   }
 
@@ -132,6 +138,8 @@ export interface DatosServicio {
   requiereCertificado: boolean | null;
   /** Vigencia del certificado en días; solo aplica si el servicio lo requiere. */
   vigenciaDias: string;
+  monto?: string;
+  moneda?: string;
 }
 
 const MENSAJE_SUPERFICIE = 'Ingrese una superficie mayor a 0 m².';
@@ -157,6 +165,8 @@ export function validarServicio(d: DatosServicio): Errores<keyof DatosServicio> 
         e[campo] = vacio(d.vigenciaDias) ? OBLIGATORIO : MENSAJE_VIGENCIA;
       } else if (campo === 'frecuencia') {
         e[campo] = OBLIGATORIO;
+      } else if (campo === 'monto') {
+        e[campo] = 'Ingrese un monto numérico válido mayor o igual a 0.';
       }
     }
   }
