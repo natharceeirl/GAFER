@@ -10,6 +10,7 @@
 import { create } from 'zustand';
 import { ActaServicioDrt } from '@gafer/contracts';
 import { BorradorRepository } from './borrador-repository';
+import { FormularioCampo } from './formulario-campo';
 
 export interface MetadataBorrador {
   /** Técnico dueño del borrador en este dispositivo. */
@@ -29,6 +30,7 @@ export interface BorradorInspeccion {
   numeroOrden?: string;
   servicioTipo?: string;
   datosDrt?: ActaServicioDrt;
+  datosCampo?: FormularioCampo;
 }
 
 export const MENSAJE_ERROR_PERSISTENCIA =
@@ -52,7 +54,10 @@ interface BorradorStore {
   actualizarObservaciones: (observaciones: string) => Promise<boolean>;
   /** Guarda el acta DRT en disco y luego la muestra. Devuelve false si no se pudo guardar. */
   actualizarDrt: (acta: ActaServicioDrt, metadata?: MetadataBorrador) => Promise<boolean>;
+  /** Guarda el formulario de campo en disco y luego lo muestra. Devuelve false si no se pudo guardar. */
+  actualizarCampo: (formulario: FormularioCampo, metadata?: MetadataBorrador) => Promise<boolean>;
   finalizarServicioDrt: (acta: ActaServicioDrt, usuarioId: string) => Promise<{ operationId: string }>;
+  finalizarServicioCampo: (formulario: FormularioCampo, usuarioId: string) => Promise<{ operationId: string }>;
   marcarComoPendienteDeSincronizar: () => void;
   restaurarBorrador: (borrador: BorradorInspeccion | null) => void;
   /**
@@ -124,9 +129,33 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
     }
   },
 
+  actualizarCampo: async (formulario, metadata) => {
+    try {
+      const repo = new BorradorRepository();
+      const persistido = await repo.guardarCampo(formulario, metadata);
+      set({ borrador: persistido, errorPersistencia: null });
+      return true;
+    } catch (error) {
+      set({ errorPersistencia: describirError(error) });
+      return false;
+    }
+  },
+
   finalizarServicioDrt: async (acta, usuarioId) => {
     const repo = new BorradorRepository();
     const resultado = await repo.finalizarYEncolarDrt(acta, usuarioId);
+
+    set({
+      borrador: null,
+      colaEnvioPendiente: true,
+    });
+
+    return resultado;
+  },
+
+  finalizarServicioCampo: async (formulario, usuarioId) => {
+    const repo = new BorradorRepository();
+    const resultado = await repo.finalizarYEncolarCampo(formulario, usuarioId);
 
     set({
       borrador: null,
