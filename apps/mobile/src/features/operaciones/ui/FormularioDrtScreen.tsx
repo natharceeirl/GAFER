@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,6 +7,9 @@ import {
   TouchableOpacity,
   Alert,
   TextInput,
+  BackHandler,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -64,10 +67,20 @@ const LABELS_ROEDOR: Record<EspecieRoedorDrt, string> = {
 };
 
 const LABELS_ESTADO_ESTACION: Record<EstadoEstacionPlanilla, { label: string; color: string; badge: string }> = {
-  SIN_ACTIVIDAD: { label: 'Sin Actividad', color: '#16a34a', badge: 'IN TACTA' },
+  SIN_ACTIVIDAD: { label: 'Sin Actividad', color: '#16a34a', badge: 'INTACTA' },
   CON_CONSUMO: { label: 'Con Consumo', color: '#ea580c', badge: 'ACTIVIDAD' },
   SIN_ACCESO: { label: 'Sin Acceso', color: '#64748b', badge: 'BLOQUEADA' },
   EXTRAVIADA: { label: 'Extraviada', color: '#dc2626', badge: 'EXTRAVIADA' },
+};
+
+const MAPA_ETIQUETAS_VALIDACION: Record<string, string> = {
+  'firmas.clienteConformidadNombre': 'Falta el Nombre del contacto del cliente en la Sección 7 (Firmas y Conformidad).',
+  'firmas.clienteConformidadCargo': 'Falta el Cargo del contacto del cliente en la Sección 7 (Firmas y Conformidad).',
+  'clienteRazonSocial': 'La Razón Social del cliente no puede estar vacía (Sección 1).',
+  'sedeDireccion': 'La Dirección o Sede no puede estar vacía (Sección 1).',
+  'horaInicio': 'La Hora de Inicio es obligatoria con formato HH:MM (Sección 1).',
+  'horaTermino': 'La Hora de Término es obligatoria con formato HH:MM (Sección 1).',
+  'fecha': 'La Fecha del servicio es obligatoria con formato AAAA-MM-DD (Sección 1).',
 };
 
 function fechaActualIso(): string {
@@ -140,6 +153,46 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
     };
   });
 
+  // Referencia mutable siempre actualizada para auto-guardado seguro
+  const ultimaActaRef = useRef(acta);
+  ultimaActaRef.current = acta;
+
+  // Auto-guardado en segundo plano en SQLite (debounced 2.5s) bajo la regla §2.4: Durable before visible
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      actualizarDrt(ultimaActaRef.current, {
+        clienteRazonSocial: ultimaActaRef.current.clienteRazonSocial,
+        sedeNombre: ultimaActaRef.current.sedeDireccion,
+        servicioTipo: 'DESRATIZACION_DRT',
+      })
+        .then(() => {
+          setMensajeGuardado(`Guardado localmente en SQLite a las ${horaActualIso()}`);
+        })
+        .catch(() => {});
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, [acta, actualizarDrt]);
+
+  // Manejador seguro para regresar: garantiza que todo cambio se guarde en SQLite antes de desmontar
+  const handleVolver = () => {
+    actualizarDrt(ultimaActaRef.current, {
+      clienteRazonSocial: ultimaActaRef.current.clienteRazonSocial,
+      sedeNombre: ultimaActaRef.current.sedeDireccion,
+      servicioTipo: 'DESRATIZACION_DRT',
+    }).catch(() => {});
+    onVolver();
+  };
+
+  // Interceptar botón atrás de hardware en Android (y navegación por gestos)
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleVolver();
+      return true;
+    });
+    return () => sub.remove();
+  }, [onVolver]);
+
   // Resumen en vivo de estaciones de la planilla
   const metricasEstaciones = useMemo(() => {
     let sinActividad = 0;
@@ -179,7 +232,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
     }));
   };
 
-  const handleGuardarBorrador = async () => {
+  const handleGuardarBorradorManual = async () => {
     try {
       setGuardando(true);
       setErrorValidacion(null);
@@ -190,7 +243,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
       });
       const hora = horaActualIso();
       setMensajeGuardado(`Borrador guardado en SQLite local a las ${hora}`);
-    } catch (err) {
+    } catch {
       Alert.alert('Error al guardar', 'No se pudo guardar el borrador en la base de datos local.');
     } finally {
       setGuardando(false);
@@ -201,9 +254,15 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
     // 1. Validar esquema completo según acta
     const resultado = ActaServicioDrtSchema.safeParse(acta);
     if (!resultado.success) {
-      const errorMsg = resultado.error.errors.map((e) => `• ${e.path.join('.')}: ${e.message}`).join('\n');
-      setErrorValidacion(`Por favor complete los campos requeridos antes de finalizar:\n${errorMsg}`);
-      Alert.alert('Formulario Incompleto', 'Existen campos del acta pendientes de llenar.');
+      const listaErrores = resultado.error.errors.map((e) => {
+        const pathKey = e.path.join('.');
+        return MAPA_ETIQUETAS_VALIDACION[pathKey] || `• ${pathKey}: ${e.message}`;
+      });
+      setErrorValidacion(`Complete los campos requeridos antes de finalizar:\n\n${listaErrores.join('\n')}`);
+      Alert.alert(
+        'Formulario Incompleto',
+        'Existen campos requeridos del acta en papel pendientes de llenar. Revise la alerta superior.',
+      );
       return;
     }
 
@@ -276,20 +335,22 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
     }));
   };
 
-  const agregarEstacion = () => {
+  const agregarEstaciones = (cantidad = 1) => {
     setActa((prev) => {
-      const siguienteNumero = prev.planillaEstaciones.length + 1;
+      const actuales = [...prev.planillaEstaciones];
+      const ultimoNumero = actuales.length > 0 ? actuales[actuales.length - 1].numero : 0;
+      const nuevas: ItemEstacionPlanilla[] = [];
+      for (let i = 1; i <= cantidad; i++) {
+        nuevas.push({
+          numero: ultimoNumero + i,
+          estado: 'SIN_ACTIVIDAD',
+          consumoGramos: 0,
+          repuestoGramos: 0,
+        });
+      }
       return {
         ...prev,
-        planillaEstaciones: [
-          ...prev.planillaEstaciones,
-          {
-            numero: siguienteNumero,
-            estado: 'SIN_ACTIVIDAD',
-            consumoGramos: 0,
-            repuestoGramos: 0,
-          },
-        ],
+        planillaEstaciones: [...actuales, ...nuevas],
       };
     });
   };
@@ -300,7 +361,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
 
       {/* Cabecera Técnica */}
       <View style={styles.cabeceraBar}>
-        <TouchableOpacity style={styles.botonVolver} onPress={onVolver}>
+        <TouchableOpacity style={styles.botonVolver} onPress={handleVolver}>
           <Text style={styles.textoBotonVolver}>← VOLVER</Text>
         </TouchableOpacity>
         <View style={styles.cabeceraCentro}>
@@ -312,416 +373,433 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
         </View>
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContenido}>
-        {mensajeGuardado ? (
-          <View style={styles.alertaGuardado}>
-            <Text style={styles.alertaGuardadoTexto}>✓ {mensajeGuardado}</Text>
-          </View>
-        ) : null}
-
-        {errorValidacion ? (
-          <AlertBanner tipo="error" mensaje={errorValidacion} style={styles.alertaError} />
-        ) : null}
-
-        {/* 1. DATOS GENERALES */}
-        <View style={styles.seccionCard}>
-          <Text style={styles.seccionTitulo}>1. DATOS GENERALES DEL SERVICIO</Text>
-          <Text style={styles.campoEtiqueta}>Cliente / Razón Social:</Text>
-          <TextInput
-            style={styles.inputTexto}
-            value={acta.clienteRazonSocial}
-            onChangeText={(t) => setActa((p) => ({ ...p, clienteRazonSocial: t }))}
-            placeholder="Razón Social"
-          />
-
-          <Text style={styles.campoEtiqueta}>Dirección / Sede:</Text>
-          <TextInput
-            style={styles.inputTexto}
-            value={acta.sedeDireccion}
-            onChangeText={(t) => setActa((p) => ({ ...p, sedeDireccion: t }))}
-            placeholder="Dirección del establecimiento"
-          />
-
-          <View style={styles.filaInputs}>
-            <View style={styles.columnaInput}>
-              <Text style={styles.campoEtiqueta}>Fecha (AAAA-MM-DD):</Text>
-              <TextInput
-                style={styles.inputTexto}
-                value={acta.fecha}
-                onChangeText={(t) => setActa((p) => ({ ...p, fecha: t }))}
-              />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContenido}
+          keyboardShouldPersistTaps="handled"
+        >
+          {mensajeGuardado ? (
+            <View style={styles.alertaGuardado}>
+              <Text style={styles.alertaGuardadoTexto}>✓ {mensajeGuardado}</Text>
             </View>
-            <View style={styles.columnaInput}>
-              <Text style={styles.campoEtiqueta}>Área Tratada (m²):</Text>
-              <TextInput
-                style={styles.inputTexto}
-                value={acta.areaTratadaM2 ? String(acta.areaTratadaM2) : ''}
-                keyboardType="numeric"
-                onChangeText={(t) => setActa((p) => ({ ...p, areaTratadaM2: Number(t) || 0 }))}
-                placeholder="Ej. 1200"
-              />
-            </View>
-          </View>
-
-          <View style={styles.filaInputs}>
-            <View style={styles.columnaInput}>
-              <Text style={styles.campoEtiqueta}>Hora Inicio (HH:MM):</Text>
-              <TextInput
-                style={styles.inputTexto}
-                value={acta.horaInicio}
-                onChangeText={(t) => setActa((p) => ({ ...p, horaInicio: t }))}
-              />
-            </View>
-            <View style={styles.columnaInput}>
-              <Text style={styles.campoEtiqueta}>Hora Término (HH:MM):</Text>
-              <TextInput
-                style={styles.inputTexto}
-                value={acta.horaTermino}
-                onChangeText={(t) => setActa((p) => ({ ...p, horaTermino: t }))}
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* 2. ACTIVIDAD */}
-        <View style={styles.seccionCard}>
-          <Text style={styles.seccionTitulo}>2. ACTIVIDAD REALIZADA</Text>
-          <View style={styles.chipsContenedor}>
-            {ActividadDrtSchema.options.map((act) => {
-              const seleccionado = acta.actividad === act;
-              return (
-                <TouchableOpacity
-                  key={`act-${act}`}
-                  style={[styles.chip, seleccionado && styles.chipActivo]}
-                  onPress={() => setActa((p) => ({ ...p, actividad: act }))}
-                >
-                  <Text style={[styles.chipTexto, seleccionado && styles.chipTextoActivo]}>
-                    {LABELS_ACTIVIDAD[act]}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* 3. CEBOS QUÍMICOS */}
-        <View style={styles.seccionCard}>
-          <Text style={styles.seccionTitulo}>3. CEBOS RATICIDAS EMPLEADOS</Text>
-          <Text style={styles.campoEtiqueta}>Formulación de Cebo:</Text>
-          <View style={styles.chipsContenedor}>
-            {TipoCeboDrtSchema.options.map((tc) => {
-              const seleccionado = acta.tipoCebo === tc;
-              return (
-                <TouchableOpacity
-                  key={`cebo-${tc}`}
-                  style={[styles.chip, seleccionado && styles.chipActivo]}
-                  onPress={() => setActa((p) => ({ ...p, tipoCebo: tc }))}
-                >
-                  <Text style={[styles.chipTexto, seleccionado && styles.chipTextoActivo]}>
-                    {LABELS_CEBO[tc]}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <View style={styles.filaTresInputs}>
-            <View style={styles.columnaTres}>
-              <Text style={styles.campoEtiqueta}>Instalados:</Text>
-              <TextInput
-                style={styles.inputTexto}
-                value={String(acta.cebosInstalados)}
-                keyboardType="numeric"
-                onChangeText={(t) => setActa((p) => ({ ...p, cebosInstalados: Number(t) || 0 }))}
-              />
-            </View>
-            <View style={styles.columnaTres}>
-              <Text style={styles.campoEtiqueta}>Consumidos:</Text>
-              <TextInput
-                style={styles.inputTexto}
-                value={String(acta.cebosConsumidos)}
-                keyboardType="numeric"
-                onChangeText={(t) => setActa((p) => ({ ...p, cebosConsumidos: Number(t) || 0 }))}
-              />
-            </View>
-            <View style={styles.columnaTres}>
-              <Text style={styles.campoEtiqueta}>Repuestos:</Text>
-              <TextInput
-                style={styles.inputTexto}
-                value={String(acta.cebosRepuestos)}
-                keyboardType="numeric"
-                onChangeText={(t) => setActa((p) => ({ ...p, cebosRepuestos: Number(t) || 0 }))}
-              />
-            </View>
-          </View>
-          {metricasEstaciones.conConsumo > 0 ? (
-            <TouchableOpacity style={styles.botonAutoSuma} onPress={actualizarConteoDesdePlanilla}>
-              <Text style={styles.textoAutoSuma}>
-                ⚡ Actualizar con suma de planilla ({metricasEstaciones.conConsumo} consumos / {metricasEstaciones.totalConsumoGramos}g)
-              </Text>
-            </TouchableOpacity>
           ) : null}
-        </View>
 
-        {/* 4. TRAMPAS FÍSICAS */}
-        <View style={styles.seccionCard}>
-          <Text style={styles.seccionTitulo}>4. TRAMPAS MECÁNICAS Y CAPTURA</Text>
-          <Text style={styles.campoEtiqueta}>Tipo de Trampa:</Text>
-          <View style={styles.chipsContenedor}>
-            {TipoTrampaDrtSchema.options.map((tt) => {
-              const seleccionado = acta.tipoTrampa === tt;
-              return (
-                <TouchableOpacity
-                  key={`trampa-${tt}`}
-                  style={[styles.chip, seleccionado && styles.chipActivo]}
-                  onPress={() => setActa((p) => ({ ...p, tipoTrampa: tt }))}
-                >
-                  <Text style={[styles.chipTexto, seleccionado && styles.chipTextoActivo]}>
-                    {LABELS_TRAMPA[tt]}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          {errorValidacion ? (
+            <AlertBanner tipo="error" mensaje={errorValidacion} style={styles.alertaError} />
+          ) : null}
 
-          <View style={styles.filaInputs}>
-            <View style={styles.columnaInput}>
-              <Text style={styles.campoEtiqueta}>Trampas Instaladas:</Text>
-              <TextInput
-                style={styles.inputTexto}
-                value={String(acta.trampasInstaladas)}
-                keyboardType="numeric"
-                onChangeText={(t) => setActa((p) => ({ ...p, trampasInstaladas: Number(t) || 0 }))}
-              />
-            </View>
-            <View style={styles.columnaInput}>
-              <Text style={styles.campoEtiqueta}>Trampas Activadas:</Text>
-              <TextInput
-                style={styles.inputTexto}
-                value={String(acta.trampasActivadas)}
-                keyboardType="numeric"
-                onChangeText={(t) => setActa((p) => ({ ...p, trampasActivadas: Number(t) || 0 }))}
-              />
-            </View>
-          </View>
-        </View>
+          {/* 1. DATOS GENERALES */}
+          <View style={styles.seccionCard}>
+            <Text style={styles.seccionTitulo}>1. DATOS GENERALES DEL SERVICIO</Text>
+            <Text style={styles.campoEtiqueta}>Cliente / Razón Social:</Text>
+            <TextInput
+              style={styles.inputTexto}
+              value={acta.clienteRazonSocial}
+              onChangeText={(t) => setActa((p) => ({ ...p, clienteRazonSocial: t }))}
+              placeholder="Razón Social"
+            />
 
-        {/* 5. ESPECIES DE ROEDORES */}
-        <View style={styles.seccionCard}>
-          <Text style={styles.seccionTitulo}>5. ESPECIES DE ROEDORES DETECTADAS</Text>
-          <Text style={styles.instruccionTexto}>Seleccione las especies identificadas durante la inspección:</Text>
-          <View style={styles.chipsContenedor}>
-            {EspecieRoedorDrtSchema.options.map((esp) => {
-              const marcada = acta.roedoresDetectados.includes(esp);
-              return (
-                <TouchableOpacity
-                  key={`esp-${esp}`}
-                  style={[styles.chip, marcada && styles.chipActivo]}
-                  onPress={() => toggleEspecieRoedor(esp)}
-                >
-                  <Text style={[styles.chipTexto, marcada && styles.chipTextoActivo]}>
-                    {marcada ? '✓ ' : '+ '}
-                    {LABELS_ROEDOR[esp]}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
+            <Text style={styles.campoEtiqueta}>Dirección / Sede:</Text>
+            <TextInput
+              style={styles.inputTexto}
+              value={acta.sedeDireccion}
+              onChangeText={(t) => setActa((p) => ({ ...p, sedeDireccion: t }))}
+              placeholder="Dirección del establecimiento"
+            />
 
-        {/* 6. RESULTADOS Y OBSERVACIONES */}
-        <View style={styles.seccionCard}>
-          <Text style={styles.seccionTitulo}>6. RESULTADOS, RECOMENDACIONES Y OBSERVACIONES</Text>
-          <Text style={styles.campoEtiqueta}>Resultados y Recomendaciones Técnicas:</Text>
-          <TextInput
-            style={[styles.inputTexto, styles.inputArea]}
-            value={acta.resultadosRecomendaciones}
-            multiline
-            numberOfLines={3}
-            onChangeText={(t) => setActa((p) => ({ ...p, resultadosRecomendaciones: t }))}
-            placeholder="Describa el estado del perímetro, hallazgos y medidas sanitarias..."
-          />
-
-          <Text style={styles.campoEtiqueta}>Observaciones del Cliente:</Text>
-          <TextInput
-            style={[styles.inputTexto, styles.inputArea]}
-            value={acta.observacionesCliente}
-            multiline
-            numberOfLines={2}
-            onChangeText={(t) => setActa((p) => ({ ...p, observacionesCliente: t }))}
-            placeholder="Comentarios adicionales del responsable de sede..."
-          />
-        </View>
-
-        {/* 7. FIRMAS Y CONFORMIDAD */}
-        <View style={styles.seccionCard}>
-          <Text style={styles.seccionTitulo}>7. FIRMAS Y CONFORMIDAD</Text>
-          <Text style={styles.subseccionTitulo}>Personal Responsable GAFER:</Text>
-          <View style={styles.filaInputs}>
-            <View style={styles.columnaInput}>
-              <Text style={styles.campoEtiqueta}>Nombre del Técnico:</Text>
-              <TextInput
-                style={styles.inputTexto}
-                value={acta.firmas.personalResponsableNombre}
-                onChangeText={(t) =>
-                  setActa((p) => ({ ...p, firmas: { ...p.firmas, personalResponsableNombre: t } }))
-                }
-              />
-            </View>
-            <View style={styles.columnaInput}>
-              <Text style={styles.campoEtiqueta}>Cargo:</Text>
-              <TextInput
-                style={styles.inputTexto}
-                value={acta.firmas.personalResponsableCargo}
-                onChangeText={(t) =>
-                  setActa((p) => ({ ...p, firmas: { ...p.firmas, personalResponsableCargo: t } }))
-                }
-              />
-            </View>
-          </View>
-
-          <Text style={styles.subseccionTitulo}>Conformidad del Cliente:</Text>
-          <View style={styles.filaInputs}>
-            <View style={styles.columnaInput}>
-              <Text style={styles.campoEtiqueta}>Nombre del Contacto:</Text>
-              <TextInput
-                style={styles.inputTexto}
-                value={acta.firmas.clienteConformidadNombre}
-                placeholder="Persona que recibe"
-                onChangeText={(t) =>
-                  setActa((p) => ({ ...p, firmas: { ...p.firmas, clienteConformidadNombre: t } }))
-                }
-              />
-            </View>
-            <View style={styles.columnaInput}>
-              <Text style={styles.campoEtiqueta}>Cargo del Contacto:</Text>
-              <TextInput
-                style={styles.inputTexto}
-                value={acta.firmas.clienteConformidadCargo}
-                placeholder="Cargo / Área"
-                onChangeText={(t) =>
-                  setActa((p) => ({ ...p, firmas: { ...p.firmas, clienteConformidadCargo: t } }))
-                }
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* 8. PLANILLA INDIVIDUAL POR ESTACIÓN */}
-        <View style={styles.seccionCard}>
-          <View style={styles.cabeceraPlanilla}>
-            <Text style={styles.seccionTitulo}>8. PLANILLA POR ESTACIÓN DE CONTROL</Text>
-            <TouchableOpacity style={styles.botonAgregarEstacion} onPress={agregarEstacion}>
-              <Text style={styles.textoBotonAgregar}>+ AGREGAR PUNTO</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Resumen de Métricas de la Planilla */}
-          <View style={styles.panelMetricasPlanilla}>
-            <Text style={styles.metricasPlanillaTexto}>
-              Total: <Text style={styles.metricaNegrita}>{metricasEstaciones.total}</Text> | Sin Act.:{' '}
-              <Text style={{ color: '#16a34a', fontWeight: '700' }}>{metricasEstaciones.sinActividad}</Text> | Con Cons.:{' '}
-              <Text style={{ color: '#ea580c', fontWeight: '700' }}>{metricasEstaciones.conConsumo}</Text> | Sin Acceso:{' '}
-              <Text style={{ color: '#64748b', fontWeight: '700' }}>{metricasEstaciones.sinAcceso}</Text> | Extrav.:{' '}
-              <Text style={{ color: '#dc2626', fontWeight: '700' }}>{metricasEstaciones.extraviada}</Text>
-            </Text>
-          </View>
-
-          {acta.planillaEstaciones.map((est) => {
-            const confEstado = LABELS_ESTADO_ESTACION[est.estado];
-            return (
-              <View key={`estacion-row-${est.numero}`} style={styles.filaEstacionCard}>
-                <View style={styles.estacionHeader}>
-                  <Text style={styles.estacionNumero}>📍 Estación #{est.numero}</Text>
-                  <View style={[styles.badgeEstado, { backgroundColor: confEstado.color }]}>
-                    <Text style={styles.badgeEstadoTexto}>{confEstado.badge}</Text>
-                  </View>
-                </View>
-
-                {/* Chips de Selección de Estado (incluye Sin Acceso y Extraviada) */}
-                <View style={styles.chipsContenedorCompacto}>
-                  {EstadoEstacionPlanillaSchema.options.map((estOpcion) => {
-                    const estaActivo = est.estado === estOpcion;
-                    const opcionConf = LABELS_ESTADO_ESTACION[estOpcion];
-                    return (
-                      <TouchableOpacity
-                        key={`opcion-${est.numero}-${estOpcion}`}
-                        style={[
-                          styles.chipCompacto,
-                          estaActivo && { backgroundColor: opcionConf.color, borderColor: opcionConf.color },
-                        ]}
-                        onPress={() => cambiarEstadoEstacion(est.numero, estOpcion)}
-                      >
-                        <Text
-                          style={[
-                            styles.chipCompactoTexto,
-                            estaActivo && styles.chipCompactoTextoActivo,
-                          ]}
-                        >
-                          {opcionConf.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                {/* Si hubo consumo, registrar gramos */}
-                {est.estado === 'CON_CONSUMO' ? (
-                  <View style={styles.filaInputs}>
-                    <View style={styles.columnaInput}>
-                      <Text style={styles.campoEtiqueta}>Consumo (gramos):</Text>
-                      <TextInput
-                        style={styles.inputTexto}
-                        keyboardType="numeric"
-                        value={est.consumoGramos ? String(est.consumoGramos) : ''}
-                        placeholder="Ej. 10"
-                        onChangeText={(t) => cambiarConsumoEstacion(est.numero, Number(t) || 0)}
-                      />
-                    </View>
-                    <View style={styles.columnaInput}>
-                      <Text style={styles.campoEtiqueta}>Repuesto (gramos):</Text>
-                      <TextInput
-                        style={styles.inputTexto}
-                        keyboardType="numeric"
-                        value={est.repuestoGramos ? String(est.repuestoGramos) : ''}
-                        placeholder="Ej. 10"
-                        onChangeText={(t) => cambiarConsumoEstacion(est.numero, Number(t) || 0)}
-                      />
-                    </View>
-                  </View>
-                ) : null}
-
-                {/* Observación individual (obligatoria si es Sin Acceso o Extraviada) */}
-                {(est.estado === 'SIN_ACCESO' || est.estado === 'EXTRAVIADA' || est.observaciones) ? (
-                  <View style={{ marginTop: 6 }}>
-                    <Text style={styles.campoEtiqueta}>
-                      {est.estado === 'SIN_ACCESO'
-                        ? 'Motivo de falta de acceso:'
-                        : est.estado === 'EXTRAVIADA'
-                          ? 'Detalle de extravío o daño:'
-                          : 'Observación:'}
-                    </Text>
-                    <TextInput
-                      style={styles.inputTexto}
-                      value={est.observaciones || ''}
-                      placeholder="Indique motivo o detalle..."
-                      onChangeText={(t) => cambiarNotaEstacion(est.numero, t)}
-                    />
-                  </View>
-                ) : null}
+            <View style={styles.filaInputs}>
+              <View style={styles.columnaInput}>
+                <Text style={styles.campoEtiqueta}>Fecha (AAAA-MM-DD):</Text>
+                <TextInput
+                  style={styles.inputTexto}
+                  value={acta.fecha}
+                  onChangeText={(t) => setActa((p) => ({ ...p, fecha: t }))}
+                />
               </View>
-            );
-          })}
-        </View>
+              <View style={styles.columnaInput}>
+                <Text style={styles.campoEtiqueta}>Área Tratada (m²):</Text>
+                <TextInput
+                  style={styles.inputTexto}
+                  value={acta.areaTratadaM2 ? String(acta.areaTratadaM2) : ''}
+                  keyboardType="numeric"
+                  onChangeText={(t) => setActa((p) => ({ ...p, areaTratadaM2: Number(t) || 0 }))}
+                  placeholder="Ej. 1200"
+                />
+              </View>
+            </View>
 
-        <View style={{ height: 100 }} />
-      </ScrollView>
+            <View style={styles.filaInputs}>
+              <View style={styles.columnaInput}>
+                <Text style={styles.campoEtiqueta}>Hora Inicio (HH:MM):</Text>
+                <TextInput
+                  style={styles.inputTexto}
+                  value={acta.horaInicio}
+                  onChangeText={(t) => setActa((p) => ({ ...p, horaInicio: t }))}
+                />
+              </View>
+              <View style={styles.columnaInput}>
+                <Text style={styles.campoEtiqueta}>Hora Término (HH:MM):</Text>
+                <TextInput
+                  style={styles.inputTexto}
+                  value={acta.horaTermino}
+                  onChangeText={(t) => setActa((p) => ({ ...p, horaTermino: t }))}
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* 2. ACTIVIDAD */}
+          <View style={styles.seccionCard}>
+            <Text style={styles.seccionTitulo}>2. ACTIVIDAD REALIZADA</Text>
+            <View style={styles.chipsContenedor}>
+              {ActividadDrtSchema.options.map((act) => {
+                const seleccionado = acta.actividad === act;
+                return (
+                  <TouchableOpacity
+                    key={`act-${act}`}
+                    style={[styles.chip, seleccionado && styles.chipActivo]}
+                    onPress={() => setActa((p) => ({ ...p, actividad: act }))}
+                  >
+                    <Text style={[styles.chipTexto, seleccionado && styles.chipTextoActivo]}>
+                      {LABELS_ACTIVIDAD[act]}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* 3. CEBOS QUÍMICOS */}
+          <View style={styles.seccionCard}>
+            <Text style={styles.seccionTitulo}>3. CEBOS RATICIDAS EMPLEADOS</Text>
+            <Text style={styles.campoEtiqueta}>Formulación de Cebo:</Text>
+            <View style={styles.chipsContenedor}>
+              {TipoCeboDrtSchema.options.map((tc) => {
+                const seleccionado = acta.tipoCebo === tc;
+                return (
+                  <TouchableOpacity
+                    key={`cebo-${tc}`}
+                    style={[styles.chip, seleccionado && styles.chipActivo]}
+                    onPress={() => setActa((p) => ({ ...p, tipoCebo: tc }))}
+                  >
+                    <Text style={[styles.chipTexto, seleccionado && styles.chipTextoActivo]}>
+                      {LABELS_CEBO[tc]}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={styles.filaTresInputs}>
+              <View style={styles.columnaTres}>
+                <Text style={styles.campoEtiqueta}>Instalados:</Text>
+                <TextInput
+                  style={styles.inputTexto}
+                  value={String(acta.cebosInstalados)}
+                  keyboardType="numeric"
+                  onChangeText={(t) => setActa((p) => ({ ...p, cebosInstalados: Number(t) || 0 }))}
+                />
+              </View>
+              <View style={styles.columnaTres}>
+                <Text style={styles.campoEtiqueta}>Consumidos:</Text>
+                <TextInput
+                  style={styles.inputTexto}
+                  value={String(acta.cebosConsumidos)}
+                  keyboardType="numeric"
+                  onChangeText={(t) => setActa((p) => ({ ...p, cebosConsumidos: Number(t) || 0 }))}
+                />
+              </View>
+              <View style={styles.columnaTres}>
+                <Text style={styles.campoEtiqueta}>Repuestos:</Text>
+                <TextInput
+                  style={styles.inputTexto}
+                  value={String(acta.cebosRepuestos)}
+                  keyboardType="numeric"
+                  onChangeText={(t) => setActa((p) => ({ ...p, cebosRepuestos: Number(t) || 0 }))}
+                />
+              </View>
+            </View>
+            {metricasEstaciones.conConsumo > 0 ? (
+              <TouchableOpacity style={styles.botonAutoSuma} onPress={actualizarConteoDesdePlanilla}>
+                <Text style={styles.textoAutoSuma}>
+                  ⚡ Actualizar con suma de planilla ({metricasEstaciones.conConsumo} consumos / {metricasEstaciones.totalConsumoGramos}g)
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          {/* 4. TRAMPAS FÍSICAS */}
+          <View style={styles.seccionCard}>
+            <Text style={styles.seccionTitulo}>4. TRAMPAS MECÁNICAS Y CAPTURA</Text>
+            <Text style={styles.campoEtiqueta}>Tipo de Trampa:</Text>
+            <View style={styles.chipsContenedor}>
+              {TipoTrampaDrtSchema.options.map((tt) => {
+                const seleccionado = acta.tipoTrampa === tt;
+                return (
+                  <TouchableOpacity
+                    key={`trampa-${tt}`}
+                    style={[styles.chip, seleccionado && styles.chipActivo]}
+                    onPress={() => setActa((p) => ({ ...p, tipoTrampa: tt }))}
+                  >
+                    <Text style={[styles.chipTexto, seleccionado && styles.chipTextoActivo]}>
+                      {LABELS_TRAMPA[tt]}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={styles.filaInputs}>
+              <View style={styles.columnaInput}>
+                <Text style={styles.campoEtiqueta}>Trampas Instaladas:</Text>
+                <TextInput
+                  style={styles.inputTexto}
+                  value={String(acta.trampasInstaladas)}
+                  keyboardType="numeric"
+                  onChangeText={(t) => setActa((p) => ({ ...p, trampasInstaladas: Number(t) || 0 }))}
+                />
+              </View>
+              <View style={styles.columnaInput}>
+                <Text style={styles.campoEtiqueta}>Trampas Activadas:</Text>
+                <TextInput
+                  style={styles.inputTexto}
+                  value={String(acta.trampasActivadas)}
+                  keyboardType="numeric"
+                  onChangeText={(t) => setActa((p) => ({ ...p, trampasActivadas: Number(t) || 0 }))}
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* 5. ESPECIES DE ROEDORES */}
+          <View style={styles.seccionCard}>
+            <Text style={styles.seccionTitulo}>5. ESPECIES DE ROEDORES DETECTADAS</Text>
+            <Text style={styles.instruccionTexto}>Seleccione las especies identificadas durante la inspección:</Text>
+            <View style={styles.chipsContenedor}>
+              {EspecieRoedorDrtSchema.options.map((esp) => {
+                const marcada = acta.roedoresDetectados.includes(esp);
+                return (
+                  <TouchableOpacity
+                    key={`esp-${esp}`}
+                    style={[styles.chip, marcada && styles.chipActivo]}
+                    onPress={() => toggleEspecieRoedor(esp)}
+                  >
+                    <Text style={[styles.chipTexto, marcada && styles.chipTextoActivo]}>
+                      {marcada ? '✓ ' : '+ '}
+                      {LABELS_ROEDOR[esp]}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* 6. RESULTADOS Y OBSERVACIONES */}
+          <View style={styles.seccionCard}>
+            <Text style={styles.seccionTitulo}>6. RESULTADOS, RECOMENDACIONES Y OBSERVACIONES</Text>
+            <Text style={styles.campoEtiqueta}>Resultados y Recomendaciones Técnicas:</Text>
+            <TextInput
+              style={[styles.inputTexto, styles.inputArea]}
+              value={acta.resultadosRecomendaciones}
+              multiline
+              numberOfLines={3}
+              onChangeText={(t) => setActa((p) => ({ ...p, resultadosRecomendaciones: t }))}
+              placeholder="Describa el estado del perímetro, hallazgos y medidas sanitarias..."
+            />
+
+            <Text style={styles.campoEtiqueta}>Observaciones del Cliente:</Text>
+            <TextInput
+              style={[styles.inputTexto, styles.inputArea]}
+              value={acta.observacionesCliente}
+              multiline
+              numberOfLines={2}
+              onChangeText={(t) => setActa((p) => ({ ...p, observacionesCliente: t }))}
+              placeholder="Comentarios adicionales del responsable de sede..."
+            />
+          </View>
+
+          {/* 7. FIRMAS Y CONFORMIDAD */}
+          <View style={styles.seccionCard}>
+            <Text style={styles.seccionTitulo}>7. FIRMAS Y CONFORMIDAD</Text>
+            <Text style={styles.subseccionTitulo}>Personal Responsable GAFER:</Text>
+            <View style={styles.filaInputs}>
+              <View style={styles.columnaInput}>
+                <Text style={styles.campoEtiqueta}>Nombre del Técnico:</Text>
+                <TextInput
+                  style={styles.inputTexto}
+                  value={acta.firmas.personalResponsableNombre}
+                  onChangeText={(t) =>
+                    setActa((p) => ({ ...p, firmas: { ...p.firmas, personalResponsableNombre: t } }))
+                  }
+                />
+              </View>
+              <View style={styles.columnaInput}>
+                <Text style={styles.campoEtiqueta}>Cargo:</Text>
+                <TextInput
+                  style={styles.inputTexto}
+                  value={acta.firmas.personalResponsableCargo}
+                  onChangeText={(t) =>
+                    setActa((p) => ({ ...p, firmas: { ...p.firmas, personalResponsableCargo: t } }))
+                  }
+                />
+              </View>
+            </View>
+
+            <Text style={styles.subseccionTitulo}>Conformidad del Cliente:</Text>
+            <View style={styles.filaInputs}>
+              <View style={styles.columnaInput}>
+                <Text style={styles.campoEtiqueta}>Nombre del Contacto:</Text>
+                <TextInput
+                  style={styles.inputTexto}
+                  value={acta.firmas.clienteConformidadNombre}
+                  placeholder="Persona que recibe"
+                  onChangeText={(t) =>
+                    setActa((p) => ({ ...p, firmas: { ...p.firmas, clienteConformidadNombre: t } }))
+                  }
+                />
+              </View>
+              <View style={styles.columnaInput}>
+                <Text style={styles.campoEtiqueta}>Cargo del Contacto:</Text>
+                <TextInput
+                  style={styles.inputTexto}
+                  value={acta.firmas.clienteConformidadCargo}
+                  placeholder="Cargo / Área"
+                  onChangeText={(t) =>
+                    setActa((p) => ({ ...p, firmas: { ...p.firmas, clienteConformidadCargo: t } }))
+                  }
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* 8. PLANILLA INDIVIDUAL POR ESTACIÓN */}
+          <View style={styles.seccionCard}>
+            <View style={styles.cabeceraPlanilla}>
+              <Text style={styles.seccionTitulo}>8. PLANILLA POR ESTACIÓN DE CONTROL</Text>
+              <View style={styles.grupoBotonesAgregar}>
+                <TouchableOpacity style={styles.botonAgregarEstacion} onPress={() => agregarEstaciones(1)}>
+                  <Text style={styles.textoBotonAgregar}>+1</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.botonAgregarEstacion} onPress={() => agregarEstaciones(5)}>
+                  <Text style={styles.textoBotonAgregar}>+5</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.botonAgregarEstacion} onPress={() => agregarEstaciones(10)}>
+                  <Text style={styles.textoBotonAgregar}>+10</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Resumen de Métricas de la Planilla */}
+            <View style={styles.panelMetricasPlanilla}>
+              <Text style={styles.metricasPlanillaTexto}>
+                Total: <Text style={styles.metricaNegrita}>{metricasEstaciones.total}</Text> | Sin Act.:{' '}
+                <Text style={{ color: '#16a34a', fontWeight: '700' }}>{metricasEstaciones.sinActividad}</Text> | Con Cons.:{' '}
+                <Text style={{ color: '#ea580c', fontWeight: '700' }}>{metricasEstaciones.conConsumo}</Text> | Sin Acceso:{' '}
+                <Text style={{ color: '#64748b', fontWeight: '700' }}>{metricasEstaciones.sinAcceso}</Text> | Extrav.:{' '}
+                <Text style={{ color: '#dc2626', fontWeight: '700' }}>{metricasEstaciones.extraviada}</Text>
+              </Text>
+            </View>
+
+            {acta.planillaEstaciones.map((est) => {
+              const confEstado = LABELS_ESTADO_ESTACION[est.estado];
+              return (
+                <View key={`estacion-row-${est.numero}`} style={styles.filaEstacionCard}>
+                  <View style={styles.estacionHeader}>
+                    <Text style={styles.estacionNumero}>📍 Estación #{est.numero}</Text>
+                    <View style={[styles.badgeEstado, { backgroundColor: confEstado.color }]}>
+                      <Text style={styles.badgeEstadoTexto}>{confEstado.badge}</Text>
+                    </View>
+                  </View>
+
+                  {/* Chips de Selección de Estado (incluye Sin Acceso y Extraviada) */}
+                  <View style={styles.chipsContenedorCompacto}>
+                    {EstadoEstacionPlanillaSchema.options.map((estOpcion) => {
+                      const estaActivo = est.estado === estOpcion;
+                      const opcionConf = LABELS_ESTADO_ESTACION[estOpcion];
+                      return (
+                        <TouchableOpacity
+                          key={`opcion-${est.numero}-${estOpcion}`}
+                          style={[
+                            styles.chipCompacto,
+                            estaActivo && { backgroundColor: opcionConf.color, borderColor: opcionConf.color },
+                          ]}
+                          onPress={() => cambiarEstadoEstacion(est.numero, estOpcion)}
+                        >
+                          <Text
+                            style={[
+                              styles.chipCompactoTexto,
+                              estaActivo && styles.chipCompactoTextoActivo,
+                            ]}
+                          >
+                            {opcionConf.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  {/* Si hubo consumo, registrar gramos */}
+                  {est.estado === 'CON_CONSUMO' ? (
+                    <View style={styles.filaInputs}>
+                      <View style={styles.columnaInput}>
+                        <Text style={styles.campoEtiqueta}>Consumo (gramos):</Text>
+                        <TextInput
+                          style={styles.inputTexto}
+                          keyboardType="numeric"
+                          value={est.consumoGramos ? String(est.consumoGramos) : ''}
+                          placeholder="Ej. 10"
+                          onChangeText={(t) => cambiarConsumoEstacion(est.numero, Number(t) || 0)}
+                        />
+                      </View>
+                      <View style={styles.columnaInput}>
+                        <Text style={styles.campoEtiqueta}>Repuesto (gramos):</Text>
+                        <TextInput
+                          style={styles.inputTexto}
+                          keyboardType="numeric"
+                          value={est.repuestoGramos ? String(est.repuestoGramos) : ''}
+                          placeholder="Ej. 10"
+                          onChangeText={(t) => cambiarConsumoEstacion(est.numero, Number(t) || 0)}
+                        />
+                      </View>
+                    </View>
+                  ) : null}
+
+                  {/* Observación individual (obligatoria si es Sin Acceso o Extraviada) */}
+                  {(est.estado === 'SIN_ACCESO' || est.estado === 'EXTRAVIADA' || est.observaciones) ? (
+                    <View style={{ marginTop: 6 }}>
+                      <Text style={styles.campoEtiqueta}>
+                        {est.estado === 'SIN_ACCESO'
+                          ? 'Motivo de falta de acceso:'
+                          : est.estado === 'EXTRAVIADA'
+                            ? 'Detalle de extravío o daño:'
+                            : 'Observación:'}
+                      </Text>
+                      <TextInput
+                        style={styles.inputTexto}
+                        value={est.observaciones || ''}
+                        placeholder="Indique motivo o detalle..."
+                        onChangeText={(t) => cambiarNotaEstacion(est.numero, t)}
+                      />
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+
+          <View style={{ height: 100 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Barra de Acciones Fijas Inferiores */}
       <View style={styles.barraAccionesFija}>
         <Button
           titulo="Guardar Borrador"
-          onPress={handleGuardarBorrador}
+          onPress={handleGuardarBorradorManual}
           variante="secundario"
           deshabilitado={guardando}
           style={styles.botonBarra}
@@ -920,6 +998,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+  },
+  grupoBotonesAgregar: {
+    flexDirection: 'row',
+    gap: 6,
   },
   botonAgregarEstacion: {
     backgroundColor: '#0284c7',
