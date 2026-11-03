@@ -22,4 +22,15 @@ export class ObtenerInspeccionUseCase {
   async ejecutarPorServicioId(servicioId: string): Promise<Inspeccion | null> {
     return this.repo.buscarPorServicioId(servicioId);
   }
+
+  async ejecutarPorTecnico(tecnicoId: string): Promise<Inspeccion[]> {
+    return this.repo.listarPorTecnico(tecnicoId);
+  }
+
+  async ejecutarTodas(): Promise<Inspeccion[]> {
+    if (this.repo.listarTodas) {
+      return this.repo.listarTodas();
+    }
+    return [];
+  }
 }

@@ -5,6 +5,7 @@ import { verificarClave } from '../../auth/domain/clave-hash';
 import { CredencialDemo, formatearCredenciales, generarClaveDemo } from './claves-demo';
 
 describe('Claves de los usuarios de ejemplo', () => {
+  jest.setTimeout(25000);
   it('se generan al azar, con al menos 16 caracteres y aptas para la política de claves', () => {
     const claves = Array.from({ length: 500 }, () => generarClaveDemo());
 

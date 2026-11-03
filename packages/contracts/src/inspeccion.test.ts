@@ -7,6 +7,8 @@ import {
   InspeccionRegistradaSchema,
   InspeccionSchema,
   PorcentajeConsumoSchema,
+  SolicitudCorreccionSchema,
+  ResumenServicioTecnicoSchema,
 } from './inspeccion';
 import { esperarFallaEn } from './pruebas';
 
@@ -93,5 +95,41 @@ describe('CrearInspeccionSchema', () => {
   it('rechaza un servicio ausente o sin formato UUID', () => {
     esperarFallaEn(CrearInspeccionSchema, {}, 'servicioId');
     esperarFallaEn(CrearInspeccionSchema, { servicioId: 's1' }, 'servicioId');
+  });
+});
+
+describe('SolicitudCorreccionSchema (GAF-104)', () => {
+  it('acepta un motivo válido con al menos 5 caracteres', () => {
+    const res = SolicitudCorreccionSchema.safeParse({
+      motivo: 'Se ingresó erróneamente la estación 12 en vez de la 14',
+    });
+    expect(res.success).toBe(true);
+  });
+
+  it('rechaza motivos vacíos, con solo espacios o menores a 5 caracteres', () => {
+    esperarFallaEn(SolicitudCorreccionSchema, { motivo: '' }, 'motivo');
+    esperarFallaEn(SolicitudCorreccionSchema, { motivo: '   ' }, 'motivo');
+    esperarFallaEn(SolicitudCorreccionSchema, { motivo: 'hola' }, 'motivo');
+  });
+});
+
+describe('ResumenServicioTecnicoSchema (GAF-104)', () => {
+  it('valida el resumen de un servicio cerrado para el técnico', () => {
+    const resumen = {
+      id,
+      servicioId: '22222222-2222-2222-2222-222222222222',
+      codigoInspeccion: 'GAFER-2026-KALLPA-001',
+      estado: 'CERRADO',
+      versionSync: 2,
+      fechaEjecucion: '2026-09-28',
+      horaInicio: '08:00',
+      horaFin: '10:00',
+      tecnicosParticipantes: [{ id: '33333333-3333-3333-3333-333333333333', nombre: 'Luis Quispe' }],
+      puedeSolicitarCorreccion: true,
+      clienteRazonSocial: 'ALICORP S.A.A.',
+      sedeNombre: 'Planta Callao',
+      servicioTipo: 'DESINSECTACION Y DESRATIZACION',
+    };
+    expect(ResumenServicioTecnicoSchema.safeParse(resumen).success).toBe(true);
   });
 });

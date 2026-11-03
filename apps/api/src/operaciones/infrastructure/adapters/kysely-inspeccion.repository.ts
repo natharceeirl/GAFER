@@ -1,5 +1,5 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { GaferDatabase } from '../../../database/types';
 import { Inspeccion, EstadoInspeccion } from '../../domain/inspeccion';
 import { InspeccionRepository } from '../../domain/ports/inspeccion.repository';
@@ -78,6 +78,29 @@ export class KyselyInspeccionRepository implements InspeccionRepository {
       .executeTakeFirst();
 
     return row ? this.mapToDomain(row) : null;
+  }
+
+  async listarPorTecnico(tecnicoId: string): Promise<Inspeccion[]> {
+    const rows = await this.db
+      .selectFrom('inspecciones')
+      .selectAll()
+      .where(
+        sql<boolean>`position(${tecnicoId}::text in snapshot_catalogos::text) > 0 OR position(${tecnicoId}::text in tecnicos_participantes::text) > 0`,
+      )
+      .orderBy('fecha_ejecucion', 'desc')
+      .execute();
+
+    return rows.map((r) => this.mapToDomain(r));
+  }
+
+  async listarTodas(): Promise<Inspeccion[]> {
+    const rows = await this.db
+      .selectFrom('inspecciones')
+      .selectAll()
+      .orderBy('fecha_ejecucion', 'desc')
+      .execute();
+
+    return rows.map((r) => this.mapToDomain(r));
   }
 
   private formatFecha(val: unknown): string {
