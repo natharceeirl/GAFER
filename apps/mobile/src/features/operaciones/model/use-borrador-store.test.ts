@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ActaServicioDrt } from '@gafer/contracts';
 import { useBorradorStore } from './use-borrador-store';
+import { crearFormularioCampo, FormularioCampo } from './formulario-campo';
 
 describe('useBorradorStore (Mobile)', () => {
   beforeEach(() => {
@@ -71,5 +72,29 @@ describe('useBorradorStore (Mobile)', () => {
     expect(estado.borrador?.servicioId).toBe(acta.servicioId);
     expect(estado.borrador?.datosDrt?.tipoCebo).toBe('BLOQUE_5G');
     expect(estado.borrador?.datosDrt?.planillaEstaciones.length).toBe(2);
+  });
+
+  it('actualiza y almacena el formulario de campo por bloques (GAF-34)', () => {
+    const f: FormularioCampo = crearFormularioCampo({
+      cliente: { razonSocial: 'SAN FERNANDO S.A.' },
+      sede: { nombre: 'PLANTA_CHORRILLOS' },
+      servicio: {
+        id: 'srv-sanfernando-01',
+        tipo: 'DESINSECTACION Y DESRATIZACION',
+        tipoServicio: 'DSS',
+        requiereCertificado: false,
+      },
+      tecnicoNombre: 'Marco Ipusari',
+    });
+
+    f.observacionesLibre = 'Aplicación focalizada en almacén 3.';
+
+    useBorradorStore.getState().actualizarCampo(f);
+    const estado = useBorradorStore.getState();
+    expect(estado.borrador?.servicioId).toBe('srv-sanfernando-01');
+    expect(estado.borrador?.clienteRazonSocial).toBe('SAN FERNANDO S.A.');
+    expect(estado.borrador?.datosCampo?.tipoServicio).toBe('DSS');
+    expect(estado.borrador?.datosCampo?.insumos.length).toBeGreaterThan(0);
+    expect(estado.borrador?.observaciones).toBe('Aplicación focalizada en almacén 3.');
   });
 });

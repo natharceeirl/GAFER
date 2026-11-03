@@ -9,6 +9,11 @@ import { SqliteDatabasePort, obtenerBaseDeDatos } from '../../../shared/db/sqlit
 import { OutboxQueue } from '../../../shared/db/outbox';
 import { generarUuid } from '../../../shared/utils/uuid';
 import { BorradorInspeccion, MetadataBorrador } from './use-borrador-store';
+import {
+  cerrarFormulario,
+  FormularioCampo,
+  validarCierre,
+} from './formulario-campo';
 
 interface FilaBorradorDb {
   servicio_id: string;
@@ -32,11 +37,19 @@ export class BorradorRepository {
 
   private mapearFilaABorrador(fila: FilaBorradorDb): BorradorInspeccion {
     let datosDrt: ActaServicioDrt | undefined;
+    let datosCampo: FormularioCampo | undefined;
+
     if (fila.datos_json) {
       try {
-        datosDrt = JSON.parse(fila.datos_json);
+        const parsed = JSON.parse(fila.datos_json);
+        if (parsed.planillaEstaciones || parsed.actividad) {
+          datosDrt = parsed;
+        } else if (parsed.insumos || parsed.metodos || parsed.clienteRazon) {
+          datosCampo = parsed;
+        }
       } catch {
         datosDrt = undefined;
+        datosCampo = undefined;
       }
     }
 
@@ -48,6 +61,7 @@ export class BorradorRepository {
       servicioTipo: fila.servicio_tipo ?? undefined,
       observaciones: fila.observaciones ?? '',
       datosDrt,
+      datosCampo,
     };
   }
 
@@ -147,6 +161,58 @@ export class BorradorRepository {
   }
 
   /**
+   * Guarda de forma durable el formulario de campo por bloques (§4, §8.2).
+   */
+  async guardarCampo(
+    formulario: FormularioCampo,
+    metadata?: MetadataBorrador,
+  ): Promise<BorradorInspeccion> {
+    const db = this.getDb();
+    const ahora = new Date().toISOString();
+    const datosJson = JSON.stringify(formulario);
+    const observaciones =
+      formulario.observacionesLibre ||
+      (formulario.observaciones.length > 0 ? formulario.observaciones.join('. ') : '');
+
+    await db.withExclusiveTransactionAsync(async (tx) => {
+      await tx.runAsync(
+        `INSERT OR REPLACE INTO borradores_inspeccion (
+          servicio_id,
+          cliente_razon_social,
+          sede_nombre,
+          numero_orden,
+          servicio_tipo,
+          observaciones,
+          datos_json,
+          actualizado_en,
+          server_version,
+          sync_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'PENDING_SYNC');`,
+        [
+          formulario.servicioId,
+          metadata?.clienteRazonSocial ?? formulario.clienteRazon,
+          metadata?.sedeNombre ?? formulario.proyectoNombre,
+          metadata?.numeroOrden ?? null,
+          metadata?.servicioTipo ?? formulario.servicioEtiqueta,
+          observaciones,
+          datosJson,
+          ahora,
+        ],
+      );
+    });
+
+    return {
+      servicioId: formulario.servicioId,
+      observaciones,
+      clienteRazonSocial: metadata?.clienteRazonSocial ?? formulario.clienteRazon,
+      sedeNombre: metadata?.sedeNombre ?? formulario.proyectoNombre,
+      numeroOrden: metadata?.numeroOrden,
+      servicioTipo: metadata?.servicioTipo ?? formulario.servicioEtiqueta,
+      datosCampo: formulario,
+    };
+  }
+
+  /**
    * Finaliza el servicio DRT: valida el acta, la encola en la tabla sync_outbox
    * y remueve el borrador activo localmente para dejar el terminal listo para el siguiente servicio.
    */
@@ -158,6 +224,7 @@ export class BorradorRepository {
     const parsed = ActaServicioDrtSchema.parse(acta);
     const operationId = generarUuid();
     const ahora = new Date().toISOString();
+
     const db = this.getDb();
     const outbox = new OutboxQueue(db);
 
@@ -177,6 +244,42 @@ export class BorradorRepository {
     });
 
     await this.eliminar(parsed.servicioId);
+
+    return { operationId };
+  }
+
+  /**
+   * Finaliza la inspección de campo por bloques (§4, §8.3): valida los bloques requeridos,
+   * encola el formulario cerrado en la tabla sync_outbox de SQLite y remueve el borrador local.
+   */
+  async finalizarYEncolarCampo(
+    formulario: FormularioCampo,
+    usuarioId: string,
+    deviceId = 'device-mobile-local',
+  ): Promise<{ operationId: string }> {
+    const ahora = new Date().toISOString();
+    const cerrado = cerrarFormulario(formulario, usuarioId, ahora);
+    const operationId = generarUuid();
+
+    const db = this.getDb();
+    const outbox = new OutboxQueue(db);
+
+    const operacion: OperacionSync = {
+      operationId,
+      tipo: 'REGISTRO_SERVICIO_CAMPO',
+      agregadoId: cerrado.servicioId,
+      actorId: usuarioId,
+      clienteTimestamp: ahora,
+      payload: cerrado as unknown as Record<string, unknown>,
+    };
+
+    await outbox.encolar(operacion, {
+      deviceId,
+      aggregateType: 'INSPECCION_CAMPO',
+      priority: 'HIGH',
+    });
+
+    await this.eliminar(cerrado.servicioId);
 
     return { operationId };
   }

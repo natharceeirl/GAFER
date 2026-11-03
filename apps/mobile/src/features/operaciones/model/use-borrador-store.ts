@@ -6,6 +6,7 @@
 import { create } from 'zustand';
 import { ActaServicioDrt } from '@gafer/contracts';
 import { BorradorRepository } from './borrador-repository';
+import { FormularioCampo } from './formulario-campo';
 
 export interface MetadataBorrador {
   clienteRazonSocial?: string;
@@ -22,6 +23,7 @@ export interface BorradorInspeccion {
   numeroOrden?: string;
   servicioTipo?: string;
   datosDrt?: ActaServicioDrt;
+  datosCampo?: FormularioCampo;
 }
 
 interface BorradorStore {
@@ -30,7 +32,9 @@ interface BorradorStore {
   iniciarBorrador: (servicioId: string, metadata?: MetadataBorrador) => Promise<void>;
   actualizarObservaciones: (observaciones: string) => Promise<void>;
   actualizarDrt: (acta: ActaServicioDrt, metadata?: MetadataBorrador) => Promise<void>;
+  actualizarCampo: (formulario: FormularioCampo, metadata?: MetadataBorrador) => Promise<void>;
   finalizarServicioDrt: (acta: ActaServicioDrt, usuarioId: string) => Promise<{ operationId: string }>;
+  finalizarServicioCampo: (formulario: FormularioCampo, usuarioId: string) => Promise<{ operationId: string }>;
   marcarComoPendienteDeSincronizar: () => void;
   restaurarBorrador: (borrador: BorradorInspeccion | null) => void;
   limpiar: () => Promise<void>;
@@ -89,6 +93,7 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
       numeroOrden: metadata?.numeroOrden ?? actual?.numeroOrden,
       servicioTipo: metadata?.servicioTipo ?? actual?.servicioTipo ?? 'DESRATIZACION_DRT',
       datosDrt: acta,
+      datosCampo: actual?.datosCampo,
     };
 
     set({
@@ -103,9 +108,50 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
     }
   },
 
+  actualizarCampo: async (formulario, metadata) => {
+    const actual = get().borrador;
+    const observacionesTexto =
+      formulario.observacionesLibre ||
+      (formulario.observaciones.length > 0 ? formulario.observaciones.join('. ') : (actual?.observaciones ?? ''));
+
+    const nuevoBorrador: BorradorInspeccion = {
+      servicioId: formulario.servicioId,
+      observaciones: observacionesTexto,
+      clienteRazonSocial: metadata?.clienteRazonSocial ?? formulario.clienteRazon ?? actual?.clienteRazonSocial,
+      sedeNombre: metadata?.sedeNombre ?? formulario.proyectoNombre ?? actual?.sedeNombre,
+      numeroOrden: metadata?.numeroOrden ?? actual?.numeroOrden,
+      servicioTipo: metadata?.servicioTipo ?? formulario.servicioEtiqueta ?? actual?.servicioTipo,
+      datosCampo: formulario,
+      datosDrt: actual?.datosDrt,
+    };
+
+    set({
+      borrador: nuevoBorrador,
+    });
+
+    try {
+      const repo = new BorradorRepository();
+      await repo.guardarCampo(formulario, metadata);
+    } catch {
+      // Fallback
+    }
+  },
+
   finalizarServicioDrt: async (acta, usuarioId) => {
     const repo = new BorradorRepository();
     const resultado = await repo.finalizarYEncolarDrt(acta, usuarioId);
+
+    set({
+      borrador: null,
+      colaEnvioPendiente: true,
+    });
+
+    return resultado;
+  },
+
+  finalizarServicioCampo: async (formulario, usuarioId) => {
+    const repo = new BorradorRepository();
+    const resultado = await repo.finalizarYEncolarCampo(formulario, usuarioId);
 
     set({
       borrador: null,
