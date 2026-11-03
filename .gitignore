@@ -12,3 +12,5 @@ coverage-e2e/
 .codegraph/
 .claude/
 .atl/
+# Documentos entregados por GAFER: contienen datos reales de sus clientes (confidencial)
+docs_empresa/
