@@ -14,3 +14,8 @@ coverage-e2e/
 .atl/
 # Documentos entregados por GAFER: contienen datos reales de sus clientes (confidencial)
 docs_empresa/
+# Documentos de trabajo con información de GAFER (especificación, propuestas, presentaciones)
+docs/*.pdf
+docs/*.docx
+docs/presentaciones/
+docs/Contradicciones_y_Vacios_Especificaciones_v6.md
