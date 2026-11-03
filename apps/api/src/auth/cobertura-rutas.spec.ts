@@ -67,8 +67,10 @@ const MATRIZ_ESPERADA: Array<[string, string]> = [
   // Operaciones
   ['POST /api/operaciones/inspecciones', 'AST'],
   ['GET /api/operaciones/inspecciones', 'AST'],
+  ['GET /api/operaciones/inspecciones/mis-servicios', 'AST'],
   ['GET /api/operaciones/inspecciones/:id', 'AST'],
   ['POST /api/operaciones/inspecciones/:id/cerrar', 'AST'],
+  ['POST /api/operaciones/inspecciones/:id/solicitar-correccion', 'AST'],
   ['GET /api/operaciones/inspecciones/:id/auditoria', 'A'],
   ['POST /api/operaciones/inspecciones/:id/sincronizar', 'AST'],
   // Fases 2 a 5 y expediente heredado

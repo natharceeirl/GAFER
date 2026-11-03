@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { Inspeccion } from '../domain/inspeccion';
 import { InspeccionRepository } from '../domain/ports/inspeccion.repository';
 
-// TODO: reemplazar por un adapter Postgres una vez definido el esquema de datos.
 @Injectable()
 export class InspeccionRepositoryMemory implements InspeccionRepository {
   private readonly store = new Map<string, Inspeccion>();
@@ -22,5 +21,20 @@ export class InspeccionRepositoryMemory implements InspeccionRepository {
       }
     }
     return null;
+  }
+
+  async listarPorTecnico(tecnicoId: string): Promise<Inspeccion[]> {
+    const res: Inspeccion[] = [];
+    for (const inspeccion of this.store.values()) {
+      const participa = inspeccion.tecnicosParticipantes.some((t) => t.id === tecnicoId);
+      if (participa) {
+        res.push(inspeccion);
+      }
+    }
+    return res;
+  }
+
+  async listarTodas(): Promise<Inspeccion[]> {
+    return Array.from(this.store.values());
   }
 }

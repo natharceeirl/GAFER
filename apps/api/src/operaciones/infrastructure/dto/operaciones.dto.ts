@@ -4,6 +4,7 @@ import {
   CrearInspeccionSchema,
   LoteSyncRequestSchema,
   OperacionSyncSchema,
+  SolicitudCorreccionSchema,
 } from '@gafer/contracts';
 import { createZodDtoDocumentado } from '../../../shared/infrastructure/dto/zod-dto-documentado';
 
@@ -43,4 +44,8 @@ export class OperacionSyncDto extends createZodDtoDocumentado(OperacionSyncSchem
 export class SincronizarLoteDto extends createZodDtoDocumentado(LoteSyncRequestSchema.partial({ inspeccionId: true }), {
   inspeccionId: '22222222-2222-4222-8222-222222222222',
   operaciones: [operacionDeEjemplo],
+}) {}
+
+export class SolicitudCorreccionDto extends createZodDtoDocumentado(SolicitudCorreccionSchema, {
+  motivo: 'Se ingresó erróneamente el número de estación 12 en vez de la 14',
 }) {}
