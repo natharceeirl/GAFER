@@ -101,6 +101,11 @@ describe('Swagger de los DTO de operaciones', () => {
   });
 
   it('lista los tipos de operación permitidos', () => {
-    expect(metadatosOpenApi(OperacionSyncDto).tipo.enum).toEqual(['REGISTRO_ESTACION', 'ACTUALIZACION_ESTACION', 'REGISTRO_OBSERVACIONES']);
+    expect(metadatosOpenApi(OperacionSyncDto).tipo.enum).toEqual([
+      'REGISTRO_ESTACION',
+      'ACTUALIZACION_ESTACION',
+      'REGISTRO_OBSERVACIONES',
+      'REGISTRO_SERVICIO_DRT',
+    ]);
   });
 });

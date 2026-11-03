@@ -5,6 +5,7 @@ export const TipoOperacionSyncSchema = z.enum([
   'REGISTRO_ESTACION',
   'ACTUALIZACION_ESTACION',
   'REGISTRO_OBSERVACIONES',
+  'REGISTRO_SERVICIO_DRT',
 ]);
 export type TipoOperacionSync = z.infer<typeof TipoOperacionSyncSchema>;
 
