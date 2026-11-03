@@ -43,6 +43,8 @@ const INICIAL: DatosServicio = {
   equipos: [],
   requiereCertificado: null,
   vigenciaDias: '',
+  monto: '',
+  moneda: 'PEN',
 };
 
 /** Estado del equipo en el listado de selección: uno fuera de servicio se ve, pero no se puede asignar. */
@@ -335,6 +337,36 @@ export function NuevoServicioPage({
             </div>
           </Campo>
         ) : null}
+      </Bloque>
+
+      <Bloque titulo="Monto y Facturación (Opcional)">
+        <Campo
+          id="ser-monto"
+          label="Monto del servicio (opcional)"
+          error={visibles.monto}
+          ayuda="Precio o tarifa del servicio. Puede dejarse vacío si la facturación se gestiona externamente."
+        >
+          <input
+            {...ariaError('ser-monto', visibles.monto)}
+            type="number"
+            min={0}
+            step="0.01"
+            inputMode="decimal"
+            value={datos.monto ?? ''}
+            onChange={(e) => set('monto', e.target.value)}
+            placeholder="0.00"
+          />
+        </Campo>
+        <Campo id="ser-moneda" label="Moneda" error={visibles.moneda}>
+          <select
+            {...ariaError('ser-moneda', visibles.moneda)}
+            value={datos.moneda ?? 'PEN'}
+            onChange={(e) => set('moneda', e.target.value)}
+          >
+            <option value="PEN">Soles (PEN S/)</option>
+            <option value="USD">Dólares (USD $)</option>
+          </select>
+        </Campo>
       </Bloque>
     </AltaFormLayout>
   );

@@ -25,6 +25,8 @@ export interface ProyectoExpediente {
   observaciones: string;
   estado: EstadoActivoInactivo;
   servicios: ServicioContratado[];
+  montoPresupuestado?: number | null;
+  moneda?: string | null;
 }
 
 export function proyectoDeApi(api: ProyectoDetalle, servicios: ServicioContratado[]): ProyectoExpediente {
@@ -42,6 +44,8 @@ export function proyectoDeApi(api: ProyectoDetalle, servicios: ServicioContratad
     observaciones: api.observaciones ?? '',
     estado: api.estado,
     servicios,
+    ...(api.montoPresupuestado !== undefined ? { montoPresupuestado: api.montoPresupuestado } : {}),
+    ...(api.moneda !== undefined ? { moneda: api.moneda } : {}),
   };
 }
 
@@ -56,10 +60,18 @@ export function datosDeProyecto(p: ProyectoExpediente): DatosProyecto {
     contactoCargo: p.contactoCargo,
     contactoTelefono: p.contactoTelefono,
     observaciones: p.observaciones,
+    montoPresupuestado: p.montoPresupuestado !== null && p.montoPresupuestado !== undefined ? String(p.montoPresupuestado) : '',
+    moneda: p.moneda ?? 'PEN',
   };
 }
 
+function montoPresupuestadoDe(d: DatosProyecto): number | null {
+  if (!d.montoPresupuestado || d.montoPresupuestado.trim() === '') return null;
+  return Number(d.montoPresupuestado);
+}
+
 function ficha(d: DatosProyecto) {
+  const monto = montoPresupuestadoDe(d);
   return {
     direccionSede: d.direccion.trim(),
     distrito: d.distrito.trim(),
@@ -69,12 +81,19 @@ function ficha(d: DatosProyecto) {
     contactoCargo: d.contactoCargo.trim(),
     contactoTelefono: d.contactoTelefono.trim(),
     observaciones: d.observaciones.trim() === '' ? null : d.observaciones.trim(),
+    montoPresupuestado: monto,
+    moneda: monto !== null ? ((d.moneda as 'PEN' | 'USD') || 'PEN') : null,
   };
 }
 
 /** Cuerpo de `POST /mantenimiento/proyectos`; el estado inicial lo fija el servidor (ACTIVO). */
 export function registroDeProyecto(clienteId: string, d: DatosProyecto): ProyectoRegistro {
-  return { clienteId, nombre: d.nombre.trim(), ...ficha(d) };
+  const f = ficha(d);
+  if (f.montoPresupuestado === null) {
+    delete (f as any).montoPresupuestado;
+    delete (f as any).moneda;
+  }
+  return { clienteId, nombre: d.nombre.trim(), ...f };
 }
 
 /** Cuerpo de `PATCH /mantenimiento/proyectos/:id`: el cliente propietario no cambia. */
@@ -94,6 +113,9 @@ export function campoDeRutaProyecto(ruta: string): keyof DatosProyecto | null {
     contactoCargo: 'contactoCargo',
     contactoTelefono: 'contactoTelefono',
     observaciones: 'observaciones',
+    montoPresupuestado: 'montoPresupuestado',
+    monto_presupuestado: 'montoPresupuestado',
+    moneda: 'moneda',
   };
   return campos[ruta] ?? null;
 }
