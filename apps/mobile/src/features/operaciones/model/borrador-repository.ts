@@ -4,7 +4,10 @@
  * Cumple con la regla 2.4: "Durable before visible" (Guía Rev 2 §2.4, §5.1).
  */
 
+import { ActaServicioDrt, ActaServicioDrtSchema, OperacionSync } from '@gafer/contracts';
 import { SqliteDatabasePort, obtenerBaseDeDatos } from '../../../shared/db/sqlite';
+import { OutboxQueue } from '../../../shared/db/outbox';
+import { generarUuid } from '../../../shared/utils/uuid';
 import { BorradorInspeccion, MetadataBorrador } from './use-borrador-store';
 
 interface FilaBorradorDb {
@@ -28,6 +31,15 @@ export class BorradorRepository {
   }
 
   private mapearFilaABorrador(fila: FilaBorradorDb): BorradorInspeccion {
+    let datosDrt: ActaServicioDrt | undefined;
+    if (fila.datos_json) {
+      try {
+        datosDrt = JSON.parse(fila.datos_json);
+      } catch {
+        datosDrt = undefined;
+      }
+    }
+
     return {
       servicioId: fila.servicio_id,
       clienteRazonSocial: fila.cliente_razon_social ?? undefined,
@@ -35,6 +47,7 @@ export class BorradorRepository {
       numeroOrden: fila.numero_orden ?? undefined,
       servicioTipo: fila.servicio_tipo ?? undefined,
       observaciones: fila.observaciones ?? '',
+      datosDrt,
     };
   }
 
@@ -82,6 +95,90 @@ export class BorradorRepository {
       numeroOrden: metadata?.numeroOrden,
       servicioTipo: metadata?.servicioTipo,
     };
+  }
+
+  /**
+   * Guarda de forma durable el formulario completo del Acta de Servicio DRT (§2.4).
+   */
+  async guardarDrt(
+    acta: ActaServicioDrt,
+    metadata?: MetadataBorrador,
+  ): Promise<BorradorInspeccion> {
+    const db = this.getDb();
+    const ahora = new Date().toISOString();
+    const datosJson = JSON.stringify(acta);
+
+    await db.withExclusiveTransactionAsync(async (tx) => {
+      await tx.runAsync(
+        `INSERT OR REPLACE INTO borradores_inspeccion (
+          servicio_id,
+          cliente_razon_social,
+          sede_nombre,
+          numero_orden,
+          servicio_tipo,
+          observaciones,
+          datos_json,
+          actualizado_en,
+          server_version,
+          sync_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'PENDING_SYNC');`,
+        [
+          acta.servicioId,
+          metadata?.clienteRazonSocial ?? acta.clienteRazonSocial,
+          metadata?.sedeNombre ?? acta.sedeDireccion,
+          metadata?.numeroOrden ?? null,
+          metadata?.servicioTipo ?? 'DESRATIZACION_DRT',
+          acta.resultadosRecomendaciones || '',
+          datosJson,
+          ahora,
+        ],
+      );
+    });
+
+    return {
+      servicioId: acta.servicioId,
+      observaciones: acta.resultadosRecomendaciones || '',
+      clienteRazonSocial: metadata?.clienteRazonSocial ?? acta.clienteRazonSocial,
+      sedeNombre: metadata?.sedeNombre ?? acta.sedeDireccion,
+      numeroOrden: metadata?.numeroOrden,
+      servicioTipo: metadata?.servicioTipo ?? 'DESRATIZACION_DRT',
+      datosDrt: acta,
+    };
+  }
+
+  /**
+   * Finaliza el servicio DRT: valida el acta, la encola en la tabla sync_outbox
+   * y remueve el borrador activo localmente para dejar el terminal listo para el siguiente servicio.
+   */
+  async finalizarYEncolarDrt(
+    acta: ActaServicioDrt,
+    usuarioId: string,
+    deviceId = 'device-mobile-local',
+  ): Promise<{ operationId: string }> {
+    const parsed = ActaServicioDrtSchema.parse(acta);
+    const operationId = generarUuid();
+    const ahora = new Date().toISOString();
+    const db = this.getDb();
+    const outbox = new OutboxQueue(db);
+
+    const operacion: OperacionSync = {
+      operationId,
+      tipo: 'REGISTRO_SERVICIO_DRT',
+      agregadoId: parsed.servicioId,
+      actorId: usuarioId,
+      clienteTimestamp: ahora,
+      payload: parsed as unknown as Record<string, unknown>,
+    };
+
+    await outbox.encolar(operacion, {
+      deviceId,
+      aggregateType: 'SERVICIO_DRT',
+      priority: 'HIGH',
+    });
+
+    await this.eliminar(parsed.servicioId);
+
+    return { operationId };
   }
 
   /**
