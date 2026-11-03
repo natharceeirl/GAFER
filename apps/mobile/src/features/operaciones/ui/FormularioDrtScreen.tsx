@@ -27,7 +27,19 @@ import {
   EstadoEstacionPlanilla,
   EstadoEstacionPlanillaSchema,
   ItemEstacionPlanilla,
+  PorcentajeConsumo,
+  EstadoFisicoEstacion,
 } from '@gafer/contracts';
+import {
+  crearEstacionDrt,
+  aplicarPrimeraVisita,
+  actualizarConsumoEstacion,
+  actualizarEstadoFisicoEstacion,
+  copiarCeboALote,
+  validarEstacionesPlanilla,
+  PORCENTAJES_CONSUMO,
+  ESTADOS_FISICOS,
+} from '../model/estaciones-drt';
 import { useAuthStore } from '../../auth/model/use-auth-store';
 import { useBorradorStore } from '../model/use-borrador-store';
 import { Button, AlertBanner } from '../../../shared/ui';
@@ -116,12 +128,16 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
       return borrador.datosDrt;
     }
 
-    const estacionesIniciales: ItemEstacionPlanilla[] = Array.from({ length: 5 }, (_, i) => ({
-      numero: i + 1,
-      estado: 'SIN_ACTIVIDAD',
-      consumoGramos: 0,
-      repuestoGramos: 0,
-    }));
+    const estacionesIniciales: ItemEstacionPlanilla[] = Array.from({ length: 5 }, (_, i) =>
+      crearEstacionDrt(i + 1, {
+        tipoCebo: 'BLOQUE_10G',
+        cantidadGramos: 20,
+        lote: 'L-2026-01',
+        vencimiento: '2026-12-31',
+        estadoFisico: 'BUENAS_CONDICIONES',
+        esInstalacion: false,
+      }),
+    );
 
     return {
       servicioId: servicioIdInicial,
@@ -131,6 +147,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
       areaTratadaM2: 500,
       horaInicio: '08:30',
       horaTermino: '11:00',
+      primeraVisita: false,
       actividad: 'MONITOREO',
       tipoCebo: 'BLOQUE_10G',
       cebosInstalados: 20,
@@ -266,9 +283,21 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
       return;
     }
 
+    // 2. Validar requerimientos técnicos específicos por estación (§5.1, GAF-35)
+    const validacionEstaciones = validarEstacionesPlanilla(acta.planillaEstaciones, !!acta.primeraVisita);
+    if (!validacionEstaciones.valido) {
+      const listaErrores = validacionEstaciones.errores.map((e) => `• ${e}`).join('\n');
+      setErrorValidacion(`Corrija los datos de las estaciones antes de finalizar (§5.1):\n\n${listaErrores}`);
+      Alert.alert(
+        'Estaciones Incompletas (§5.1)',
+        'Hay estaciones con datos pendientes (cebo, lote, estado físico u observaciones). Revise la alerta superior.',
+      );
+      return;
+    }
+
     Alert.alert(
       'Finalizar y Encolar Servicio',
-      '¿Confirma que desea cerrar el acta de servicio DRT? El servicio se guardará de forma durable y se encolará para sincronización con el servidor.',
+      '¿Confirma que desea cerrar el acta de servicio DRT? El servicio y sus estaciones se guardarán de forma durable y se encolarán para sincronización con el servidor.',
       [
         { text: 'Revisar', style: 'cancel' },
         {
@@ -278,7 +307,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
             try {
               setGuardando(true);
               const userId = usuario?.id || 'tecnico-local-01';
-              const res = await finalizarServicioDrt(resultado.data, userId);
+              const res = await finalizarServicioDrt(resultado.data, userId, { encolarEstacionesIndividuales: true });
               Alert.alert(
                 'Servicio Registrado con Éxito',
                 `El acta DRT fue guardada en SQLite y encolada en Outbox (Op: ${res.operationId.substring(0, 8)}). Se sincronizará automáticamente al detectar conexión.`,
@@ -308,11 +337,79 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
     });
   };
 
+  // Mutadores de primera visita y planilla §5.1
+  const handleTogglePrimeraVisita = (esPrimera: boolean) => {
+    setActa((prev) => {
+      const estacionesActualizadas = aplicarPrimeraVisita(prev.planillaEstaciones, esPrimera, {
+        tipoCebo: prev.tipoCebo,
+        cantidadGramos: 20,
+      });
+      return {
+        ...prev,
+        primeraVisita: esPrimera,
+        actividad: esPrimera ? 'INSTALACION' : (prev.actividad === 'INSTALACION' ? 'MONITOREO' : prev.actividad),
+        planillaEstaciones: estacionesActualizadas,
+      };
+    });
+  };
+
+  const handleCopiarCeboATodas = () => {
+    if (acta.planillaEstaciones.length === 0) return;
+    const ref = acta.planillaEstaciones[0];
+    const cebo = {
+      tipoCebo: ref.tipoCebo || acta.tipoCebo || 'BLOQUE_10G',
+      cantidadGramos: ref.cantidadGramos || 20,
+      lote: ref.lote || 'LOTE-001',
+      vencimiento: ref.vencimiento || '2026-12-31',
+    };
+
+    setActa((prev) => ({
+      ...prev,
+      planillaEstaciones: copiarCeboALote(prev.planillaEstaciones, cebo),
+    }));
+
+    Alert.alert(
+      'Cebo Replicado',
+      `Se aplicó la formulación (${cebo.tipoCebo}, ${cebo.cantidadGramos}g, Lote: ${cebo.lote}, Venc: ${cebo.vencimiento}) a todas las estaciones.`,
+    );
+  };
+
   const cambiarEstadoEstacion = (numero: number, nuevoEstado: EstadoEstacionPlanilla) => {
     setActa((prev) => ({
       ...prev,
       planillaEstaciones: prev.planillaEstaciones.map((est) =>
         est.numero === numero ? { ...est, estado: nuevoEstado } : est,
+      ),
+    }));
+  };
+
+  const cambiarConsumoPorcentaje = (numero: number, huboConsumo: boolean, porcentaje?: PorcentajeConsumo) => {
+    setActa((prev) => ({
+      ...prev,
+      planillaEstaciones: prev.planillaEstaciones.map((est) =>
+        est.numero === numero ? actualizarConsumoEstacion(est, huboConsumo, porcentaje) : est,
+      ),
+    }));
+  };
+
+  const cambiarEstadoFisico = (numero: number, estadoFisico: EstadoFisicoEstacion) => {
+    setActa((prev) => ({
+      ...prev,
+      planillaEstaciones: prev.planillaEstaciones.map((est) =>
+        est.numero === numero ? actualizarEstadoFisicoEstacion(est, estadoFisico) : est,
+      ),
+    }));
+  };
+
+  const cambiarDatoEstacion = <K extends keyof ItemEstacionPlanilla>(
+    numero: number,
+    campo: K,
+    valor: ItemEstacionPlanilla[K],
+  ) => {
+    setActa((prev) => ({
+      ...prev,
+      planillaEstaciones: prev.planillaEstaciones.map((est) =>
+        est.numero === numero ? { ...est, [campo]: valor } : est,
       ),
     }));
   };
@@ -339,14 +436,19 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
     setActa((prev) => {
       const actuales = [...prev.planillaEstaciones];
       const ultimoNumero = actuales.length > 0 ? actuales[actuales.length - 1].numero : 0;
+      const ref = actuales[0];
       const nuevas: ItemEstacionPlanilla[] = [];
       for (let i = 1; i <= cantidad; i++) {
-        nuevas.push({
-          numero: ultimoNumero + i,
-          estado: 'SIN_ACTIVIDAD',
-          consumoGramos: 0,
-          repuestoGramos: 0,
-        });
+        nuevas.push(
+          crearEstacionDrt(ultimoNumero + i, {
+            tipoCebo: ref?.tipoCebo || prev.tipoCebo || 'BLOQUE_10G',
+            cantidadGramos: ref?.cantidadGramos || 20,
+            lote: ref?.lote || 'L-2026-01',
+            vencimiento: ref?.vencimiento || '2026-12-31',
+            estadoFisico: 'BUENAS_CONDICIONES',
+            esInstalacion: !!prev.primeraVisita,
+          }),
+        );
       }
       return {
         ...prev,
@@ -676,10 +778,10 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
             </View>
           </View>
 
-          {/* 8. PLANILLA INDIVIDUAL POR ESTACIÓN */}
+          {/* 8. PLANILLA INDIVIDUAL POR ESTACIÓN (§5.1, GAF-35) */}
           <View style={styles.seccionCard}>
             <View style={styles.cabeceraPlanilla}>
-              <Text style={styles.seccionTitulo}>8. PLANILLA POR ESTACIÓN DE CONTROL</Text>
+              <Text style={styles.seccionTitulo}>8. PLANILLA POR ESTACIÓN DE CONTROL (§5.1)</Text>
               <View style={styles.grupoBotonesAgregar}>
                 <TouchableOpacity style={styles.botonAgregarEstacion} onPress={() => agregarEstaciones(1)}>
                   <Text style={styles.textoBotonAgregar}>+1</Text>
@@ -691,6 +793,63 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
                   <Text style={styles.textoBotonAgregar}>+10</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+
+            {/* Selector de Primera Visita (Instalación Inicial) */}
+            <View style={styles.contenedorPrimeraVisita}>
+              <View style={styles.filaPrimeraVisita}>
+                <Text style={styles.etiquetaPrimeraVisita}>🌱 Tipo de Visita:</Text>
+                <View style={styles.chipsContenedorCompacto}>
+                  <TouchableOpacity
+                    style={[
+                      styles.chipCompacto,
+                      !acta.primeraVisita && styles.chipCompactoActivoVerde,
+                    ]}
+                    onPress={() => handleTogglePrimeraVisita(false)}
+                  >
+                    <Text
+                      style={[
+                        styles.chipCompactoTexto,
+                        !acta.primeraVisita && styles.chipCompactoTextoActivo,
+                      ]}
+                    >
+                      Monitoreo / Regular
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.chipCompacto,
+                      acta.primeraVisita && styles.chipCompactoActivoVerde,
+                    ]}
+                    onPress={() => handleTogglePrimeraVisita(true)}
+                  >
+                    <Text
+                      style={[
+                        styles.chipCompactoTexto,
+                        acta.primeraVisita && styles.chipCompactoTextoActivo,
+                      ]}
+                    >
+                      🌱 Primera Visita (Instalación)
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {acta.primeraVisita ? (
+                <View style={styles.bannerPrimeraVisita}>
+                  <Text style={styles.bannerPrimeraVisitaTexto}>
+                    📌 Modo Instalación Inicial: Se instalan estaciones y registra cebo, lote, vencimiento y estado físico. No se evalúa consumo (§5.1).
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Botón rápido para replicar cebo a todas las estaciones */}
+              <TouchableOpacity
+                style={styles.botonCopiarCebo}
+                onPress={handleCopiarCeboATodas}
+              >
+                <Text style={styles.textoBotonCopiarCebo}>⚡ Replicar Cebo, Lote y Vencimiento a todas</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Resumen de Métricas de la Planilla */}
@@ -706,82 +865,270 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
 
             {acta.planillaEstaciones.map((est) => {
               const confEstado = LABELS_ESTADO_ESTACION[est.estado];
+              const esPrimera = !!acta.primeraVisita || !!est.esInstalacion;
               return (
                 <View key={`estacion-row-${est.numero}`} style={styles.filaEstacionCard}>
                   <View style={styles.estacionHeader}>
                     <Text style={styles.estacionNumero}>📍 Estación #{est.numero}</Text>
-                    <View style={[styles.badgeEstado, { backgroundColor: confEstado.color }]}>
-                      <Text style={styles.badgeEstadoTexto}>{confEstado.badge}</Text>
+                    <View style={{ flexDirection: 'row', gap: 4 }}>
+                      {esPrimera ? (
+                        <View style={[styles.badgeEstado, { backgroundColor: '#10b981' }]}>
+                          <Text style={styles.badgeEstadoTexto}>INSTALACIÓN</Text>
+                        </View>
+                      ) : (
+                        <View style={[styles.badgeEstado, { backgroundColor: confEstado.color }]}>
+                          <Text style={styles.badgeEstadoTexto}>{confEstado.badge}</Text>
+                        </View>
+                      )}
+                      <View
+                        style={[
+                          styles.badgeEstado,
+                          {
+                            backgroundColor:
+                              est.estadoFisico === 'MALAS_CONDICIONES' ? '#ef4444' : '#16a34a',
+                          },
+                        ]}
+                      >
+                        <Text style={styles.badgeEstadoTexto}>
+                          {est.estadoFisico === 'MALAS_CONDICIONES' ? '⚠️ MAL ESTADO' : '✓ BUEN ESTADO'}
+                        </Text>
+                      </View>
                     </View>
                   </View>
 
-                  {/* Chips de Selección de Estado (incluye Sin Acceso y Extraviada) */}
+                  {/* Fila 1: Cebo y Gramos */}
+                  <View style={styles.filaInputs}>
+                    <View style={styles.columnaInput}>
+                      <Text style={styles.campoEtiqueta}>Formulación Cebo:</Text>
+                      <TextInput
+                        style={styles.inputTexto}
+                        value={est.tipoCebo || ''}
+                        placeholder="Ej. BLOQUE_10G"
+                        onChangeText={(t) => cambiarDatoEstacion(est.numero, 'tipoCebo', t)}
+                      />
+                    </View>
+                    <View style={[styles.columnaInput, { maxWidth: 100 }]}>
+                      <Text style={styles.campoEtiqueta}>Gramos Base:</Text>
+                      <TextInput
+                        style={styles.inputTexto}
+                        keyboardType="numeric"
+                        value={est.cantidadGramos ? String(est.cantidadGramos) : ''}
+                        placeholder="20"
+                        onChangeText={(t) => {
+                          const g = Number(t) || 0;
+                          setActa((prev) => ({
+                            ...prev,
+                            planillaEstaciones: prev.planillaEstaciones.map((e) =>
+                              e.numero === est.numero
+                                ? {
+                                    ...e,
+                                    cantidadGramos: g,
+                                    consumoGramos:
+                                      e.huboConsumo && e.porcentajeConsumo
+                                        ? Math.round((g * (e.porcentajeConsumo / 100)) * 100) / 100
+                                        : 0,
+                                    repuestoGramos:
+                                      e.huboConsumo && e.porcentajeConsumo
+                                        ? Math.round((g * (e.porcentajeConsumo / 100)) * 100) / 100
+                                        : 0,
+                                  }
+                                : e,
+                            ),
+                          }));
+                        }}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Fila 2: Lote y Vencimiento */}
+                  <View style={styles.filaInputs}>
+                    <View style={styles.columnaInput}>
+                      <Text style={styles.campoEtiqueta}>Lote:</Text>
+                      <TextInput
+                        style={styles.inputTexto}
+                        value={est.lote || ''}
+                        placeholder="Ej. L-2026-01"
+                        onChangeText={(t) => cambiarDatoEstacion(est.numero, 'lote', t)}
+                      />
+                    </View>
+                    <View style={styles.columnaInput}>
+                      <Text style={styles.campoEtiqueta}>Vencimiento (YYYY-MM-DD):</Text>
+                      <TextInput
+                        style={styles.inputTexto}
+                        value={est.vencimiento || ''}
+                        placeholder="2026-12-31"
+                        onChangeText={(t) => cambiarDatoEstacion(est.numero, 'vencimiento', t)}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Selector de Estado Físico (§5.1) */}
+                  <Text style={styles.campoEtiqueta}>Estado Físico de la Estación:</Text>
                   <View style={styles.chipsContenedorCompacto}>
-                    {EstadoEstacionPlanillaSchema.options.map((estOpcion) => {
-                      const estaActivo = est.estado === estOpcion;
-                      const opcionConf = LABELS_ESTADO_ESTACION[estOpcion];
+                    {ESTADOS_FISICOS.map((ef) => {
+                      const activo = est.estadoFisico === ef;
+                      const esMalo = ef === 'MALAS_CONDICIONES';
                       return (
                         <TouchableOpacity
-                          key={`opcion-${est.numero}-${estOpcion}`}
+                          key={`ef-${est.numero}-${ef}`}
                           style={[
                             styles.chipCompacto,
-                            estaActivo && { backgroundColor: opcionConf.color, borderColor: opcionConf.color },
+                            activo && {
+                              backgroundColor: esMalo ? '#dc2626' : '#16a34a',
+                              borderColor: esMalo ? '#dc2626' : '#16a34a',
+                            },
                           ]}
-                          onPress={() => cambiarEstadoEstacion(est.numero, estOpcion)}
+                          onPress={() => cambiarEstadoFisico(est.numero, ef)}
                         >
                           <Text
                             style={[
                               styles.chipCompactoTexto,
-                              estaActivo && styles.chipCompactoTextoActivo,
+                              activo && styles.chipCompactoTextoActivo,
                             ]}
                           >
-                            {opcionConf.label}
+                            {ef === 'BUENAS_CONDICIONES' ? '✓ Buenas Condiciones' : '⚠️ Malas Condiciones'}
                           </Text>
                         </TouchableOpacity>
                       );
                     })}
                   </View>
 
-                  {/* Si hubo consumo, registrar gramos */}
-                  {est.estado === 'CON_CONSUMO' ? (
-                    <View style={styles.filaInputs}>
-                      <View style={styles.columnaInput}>
-                        <Text style={styles.campoEtiqueta}>Consumo (gramos):</Text>
-                        <TextInput
-                          style={styles.inputTexto}
-                          keyboardType="numeric"
-                          value={est.consumoGramos ? String(est.consumoGramos) : ''}
-                          placeholder="Ej. 10"
-                          onChangeText={(t) => cambiarConsumoEstacion(est.numero, Number(t) || 0)}
-                        />
+                  {/* Consumo (§5.1) */}
+                  {!esPrimera ? (
+                    <View style={styles.contenedorConsumo}>
+                      <Text style={styles.campoEtiqueta}>Estado del Punto de Control:</Text>
+                      <View style={styles.chipsContenedorCompacto}>
+                        {EstadoEstacionPlanillaSchema.options.map((estOpcion) => {
+                          const estaActivo = est.estado === estOpcion;
+                          const opcionConf = LABELS_ESTADO_ESTACION[estOpcion];
+                          return (
+                            <TouchableOpacity
+                              key={`opcion-${est.numero}-${estOpcion}`}
+                              style={[
+                                styles.chipCompacto,
+                                estaActivo && {
+                                  backgroundColor: opcionConf.color,
+                                  borderColor: opcionConf.color,
+                                },
+                              ]}
+                              onPress={() => cambiarEstadoEstacion(est.numero, estOpcion)}
+                            >
+                              <Text
+                                style={[
+                                  styles.chipCompactoTexto,
+                                  estaActivo && styles.chipCompactoTextoActivo,
+                                ]}
+                              >
+                                {opcionConf.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
                       </View>
-                      <View style={styles.columnaInput}>
-                        <Text style={styles.campoEtiqueta}>Repuesto (gramos):</Text>
-                        <TextInput
-                          style={styles.inputTexto}
-                          keyboardType="numeric"
-                          value={est.repuestoGramos ? String(est.repuestoGramos) : ''}
-                          placeholder="Ej. 10"
-                          onChangeText={(t) => cambiarConsumoEstacion(est.numero, Number(t) || 0)}
-                        />
-                      </View>
-                    </View>
-                  ) : null}
 
-                  {/* Observación individual (obligatoria si es Sin Acceso o Extraviada) */}
-                  {(est.estado === 'SIN_ACCESO' || est.estado === 'EXTRAVIADA' || est.observaciones) ? (
+                      {/* Consumo Sí / No */}
+                      <Text style={styles.campoEtiqueta}>¿Hubo consumo de cebo?:</Text>
+                      <View style={styles.chipsContenedorCompacto}>
+                        <TouchableOpacity
+                          style={[
+                            styles.chipCompacto,
+                            !est.huboConsumo && styles.chipCompactoActivoVerde,
+                          ]}
+                          onPress={() => cambiarConsumoPorcentaje(est.numero, false)}
+                        >
+                          <Text
+                            style={[
+                              styles.chipCompactoTexto,
+                              !est.huboConsumo && styles.chipCompactoTextoActivo,
+                            ]}
+                          >
+                            No (0%)
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.chipCompacto,
+                            est.huboConsumo && styles.chipCompactoActivoNaranja,
+                          ]}
+                          onPress={() => cambiarConsumoPorcentaje(est.numero, true, est.porcentajeConsumo || 25)}
+                        >
+                          <Text
+                            style={[
+                              styles.chipCompactoTexto,
+                              est.huboConsumo && styles.chipCompactoTextoActivo,
+                            ]}
+                          >
+                            Sí (Hubo Consumo)
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Porcentaje de Consumo en pasos de 25 */}
+                      {est.huboConsumo ? (
+                        <View style={styles.seccionPorcentaje}>
+                          <Text style={styles.campoEtiqueta}>Porcentaje de consumo (§5.1):</Text>
+                          <View style={styles.chipsContenedorCompacto}>
+                            {PORCENTAJES_CONSUMO.map((p) => {
+                              const activo = est.porcentajeConsumo === p;
+                              return (
+                                <TouchableOpacity
+                                  key={`porc-${est.numero}-${p}`}
+                                  style={[
+                                    styles.chipCompacto,
+                                    activo && styles.chipCompactoActivoNaranja,
+                                  ]}
+                                  onPress={() => cambiarConsumoPorcentaje(est.numero, true, p)}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.chipCompactoTexto,
+                                      activo && styles.chipCompactoTextoActivo,
+                                    ]}
+                                  >
+                                    {p}%
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+
+                          <View style={styles.panelCalculoConsumo}>
+                            <Text style={styles.textoCalculoConsumo}>
+                              🍽️ Consumo: <Text style={{ fontWeight: '800' }}>{est.consumoGramos} g</Text> ({est.porcentajeConsumo}%)
+                              {'  '}|{'  '}
+                              🔄 Reposición: <Text style={{ fontWeight: '800' }}>{est.repuestoGramos} g</Text>
+                            </Text>
+                          </View>
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : (
+                    <View style={styles.bannerPrimeraVisitaEstacion}>
+                      <Text style={styles.bannerPrimeraVisitaEstacionTexto}>
+                        🌱 Instalación Inicial: Cebo instalado al 100%. No se evalúa consumo (§5.1).
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Observaciones */}
+                  {(est.estadoFisico === 'MALAS_CONDICIONES' ||
+                    est.estado === 'SIN_ACCESO' ||
+                    est.estado === 'EXTRAVIADA' ||
+                    est.observaciones) ? (
                     <View style={{ marginTop: 6 }}>
                       <Text style={styles.campoEtiqueta}>
-                        {est.estado === 'SIN_ACCESO'
-                          ? 'Motivo de falta de acceso:'
-                          : est.estado === 'EXTRAVIADA'
-                            ? 'Detalle de extravío o daño:'
-                            : 'Observación:'}
+                        {est.estadoFisico === 'MALAS_CONDICIONES'
+                          ? '⚠️ Detalle del daño físico (Requerido):'
+                          : est.estado === 'SIN_ACCESO'
+                            ? 'Motivo de falta de acceso (Requerido):'
+                            : est.estado === 'EXTRAVIADA'
+                              ? 'Detalle de extravío (Requerido):'
+                              : 'Observación:'}
                       </Text>
                       <TextInput
                         style={styles.inputTexto}
                         value={est.observaciones || ''}
-                        placeholder="Indique motivo o detalle..."
+                        placeholder="Indique motivo o detalle del daño..."
                         onChangeText={(t) => cambiarNotaEstacion(est.numero, t)}
                       />
                     </View>
@@ -1079,6 +1426,97 @@ const styles = StyleSheet.create({
   },
   chipCompactoTextoActivo: {
     color: '#ffffff',
+  },
+  chipCompactoActivoVerde: {
+    backgroundColor: '#16a34a',
+    borderColor: '#16a34a',
+  },
+  chipCompactoActivoNaranja: {
+    backgroundColor: '#ea580c',
+    borderColor: '#ea580c',
+  },
+  contenedorPrimeraVisita: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 6,
+    padding: 10,
+    marginBottom: 10,
+    gap: 8,
+  },
+  filaPrimeraVisita: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  etiquetaPrimeraVisita: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1e293b',
+  },
+  bannerPrimeraVisita: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0',
+    borderWidth: 1,
+    borderRadius: 4,
+    padding: 8,
+  },
+  bannerPrimeraVisitaTexto: {
+    fontSize: 11,
+    color: '#065f46',
+    fontWeight: '600',
+  },
+  botonCopiarCebo: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#93c5fd',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+  },
+  textoBotonCopiarCebo: {
+    fontSize: 11,
+    color: '#1d4ed8',
+    fontWeight: '800',
+  },
+  contenedorConsumo: {
+    marginTop: 4,
+  },
+  seccionPorcentaje: {
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    borderRadius: 4,
+    padding: 8,
+    marginTop: 6,
+  },
+  panelCalculoConsumo: {
+    backgroundColor: '#ffffff',
+    borderRadius: 4,
+    padding: 6,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    marginTop: 4,
+  },
+  textoCalculoConsumo: {
+    fontSize: 11,
+    color: '#9a3412',
+  },
+  bannerPrimeraVisitaEstacion: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#d1fae5',
+    borderRadius: 4,
+    padding: 6,
+    marginTop: 6,
+  },
+  bannerPrimeraVisitaEstacionTexto: {
+    fontSize: 11,
+    color: '#047857',
+    fontWeight: '600',
   },
   barraAccionesFija: {
     position: 'absolute',

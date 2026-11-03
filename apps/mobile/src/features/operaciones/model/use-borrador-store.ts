@@ -33,7 +33,11 @@ interface BorradorStore {
   actualizarObservaciones: (observaciones: string) => Promise<void>;
   actualizarDrt: (acta: ActaServicioDrt, metadata?: MetadataBorrador) => Promise<void>;
   actualizarCampo: (formulario: FormularioCampo, metadata?: MetadataBorrador) => Promise<void>;
-  finalizarServicioDrt: (acta: ActaServicioDrt, usuarioId: string) => Promise<{ operationId: string }>;
+  finalizarServicioDrt: (
+    acta: ActaServicioDrt,
+    usuarioId: string,
+    opciones?: { encolarEstacionesIndividuales?: boolean },
+  ) => Promise<{ operationId: string; estacionesOperacionesIds?: string[] }>;
   finalizarServicioCampo: (formulario: FormularioCampo, usuarioId: string) => Promise<{ operationId: string }>;
   marcarComoPendienteDeSincronizar: () => void;
   restaurarBorrador: (borrador: BorradorInspeccion | null) => void;
@@ -137,9 +141,9 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
     }
   },
 
-  finalizarServicioDrt: async (acta, usuarioId) => {
+  finalizarServicioDrt: async (acta, usuarioId, opciones) => {
     const repo = new BorradorRepository();
-    const resultado = await repo.finalizarYEncolarDrt(acta, usuarioId);
+    const resultado = await repo.finalizarYEncolarDrt(acta, usuarioId, undefined, opciones);
 
     set({
       borrador: null,

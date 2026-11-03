@@ -215,18 +215,57 @@ export class BorradorRepository {
   /**
    * Finaliza el servicio DRT: valida el acta, la encola en la tabla sync_outbox
    * y remueve el borrador activo localmente para dejar el terminal listo para el siguiente servicio.
+   * Opcionalmente encola operaciones individuales REGISTRO_ESTACION (§5.1, GAF-35).
    */
   async finalizarYEncolarDrt(
     acta: ActaServicioDrt,
     usuarioId: string,
     deviceId = 'device-mobile-local',
-  ): Promise<{ operationId: string }> {
+    opciones?: { encolarEstacionesIndividuales?: boolean },
+  ): Promise<{ operationId: string; estacionesOperacionesIds?: string[] }> {
     const parsed = ActaServicioDrtSchema.parse(acta);
     const operationId = generarUuid();
     const ahora = new Date().toISOString();
 
     const db = this.getDb();
     const outbox = new OutboxQueue(db);
+
+    let estacionesOperacionesIds: string[] | undefined;
+    if (opciones?.encolarEstacionesIndividuales && parsed.planillaEstaciones.length > 0) {
+      estacionesOperacionesIds = [];
+      for (const est of parsed.planillaEstaciones) {
+        const estOpId = generarUuid();
+        const opEstacion: OperacionSync = {
+          operationId: estOpId,
+          tipo: 'REGISTRO_ESTACION',
+          agregadoId: parsed.servicioId,
+          actorId: usuarioId,
+          clienteTimestamp: ahora,
+          payload: {
+            numeroEstacion: est.numero,
+            huboConsumo: est.huboConsumo ?? (est.estado === 'CON_CONSUMO'),
+            porcentajeConsumo: est.porcentajeConsumo ?? 0,
+            cantidadGramos: est.cantidadGramos ?? 20,
+            consumoGramos: est.consumoGramos ?? 0,
+            cantidadReposicion: est.cantidadReposicion ?? est.repuestoGramos ?? 0,
+            tipoCebo: est.tipoCebo ?? 'BLOQUE_10G',
+            lote: est.lote ?? 'LOTE-DEFAULT',
+            vencimiento: est.vencimiento ?? '2026-12-31',
+            estadoFisico: est.estadoFisico ?? 'BUENAS_CONDICIONES',
+            esInstalacion: est.esInstalacion ?? parsed.primeraVisita ?? false,
+            colorIcono: est.huboConsumo ? 'ROJO' : 'VERDE',
+            colorAura: est.estadoFisico === 'MALAS_CONDICIONES' ? 'ROJO' : 'VERDE',
+            observaciones: est.observaciones ?? '',
+          },
+        };
+        await outbox.encolar(opEstacion, {
+          deviceId,
+          aggregateType: 'ESTACION_CONTROL',
+          priority: 'NORMAL',
+        });
+        estacionesOperacionesIds.push(estOpId);
+      }
+    }
 
     const operacion: OperacionSync = {
       operationId,
@@ -245,7 +284,7 @@ export class BorradorRepository {
 
     await this.eliminar(parsed.servicioId);
 
-    return { operationId };
+    return { operationId, estacionesOperacionesIds };
   }
 
   /**

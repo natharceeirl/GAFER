@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { ColorAuraSchema, ColorIconoSchema } from './estacion';
+import { PorcentajeConsumoSchema, EstadoFisicoEstacionSchema } from './inspeccion';
+import { FechaSchema } from './comun';
 
 export const TipoOperacionSyncSchema = z.enum([
   'REGISTRO_ESTACION',
@@ -11,9 +13,18 @@ export const TipoOperacionSyncSchema = z.enum([
 export type TipoOperacionSync = z.infer<typeof TipoOperacionSyncSchema>;
 
 export const PayloadEstacionSyncSchema = z.object({
-  estacionId: z.string().uuid(),
+  estacionId: z.string().uuid().optional(),
   numeroEstacion: z.number().int().positive(),
   huboConsumo: z.boolean().optional(),
+  porcentajeConsumo: PorcentajeConsumoSchema.optional(),
+  cantidadGramos: z.number().nonnegative().optional(),
+  consumoGramos: z.number().nonnegative().optional(),
+  cantidadReposicion: z.number().nonnegative().optional(),
+  tipoCebo: z.string().optional(),
+  lote: z.string().optional(),
+  vencimiento: FechaSchema.optional(),
+  estadoFisico: EstadoFisicoEstacionSchema.optional(),
+  esInstalacion: z.boolean().optional(),
   colorIcono: ColorIconoSchema.optional(),
   colorAura: ColorAuraSchema.optional(),
   observaciones: z.string().optional(),

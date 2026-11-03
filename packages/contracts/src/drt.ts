@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { FechaSchema, HoraSchema } from './comun';
+import { PorcentajeConsumoSchema, EstadoFisicoEstacionSchema } from './inspeccion';
 
 /**
  * GAFER — Contrato Acta de Servicio DRT (Desratización / Control de Roedores)
- * Siguiendo el acta oficial en papel entregada por GAFER (GAF-103).
+ * Siguiendo el acta oficial en papel entregada por GAFER (GAF-103) y registro por estación (§5.1, GAF-35).
  */
 
 export const ActividadDrtSchema = z.enum([
@@ -47,12 +48,27 @@ export const EstadoEstacionPlanillaSchema = z.enum([
 ]);
 export type EstadoEstacionPlanilla = z.infer<typeof EstadoEstacionPlanillaSchema>;
 
+/**
+ * Registro de estación individual (§5.1, GAF-35).
+ * - En primera visita (instalación): registra cebo, gramos, lote, vencimiento y estado físico sin evaluar consumo.
+ * - En visitas regulares: evalúa consumo Sí/No con porcentaje en pasos de 25, gramos consumidos y reposición.
+ */
 export const ItemEstacionPlanillaSchema = z.object({
   numero: z.number().int().positive(),
   estado: EstadoEstacionPlanillaSchema,
   consumoGramos: z.number().nonnegative().optional(),
   repuestoGramos: z.number().nonnegative().optional(),
   observaciones: z.string().optional(),
+  // Campos por estación §5.1 / GAF-35:
+  tipoCebo: z.string().optional(),
+  cantidadGramos: z.number().nonnegative().optional(),
+  lote: z.string().optional(),
+  vencimiento: FechaSchema.optional(),
+  huboConsumo: z.boolean().optional(),
+  porcentajeConsumo: PorcentajeConsumoSchema.optional(),
+  estadoFisico: EstadoFisicoEstacionSchema.optional(),
+  cantidadReposicion: z.number().nonnegative().optional(),
+  esInstalacion: z.boolean().optional(),
 });
 export type ItemEstacionPlanilla = z.infer<typeof ItemEstacionPlanillaSchema>;
 
@@ -75,6 +91,7 @@ export const ActaServicioDrtSchema = z.object({
   areaTratadaM2: z.number().nonnegative().nullish(),
   horaInicio: HoraSchema,
   horaTermino: HoraSchema,
+  primeraVisita: z.boolean().optional(),
 
   // 2. Actividad
   actividad: ActividadDrtSchema,
@@ -100,7 +117,7 @@ export const ActaServicioDrtSchema = z.object({
   // 7. Firmas y Conformidad
   firmas: FirmaConformidadDrtSchema,
 
-  // 8. Planilla individual por estación
+  // 8. Planilla de Estaciones de Control
   planillaEstaciones: z.array(ItemEstacionPlanillaSchema).default([]),
 });
 export type ActaServicioDrt = z.infer<typeof ActaServicioDrtSchema>;
