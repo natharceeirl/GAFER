@@ -19,6 +19,9 @@ export interface MetadataBorrador {
   sedeNombre?: string;
   numeroOrden?: string;
   servicioTipo?: string;
+  tecnicoId?: string;
+  tecnicoNombre?: string;
+  tecnicoCargo?: string;
 }
 
 export interface BorradorInspeccion {
@@ -31,6 +34,15 @@ export interface BorradorInspeccion {
   servicioTipo?: string;
   datosDrt?: ActaServicioDrt;
   datosCampo?: FormularioCampo;
+  actualizadoEn?: string;
+  guardadoPor?: {
+    tecnicoId?: string;
+    nombre?: string;
+    cargo?: string;
+  };
+  bloqueada?: boolean;
+  motivoBloqueo?: string;
+  syncStatus?: string;
 }
 
 export const MENSAJE_ERROR_PERSISTENCIA =
