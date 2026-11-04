@@ -86,8 +86,10 @@ describe('Flujo E2E: Registro de Estaciones de Roedores y Sincronización (§5.1
         clienteConformidadNombre: 'Roberto Gomez',
         clienteConformidadCargo: 'Jefe de Planta',
         fecha: '2026-11-03',
+        responsableNoDisponible: false,
       },
       planillaEstaciones: estacionesConfiguradas,
+      fotos: [],
     };
 
     // Validar contratos y requerimientos §5.1
@@ -245,8 +247,10 @@ describe('Flujo E2E: Registro de Estaciones de Roedores y Sincronización (§5.1
         clienteConformidadNombre: 'Laura Vega',
         clienteConformidadCargo: 'Supervisora de Calidad',
         fecha: '2026-11-03',
+        responsableNoDisponible: false,
       },
       planillaEstaciones: estaciones,
+      fotos: [],
     };
 
     expect(() => ActaServicioDrtSchema.parse(actaRegular)).not.toThrow();

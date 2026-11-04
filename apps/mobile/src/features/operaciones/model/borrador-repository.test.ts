@@ -81,6 +81,7 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
         clienteConformidadNombre: 'Jorge Ramirez',
         clienteConformidadCargo: 'Supervisor de Planta',
         fecha: '2026-11-03',
+        responsableNoDisponible: false,
       },
       planillaEstaciones: [
         { numero: 1, estado: 'SIN_ACTIVIDAD' },
@@ -88,6 +89,7 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
         { numero: 3, estado: 'SIN_ACCESO', observaciones: 'Almacén cerrado' },
         { numero: 4, estado: 'EXTRAVIADA', observaciones: 'No se ubicó punto de control' },
       ],
+      fotos: [],
     };
 
     await repo.guardarDrt(acta);
@@ -166,10 +168,12 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
         clienteConformidadNombre: 'Luis Mendoza',
         clienteConformidadCargo: 'Encargado de Seguridad',
         fecha: '2026-11-03',
+        responsableNoDisponible: false,
       },
       planillaEstaciones: [
         { numero: 1, estado: 'SIN_ACTIVIDAD' },
       ],
+      fotos: [],
     };
 
     await repo.guardarDrt(acta);

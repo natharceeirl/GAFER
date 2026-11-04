@@ -60,11 +60,13 @@ describe('useBorradorStore (Mobile)', () => {
         clienteConformidadNombre: 'Ana Rivas',
         clienteConformidadCargo: 'Jefa de Calidad',
         fecha: '2026-11-03',
+        responsableNoDisponible: false,
       },
       planillaEstaciones: [
         { numero: 1, estado: 'SIN_ACTIVIDAD' },
         { numero: 2, estado: 'CON_CONSUMO', consumoGramos: 5, repuestoGramos: 5 },
       ],
+      fotos: [],
     };
 
     useBorradorStore.getState().actualizarDrt(acta);

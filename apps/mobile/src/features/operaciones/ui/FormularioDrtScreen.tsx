@@ -29,6 +29,7 @@ import {
   ItemEstacionPlanilla,
   PorcentajeConsumo,
   EstadoFisicoEstacion,
+  FotoEvidenciaDrt,
 } from '@gafer/contracts';
 import {
   crearEstacionDrt,
@@ -40,6 +41,9 @@ import {
   PORCENTAJES_CONSUMO,
   ESTADOS_FISICOS,
 } from '../model/estaciones-drt';
+import { MAX_TAMANO_FOTO_BYTES } from '../model/fotos-compresion';
+import { FirmaPadModal, ResultadoFirma } from './FirmaPadModal';
+import { GaleriaEvidenciasFotos } from './GaleriaEvidenciasFotos';
 import { useAuthStore } from '../../auth/model/use-auth-store';
 import { useBorradorStore } from '../model/use-borrador-store';
 import { Button, AlertBanner } from '../../../shared/ui';
@@ -165,10 +169,14 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
         clienteConformidadNombre: '',
         clienteConformidadCargo: '',
         fecha: fechaActualIso(),
+        responsableNoDisponible: false,
       },
       planillaEstaciones: estacionesIniciales,
+      fotos: [],
     };
   });
+
+  const [modalFirmaVisible, setModalFirmaVisible] = useState(false);
 
   // Referencia mutable siempre actualizada para auto-guardado seguro
   const ultimaActaRef = useRef(acta);
@@ -295,6 +303,29 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
       return;
     }
 
+    // 3. Validar conformidad y firma (§13, GAF-36)
+    if (!acta.firmas.responsableNoDisponible) {
+      if (!acta.firmas.clienteConformidadNombre.trim() || !acta.firmas.clienteConformidadCargo.trim()) {
+        setErrorValidacion('Debe ingresar el nombre y cargo del contacto del cliente o marcar "Responsable no disponible".');
+        Alert.alert('Firma Incompleta', 'Ingrese nombre y cargo del contacto del cliente, o abra el pad de firma y marque "Responsable no disponible".');
+        return;
+      }
+      if (!acta.firmas.firmaDigitalBase64) {
+        setErrorValidacion('Debe capturar la firma del cliente en pantalla o marcar que el responsable no estuvo disponible.');
+        Alert.alert('Falta Firma en Pantalla', 'Capture la firma manuscrita en pantalla o marque "Responsable no disponible".');
+        return;
+      }
+    }
+
+    // 4. Validar tamaño de fotos (Decisión C15: <= 1 MB por foto)
+    for (const foto of acta.fotos || []) {
+      if (foto.tamanoBytes > MAX_TAMANO_FOTO_BYTES) {
+        setErrorValidacion(`La foto ${foto.nombre} excede 1 MB (${Math.round(foto.tamanoBytes / 1024)} KB). La regla C15 exige <= 1 MB.`);
+        Alert.alert('Foto Excede Límite C15', `La foto ${foto.nombre} supera el tamaño permitido.`);
+        return;
+      }
+    }
+
     Alert.alert(
       'Finalizar y Encolar Servicio',
       '¿Confirma que desea cerrar el acta de servicio DRT? El servicio y sus estaciones se guardarán de forma durable y se encolarán para sincronización con el servidor.',
@@ -322,6 +353,25 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
         },
       ],
     );
+  };
+
+  // Manejador de firma capturada o ausencia de responsable (§13, GAF-36)
+  const handleGuardarFirmaModal = (resultado: ResultadoFirma) => {
+    setActa((prev) => ({
+      ...prev,
+      firmas: {
+        ...prev.firmas,
+        firmaDigitalBase64: resultado.firmaBase64 || undefined,
+        responsableNoDisponible: resultado.responsableNoDisponible,
+        motivoNoDisponible: resultado.motivoNoDisponible,
+        clienteConformidadNombre: resultado.responsableNoDisponible
+          ? (prev.firmas.clienteConformidadNombre || 'Responsable No Disponible')
+          : prev.firmas.clienteConformidadNombre,
+        clienteConformidadCargo: resultado.responsableNoDisponible
+          ? (prev.firmas.clienteConformidadCargo || 'N/A')
+          : prev.firmas.clienteConformidadCargo,
+      },
+    }));
   };
 
   // Mutadores de campos
@@ -776,6 +826,40 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
                 />
               </View>
             </View>
+
+            {/* Estado y Captura de Firma Digital del Cliente (§13, GAF-36) */}
+            <View style={styles.contenedorEstadoFirma}>
+              {acta.firmas.responsableNoDisponible ? (
+                <View style={styles.bannerFirmaAusente}>
+                  <Text style={styles.textoFirmaAusente}>
+                    ⚠️ Responsable no disponible: {acta.firmas.motivoNoDisponible || 'Sin motivo especificado'}
+                  </Text>
+                </View>
+              ) : acta.firmas.firmaDigitalBase64 ? (
+                <View style={styles.bannerFirmaExitosa}>
+                  <Text style={styles.textoFirmaExitosa}>
+                    ✓ Firma manuscrita capturada en pantalla (inmutable)
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.bannerFirmaPendiente}>
+                  <Text style={styles.textoFirmaPendiente}>
+                    ⏳ Pendiente de firma manuscrita en pantalla
+                  </Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={styles.botonAbrirFirma}
+                onPress={() => setModalFirmaVisible(true)}
+              >
+                <Text style={styles.textoBotonAbrirFirma}>
+                  {acta.firmas.firmaDigitalBase64 || acta.firmas.responsableNoDisponible
+                    ? '✏️ Modificar Firma o Ausencia'
+                    : '✍️ Capturar Firma del Cliente en Pantalla'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* 8. PLANILLA INDIVIDUAL POR ESTACIÓN (§5.1, GAF-35) */}
@@ -1138,6 +1222,15 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
             })}
           </View>
 
+          {/* 9. EVIDENCIAS FOTOGRÁFICAS (§13, C15) */}
+          <GaleriaEvidenciasFotos
+            inspectionId={acta.servicioId}
+            fotos={acta.fotos || []}
+            onFotosChange={(fotosActualizadas) =>
+              setActa((prev) => ({ ...prev, fotos: fotosActualizadas }))
+            }
+          />
+
           <View style={{ height: 100 }} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -1160,6 +1253,15 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
           style={styles.botonBarra}
         />
       </View>
+
+      {/* Modal de Firma en Pantalla (§13, GAF-36) */}
+      <FirmaPadModal
+        visible={modalFirmaVisible}
+        onCerrar={() => setModalFirmaVisible(false)}
+        onGuardar={handleGuardarFirmaModal}
+        responsableNoDisponibleInicial={acta.firmas.responsableNoDisponible}
+        motivoNoDisponibleInicial={acta.firmas.motivoNoDisponible}
+      />
     </SafeAreaView>
   );
 };
@@ -1537,5 +1639,57 @@ const styles = StyleSheet.create({
   },
   botonBarra: {
     flex: 1,
+  },
+  contenedorEstadoFirma: {
+    marginTop: 10,
+    gap: 8,
+  },
+  bannerFirmaAusente: {
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#fcd34d',
+    borderRadius: 6,
+    padding: 10,
+  },
+  textoFirmaAusente: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#92400e',
+  },
+  bannerFirmaExitosa: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    borderRadius: 6,
+    padding: 10,
+  },
+  textoFirmaExitosa: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#065f46',
+  },
+  bannerFirmaPendiente: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    padding: 10,
+  },
+  textoFirmaPendiente: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  botonAbrirFirma: {
+    backgroundColor: '#2563eb',
+    borderRadius: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+  },
+  textoBotonAbrirFirma: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
   },
 });
