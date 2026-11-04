@@ -42,6 +42,7 @@ import {
   ESTADOS_FISICOS,
 } from '../model/estaciones-drt';
 import { MAX_TAMANO_FOTO_BYTES } from '../model/fotos-compresion';
+import { formatearDetalleBorrador } from '../model/trabajo-colaborativo';
 import { FirmaPadModal, ResultadoFirma } from './FirmaPadModal';
 import { GaleriaEvidenciasFotos } from './GaleriaEvidenciasFotos';
 import { useAuthStore } from '../../auth/model/use-auth-store';
@@ -178,17 +179,26 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
 
   const [modalFirmaVisible, setModalFirmaVisible] = useState(false);
 
+  // Detección de inspección cerrada / bloqueada para colaboración multi-técnico (§8.2, GAF-37)
+  const estaBloqueada = !!borrador?.bloqueada || !!acta.cerradaEnRevision;
+
   // Referencia mutable siempre actualizada para auto-guardado seguro
   const ultimaActaRef = useRef(acta);
   ultimaActaRef.current = acta;
 
   // Auto-guardado en segundo plano en SQLite (debounced 2.5s) bajo la regla §2.4: Durable before visible
   useEffect(() => {
+    if (estaBloqueada) return;
+
     const timer = setTimeout(() => {
+      const tecnicoNombre = usuario ? `${usuario.nombres} ${usuario.apellidos}` : 'Técnico Operador';
       actualizarDrt(ultimaActaRef.current, {
         clienteRazonSocial: ultimaActaRef.current.clienteRazonSocial,
         sedeNombre: ultimaActaRef.current.sedeDireccion,
         servicioTipo: 'DESRATIZACION_DRT',
+        tecnicoId: usuario?.id,
+        tecnicoNombre,
+        tecnicoCargo: usuario?.cargo,
       })
         .then(() => {
           setMensajeGuardado(`Guardado localmente en SQLite a las ${horaActualIso()}`);
@@ -197,15 +207,21 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
     }, 2500);
 
     return () => clearTimeout(timer);
-  }, [acta, actualizarDrt]);
+  }, [acta, actualizarDrt, estaBloqueada, usuario]);
 
   // Manejador seguro para regresar: garantiza que todo cambio se guarde en SQLite antes de desmontar
   const handleVolver = () => {
-    actualizarDrt(ultimaActaRef.current, {
-      clienteRazonSocial: ultimaActaRef.current.clienteRazonSocial,
-      sedeNombre: ultimaActaRef.current.sedeDireccion,
-      servicioTipo: 'DESRATIZACION_DRT',
-    }).catch(() => {});
+    if (!estaBloqueada) {
+      const tecnicoNombre = usuario ? `${usuario.nombres} ${usuario.apellidos}` : 'Técnico Operador';
+      actualizarDrt(ultimaActaRef.current, {
+        clienteRazonSocial: ultimaActaRef.current.clienteRazonSocial,
+        sedeNombre: ultimaActaRef.current.sedeDireccion,
+        servicioTipo: 'DESRATIZACION_DRT',
+        tecnicoId: usuario?.id,
+        tecnicoNombre,
+        tecnicoCargo: usuario?.cargo,
+      }).catch(() => {});
+    }
     onVolver();
   };
 
@@ -258,16 +274,32 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
   };
 
   const handleGuardarBorradorManual = async () => {
+    if (estaBloqueada) {
+      Alert.alert(
+        'Inspección Cerrada (§8.2)',
+        'Esta inspección ya fue finalizada y enviada a revisión. Se encuentra bloqueada para nuevas modificaciones.',
+      );
+      return;
+    }
+
     try {
       setGuardando(true);
       setErrorValidacion(null);
+      const tecnicoNombre = usuario ? `${usuario.nombres} ${usuario.apellidos}` : 'Técnico Operador';
       await actualizarDrt(acta, {
         clienteRazonSocial: acta.clienteRazonSocial,
         sedeNombre: acta.sedeDireccion,
         servicioTipo: 'DESRATIZACION_DRT',
+        tecnicoId: usuario?.id,
+        tecnicoNombre,
+        tecnicoCargo: usuario?.cargo,
       });
       const hora = horaActualIso();
-      setMensajeGuardado(`Borrador guardado en SQLite local a las ${hora}`);
+      setMensajeGuardado(`Borrador guardado a las ${hora} por ${tecnicoNombre}`);
+      Alert.alert(
+        'Borrador Guardado (§8.2)',
+        `Se guardó el borrador en SQLite local a las ${hora} por ${tecnicoNombre}. Los datos están seguros y listos para trabajo colaborativo.`,
+      );
     } catch {
       Alert.alert('Error al guardar', 'No se pudo guardar el borrador en la base de datos local.');
     } finally {
@@ -276,6 +308,14 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
   };
 
   const handleFinalizarServicio = async () => {
+    if (estaBloqueada) {
+      Alert.alert(
+        'Inspección Ya Cerrada (§8.2)',
+        'Esta inspección ya fue finalizada previamente y enviada a revisión.',
+      );
+      return;
+    }
+
     // 1. Validar esquema completo según acta
     const resultado = ActaServicioDrtSchema.safeParse(acta);
     if (!resultado.success) {
@@ -534,6 +574,26 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
           contentContainerStyle={styles.scrollContenido}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Alerta de Inspección Bloqueada / Cerrada para Colaboración (§8.2, GAF-37) */}
+          {estaBloqueada ? (
+            <View style={styles.alertaBloqueo}>
+              <Text style={styles.alertaBloqueoTitulo}>🔒 Inspección Cerrada y en Revisión (§8.2)</Text>
+              <Text style={styles.alertaBloqueoTexto}>
+                Esta inspección fue concluida por {acta.cerradoPor || borrador?.guardadoPor?.nombre || 'otro operador'} y enviada a revisión. El formulario se encuentra en modo de solo lectura para evitar inconsistencias o pérdida de datos.
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Banner Informativo de Borrador Colaborativo con Técnico y Hora (§8.2) */}
+          <View style={styles.bannerBorradorInfo}>
+            <Text style={styles.textoBorradorInfo}>
+              💾 {formatearDetalleBorrador(
+                borrador?.actualizadoEn || acta.actualizadoEn || fechaActualIso(),
+                borrador?.guardadoPor?.nombre || acta.actualizadoPor || (usuario ? `${usuario.nombres} ${usuario.apellidos}` : 'Técnico Operador'),
+              )}
+            </Text>
+          </View>
+
           {mensajeGuardado ? (
             <View style={styles.alertaGuardado}>
               <Text style={styles.alertaGuardadoTexto}>✓ {mensajeGuardado}</Text>
@@ -1235,23 +1295,33 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Barra de Acciones Fijas Inferiores */}
+      {/* Barra de Acciones Fijas Inferiores (§8.2) */}
       <View style={styles.barraAccionesFija}>
-        <Button
-          titulo="Guardar Borrador"
-          onPress={handleGuardarBorradorManual}
-          variante="secundario"
-          deshabilitado={guardando}
-          style={styles.botonBarra}
-        />
-        <Button
-          titulo="Finalizar y Encolar"
-          onPress={handleFinalizarServicio}
-          variante="primario"
-          deshabilitado={guardando}
-          cargando={guardando}
-          style={styles.botonBarra}
-        />
+        {estaBloqueada ? (
+          <View style={styles.bannerBarraBloqueada}>
+            <Text style={styles.textoBarraBloqueada}>
+              🔒 Inspección enviada a revisión (§8.2) — Modo Solo Lectura
+            </Text>
+          </View>
+        ) : (
+          <>
+            <Button
+              titulo="Guardar Borrador"
+              onPress={handleGuardarBorradorManual}
+              variante="secundario"
+              deshabilitado={guardando}
+              style={styles.botonBarra}
+            />
+            <Button
+              titulo="Finalizar y Encolar"
+              onPress={handleFinalizarServicio}
+              variante="primario"
+              deshabilitado={guardando}
+              cargando={guardando}
+              style={styles.botonBarra}
+            />
+          </>
+        )}
       </View>
 
       {/* Modal de Firma en Pantalla (§13, GAF-36) */}
@@ -1690,6 +1760,53 @@ const styles = StyleSheet.create({
   textoBotonAbrirFirma: {
     color: '#ffffff',
     fontSize: 12,
+    fontWeight: '800',
+  },
+  alertaBloqueo: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  alertaBloqueoTitulo: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#991b1b',
+    marginBottom: 4,
+  },
+  alertaBloqueoTexto: {
+    fontSize: 11,
+    color: '#7f1d1d',
+    lineHeight: 16,
+  },
+  bannerBorradorInfo: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginBottom: 6,
+  },
+  textoBorradorInfo: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '700',
+  },
+  bannerBarraBloqueada: {
+    flex: 1,
+    backgroundColor: '#f1f5f9',
+    borderColor: '#cbd5e1',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  textoBarraBloqueada: {
+    fontSize: 12,
+    color: '#64748b',
     fontWeight: '800',
   },
 });

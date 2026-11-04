@@ -13,6 +13,9 @@ export interface MetadataBorrador {
   sedeNombre?: string;
   numeroOrden?: string;
   servicioTipo?: string;
+  tecnicoId?: string;
+  tecnicoNombre?: string;
+  tecnicoCargo?: string;
 }
 
 export interface BorradorInspeccion {
@@ -24,6 +27,15 @@ export interface BorradorInspeccion {
   servicioTipo?: string;
   datosDrt?: ActaServicioDrt;
   datosCampo?: FormularioCampo;
+  actualizadoEn?: string;
+  guardadoPor?: {
+    tecnicoId?: string;
+    nombre?: string;
+    cargo?: string;
+  };
+  bloqueada?: boolean;
+  motivoBloqueo?: string;
+  syncStatus?: string;
 }
 
 interface BorradorStore {
@@ -89,6 +101,7 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
 
   actualizarDrt: async (acta, metadata) => {
     const actual = get().borrador;
+    const ahora = new Date().toISOString();
     const nuevoBorrador: BorradorInspeccion = {
       servicioId: acta.servicioId,
       observaciones: acta.resultadosRecomendaciones || (actual?.observaciones ?? ''),
@@ -96,8 +109,22 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
       sedeNombre: metadata?.sedeNombre ?? actual?.sedeNombre ?? acta.sedeDireccion,
       numeroOrden: metadata?.numeroOrden ?? actual?.numeroOrden,
       servicioTipo: metadata?.servicioTipo ?? actual?.servicioTipo ?? 'DESRATIZACION_DRT',
-      datosDrt: acta,
+      datosDrt: {
+        ...acta,
+        actualizadoEn: ahora,
+        actualizadoPor: metadata?.tecnicoNombre ?? acta.actualizadoPor ?? acta.firmas?.personalResponsableNombre,
+      },
       datosCampo: actual?.datosCampo,
+      actualizadoEn: ahora,
+      guardadoPor: {
+        tecnicoId: metadata?.tecnicoId,
+        nombre: metadata?.tecnicoNombre ?? acta.firmas?.personalResponsableNombre,
+        cargo: metadata?.tecnicoCargo ?? acta.firmas?.personalResponsableCargo,
+      },
+      bloqueada: !!acta.cerradaEnRevision,
+      motivoBloqueo: acta.cerradaEnRevision
+        ? 'La inspección está cerrada y no acepta más sincronizaciones de campo (Sección 8.2)'
+        : undefined,
     };
 
     set({
@@ -106,7 +133,7 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
 
     try {
       const repo = new BorradorRepository();
-      await repo.guardarDrt(acta, metadata);
+      await repo.guardarDrt(nuevoBorrador.datosDrt!, metadata);
     } catch {
       // Fallback
     }

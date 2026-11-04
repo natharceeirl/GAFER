@@ -69,6 +69,9 @@ export const ItemEstacionPlanillaSchema = z.object({
   estadoFisico: EstadoFisicoEstacionSchema.optional(),
   cantidadReposicion: z.number().nonnegative().optional(),
   esInstalacion: z.boolean().optional(),
+  // Trabajo colaborativo multi-técnico (§8.2, GAF-37):
+  actualizadoEn: z.string().optional(),
+  actualizadoPor: z.string().optional(),
 });
 export type ItemEstacionPlanilla = z.infer<typeof ItemEstacionPlanillaSchema>;
 
@@ -136,5 +139,11 @@ export const ActaServicioDrtSchema = z.object({
 
   // 9. Fotografías de evidencia (§13, C15)
   fotos: z.array(FotoEvidenciaDrtSchema).default([]),
+
+  // 10. Metadatos de Trabajo Colaborativo y Cierre (§8.2, GAF-37)
+  actualizadoEn: z.string().optional(),
+  actualizadoPor: z.string().optional(),
+  cerradaEnRevision: z.boolean().optional(),
+  cerradoPor: z.string().optional(),
 });
 export type ActaServicioDrt = z.infer<typeof ActaServicioDrtSchema>;

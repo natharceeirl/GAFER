@@ -287,11 +287,26 @@ export class OutboxQueue {
       );
 
       if (!response.ok) {
-        const errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+        let detalleError = response.statusText;
+        try {
+          const jsonError = (await response.json()) as { message?: string } | undefined;
+          if (jsonError && typeof jsonError.message === 'string') {
+            detalleError = jsonError.message;
+          }
+        } catch {
+          // Fallback a texto o statusText
+        }
+
+        const errorMsg = `HTTP ${response.status}: ${detalleError}`;
+        const esInspeccionCerrada = response.status === 409 || detalleError.toLowerCase().includes('cerrada');
         const ahora = new Date().toISOString();
+
         for (const item of pendientes) {
           item.intentos += 1;
           item.ultimoError = errorMsg;
+          if (esInspeccionCerrada) {
+            item.sincronizado = false;
+          }
         }
 
         if (this.db) {
@@ -301,9 +316,28 @@ export class OutboxQueue {
                 `UPDATE sync_outbox 
                  SET attempt_count = attempt_count + 1,
                      last_attempt_at = ?,
-                     last_error_message_sanitized = ?
+                     last_error_code = ?,
+                     last_error_message_sanitized = ?,
+                     status = ?
                  WHERE operation_id = ?;`,
-                [ahora, errorMsg, item.operacion.operationId],
+                [
+                  ahora,
+                  esInspeccionCerrada ? 'INSPECCION_CERRADA' : null,
+                  errorMsg,
+                  esInspeccionCerrada ? 'REJECTED' : 'PENDING',
+                  item.operacion.operationId,
+                ],
+              );
+            }
+
+            // Bloquear borrador local si la inspección fue cerrada por otro técnico en el servidor (§8.2)
+            if (esInspeccionCerrada) {
+              await tx.runAsync(
+                `UPDATE borradores_inspeccion 
+                 SET sync_status = 'LOCKED',
+                     actualizado_en = ?
+                 WHERE servicio_id = ?;`,
+                [ahora, inspeccionId],
               );
             }
           });
