@@ -3,6 +3,7 @@ import { useSesion } from '../shared/api/sesion';
 import { LoginPage } from '../features/auth/pages/LoginPage';
 import { LogoGafer } from '../shared/ui/atoms/LogoGafer';
 import { BotonTema } from '../shared/ui/atoms/BotonTema';
+import { useBarraLateral } from '../shared/lib/barra-lateral';
 import { NOMBRE_ROL, type Rol } from '../features/auth/model/roles';
 import { DashboardPage } from '../features/estadisticas/pages/DashboardPage';
 import { ClientesModule } from '../features/cliente-expediente/pages/ClientesModule';
@@ -47,16 +48,23 @@ const SOLO_ADMINISTRADOR: Pantalla[] = ['AUDITORIA'];
 
 export function AppShell() {
   const usuarioSesion = useSesion((s) => s.usuario);
-  const cerrarSesion = useSesion((s) => s.cerrar);
-  const [pantalla, setPantalla] = useState<Pantalla>('DASHBOARD');
-  const [documentoAbierto, setDocumentoAbierto] = useState<string | null>(null);
-  const [mapaSeleccion, setMapaSeleccion] = useState<SeleccionMapa | null>(null);
-  const { documentos } = useDocumentos();
 
   if (!usuarioSesion) return <LoginPage />;
 
   /** El rol sale de la sesión del API; la web solo admite Administrador y Supervisor (§16). */
   const sesion = { rol: usuarioSesion.cargo as Rol, usuario: usuarioSesion.usuario };
+
+  // La clave reinicia el armazón al cambiar de usuario: pantalla inicial y su propia preferencia de barra.
+  return <ShellConSesion key={sesion.usuario} rol={sesion.rol} usuario={sesion.usuario} />;
+}
+
+function ShellConSesion(sesion: { rol: Rol; usuario: string }) {
+  const cerrarSesion = useSesion((s) => s.cerrar);
+  const [pantalla, setPantalla] = useState<Pantalla>('DASHBOARD');
+  const [documentoAbierto, setDocumentoAbierto] = useState<string | null>(null);
+  const [mapaSeleccion, setMapaSeleccion] = useState<SeleccionMapa | null>(null);
+  const { documentos } = useDocumentos();
+  const barra = useBarraLateral(sesion.usuario);
 
   const pantallasVisibles = PANTALLAS.filter((p) => sesion.rol === 'ADMINISTRADOR' || !SOLO_ADMINISTRADOR.includes(p.id));
   const detalleAbierto = documentoAbierto ? documentos.find((d) => d.id === documentoAbierto) : undefined;
@@ -67,41 +75,51 @@ export function AppShell() {
   }
 
   return (
-    <div className="app-shell">
-      <nav className="app-shell__rail" aria-label="Selector de pantalla (solo para revisión del mockup)">
-        <LogoGafer ancho={148} />
-        <ul className="app-shell__nav">
-          {pantallasVisibles.map((item) => (
-            <li key={item.id}>
-              <button
-                type="button"
-                className={
-                  pantalla === item.id ? 'app-shell__nav-btn app-shell__nav-btn--activo' : 'app-shell__nav-btn'
-                }
-                onClick={() => {
-                  setPantalla(item.id);
-                  setDocumentoAbierto(null);
-                }}
-              >
-                {item.etiqueta}
-              </button>
-            </li>
-          ))}
-        </ul>
+    <div className={barra.oculta ? 'app-shell app-shell--barra-oculta' : 'app-shell'}>
+      <nav id="menu-principal" className="app-shell__rail" aria-label="Menú principal">
+        <button
+          type="button"
+          className="app-shell__plegar"
+          aria-expanded={!barra.oculta}
+          aria-controls="menu-principal-opciones"
+          onClick={barra.alternar}
+        >
+          <span aria-hidden="true">{barra.oculta ? '»' : '«'}</span>
+          <span className="app-shell__plegar-texto">{barra.oculta ? 'Mostrar menú' : 'Ocultar menú'}</span>
+        </button>
 
-        <div className="app-shell__sesion">
-          <div className="app-shell__sesion-usuario">
-            <span className="app-shell__sesion-nombre">{sesion.usuario}</span>
-            <span className="app-shell__sesion-rol">{NOMBRE_ROL[sesion.rol]}</span>
+        {/* Con la barra oculta las opciones siguen en el DOM pero `hidden` las saca de la vista y del lector de pantalla. */}
+        <div id="menu-principal-opciones" className="app-shell__opciones" hidden={barra.oculta}>
+          <LogoGafer ancho={148} />
+          <ul className="app-shell__nav">
+            {pantallasVisibles.map((item) => (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  className={
+                    pantalla === item.id ? 'app-shell__nav-btn app-shell__nav-btn--activo' : 'app-shell__nav-btn'
+                  }
+                  onClick={() => {
+                    setPantalla(item.id);
+                    setDocumentoAbierto(null);
+                  }}
+                >
+                  {item.etiqueta}
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          <div className="app-shell__sesion">
+            <div className="app-shell__sesion-usuario">
+              <span className="app-shell__sesion-nombre">{sesion.usuario}</span>
+              <span className="app-shell__sesion-rol">{NOMBRE_ROL[sesion.rol]}</span>
+            </div>
+            <BotonTema />
+            <button type="button" className="app-shell__salir" onClick={cerrarSesion}>
+              Cerrar sesión
+            </button>
           </div>
-          <BotonTema />
-          <button type="button" className="app-shell__salir" onClick={() => {
-              cerrarSesion();
-              setPantalla('DASHBOARD');
-              setDocumentoAbierto(null);
-            }}>
-            Cerrar sesión
-          </button>
         </div>
       </nav>
 
