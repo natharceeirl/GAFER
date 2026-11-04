@@ -3,6 +3,9 @@ import { StyleSheet, View, Text, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from './src/features/auth/model/use-auth-store';
+import { useBorradorStore } from './src/features/operaciones/model/use-borrador-store';
+import { BorradorRepository } from './src/features/operaciones/model/borrador-repository';
+import { inicializarBaseDeDatos } from './src/shared/db/sqlite';
 import { LoginScreen } from './src/features/auth/ui';
 import { AgendaScreen } from './src/features/agenda/ui';
 import { TOKENS } from './src/shared/theme/tokens';
@@ -16,6 +19,15 @@ function AppContent() {
     (async () => {
       try {
         await restaurarSesion();
+        // Inicializar persistencia SQLite local y restaurar borrador activo si existe
+        await inicializarBaseDeDatos();
+        const repo = new BorradorRepository();
+        const borradorActivo = await repo.obtenerActivo();
+        if (borradorActivo) {
+          useBorradorStore.getState().restaurarBorrador(borradorActivo);
+        }
+      } catch (error) {
+        console.warn('Advertencia al inicializar almacenamiento local SQLite:', error);
       } finally {
         if (montado) {
           setIniciando(false);
