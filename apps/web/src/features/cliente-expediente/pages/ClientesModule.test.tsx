@@ -127,7 +127,7 @@ describe('ClientesModule conectado al API', () => {
     expect(await screen.findByRole('button', { name: /Kallpa Energía S\.A\./ })).toBeInTheDocument();
   });
 
-  it('da de alta un cliente real: envía el cuerpo del contrato y abre su expediente', async () => {
+  it('da de alta un cliente real: envía el cuerpo del contrato, pasa a registrar su sede y, al salir, abre su expediente', async () => {
     simularApi();
     montar();
     fireEvent.click(await screen.findByRole('button', { name: 'Nuevo cliente' }));
@@ -157,7 +157,10 @@ describe('ClientesModule conectado al API', () => {
       contactoCorreo: 'cpinto@molisur.pe',
       camposExtra: { anticipacionAlertaDias: 60 },
     });
-    expect(screen.getByText('60 días antes')).toBeInTheDocument();
+    // GAF-99: el alta continúa en el paso 2 (sede); salir deja el cliente guardado y abre su expediente.
+    expect(screen.getByRole('heading', { name: 'Nueva sede' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Salir del alta rápida' }));
+    expect(await screen.findByText('60 días antes')).toBeInTheDocument();
   });
 
   it('los giros del formulario salen del catálogo de texto del API, no de una lista fija', async () => {

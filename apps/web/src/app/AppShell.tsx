@@ -63,6 +63,8 @@ function ShellConSesion(sesion: { rol: Rol; usuario: string }) {
   const [pantalla, setPantalla] = useState<Pantalla>('DASHBOARD');
   const [documentoAbierto, setDocumentoAbierto] = useState<string | null>(null);
   const [mapaSeleccion, setMapaSeleccion] = useState<SeleccionMapa | null>(null);
+  /** GAF-99: Clientes se abre en el paso 1 del alta rápida cuando se llega por el acceso directo del panel. */
+  const [altaRapida, setAltaRapida] = useState(false);
   const { documentos } = useDocumentos();
   const barra = useBarraLateral(sesion.usuario);
 
@@ -102,6 +104,7 @@ function ShellConSesion(sesion: { rol: Rol; usuario: string }) {
                   onClick={() => {
                     setPantalla(item.id);
                     setDocumentoAbierto(null);
+                    setAltaRapida(false);
                   }}
                 >
                   {item.etiqueta}
@@ -125,7 +128,17 @@ function ShellConSesion(sesion: { rol: Rol; usuario: string }) {
 
       {/* El contenido tiene su propio scroll; la clave lo reinicia al cambiar de pantalla o abrir un documento. */}
       <div className="app-shell__stage" key={`${pantalla}:${documentoAbierto ?? ''}`}>
-        {pantalla === 'DASHBOARD' ? <DashboardPage rol={sesion.rol} documentos={documentos} onAbrirDocumento={abrirDocumento} /> : null}
+        {pantalla === 'DASHBOARD' ? (
+          <DashboardPage
+            rol={sesion.rol}
+            documentos={documentos}
+            onAbrirDocumento={abrirDocumento}
+            onNuevoCliente={() => {
+              setAltaRapida(true);
+              setPantalla('CLIENTES');
+            }}
+          />
+        ) : null}
         {pantalla === 'PROGRAMACION' ? <ProgramacionPage usuario={sesion.usuario} rol={sesion.rol} /> : null}
         {pantalla === 'CLIENTES' ? (
           <ClientesModule
@@ -134,6 +147,11 @@ function ShellConSesion(sesion: { rol: Rol; usuario: string }) {
             onAbrirMapaMurino={(clienteId) => {
               setMapaSeleccion({ clienteId });
               setPantalla('MAPA_MURINO');
+            }}
+            iniciarEnAltaRapida={altaRapida}
+            onProgramarVisita={() => {
+              setAltaRapida(false);
+              setPantalla('PROGRAMACION');
             }}
           />
         ) : null}

@@ -1,0 +1,65 @@
+.alta-rapida__pasos {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  max-width: 780px;
+  margin: 16px auto 0;
+  padding: 10px 20px;
+  box-sizing: border-box;
+  font-family: var(--gf-font-ui);
+  font-size: 13px;
+}
+.alta-rapida__contador {
+  font-family: var(--gf-font-mono);
+  font-weight: 700;
+  color: var(--gf-ink);
+}
+.alta-rapida__lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.alta-rapida__paso {
+  padding: 3px 10px;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  color: var(--gf-ink-faint);
+}
+.alta-rapida__paso--hecho {
+  color: var(--gf-ink-soft);
+  text-decoration: line-through;
+}
+.alta-rapida__paso--actual {
+  border-color: var(--gf-ink);
+  color: var(--gf-ink);
+  font-weight: 700;
+}
+.alta-rapida__salir {
+  margin-left: auto;
+  padding: 6px 10px;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  background: transparent;
+  color: var(--gf-ink-soft);
+  font-family: var(--gf-font-ui);
+  font-weight: 700;
+  cursor: pointer;
+}
+.alta-rapida__salir:hover {
+  border-color: var(--gf-ink);
+  color: var(--gf-ink);
+}
+.alta-rapida__aviso {
+  max-width: 740px;
+  margin: 8px auto 0;
+  padding: 10px 16px;
+  background: var(--gf-verde);
+  color: var(--gf-verde-ink);
+  border-radius: var(--gf-radius);
+  font-weight: 700;
+  font-size: 14px;
+}

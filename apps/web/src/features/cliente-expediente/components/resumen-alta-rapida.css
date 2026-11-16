@@ -1,0 +1,40 @@
+.alta-resumen {
+  display: grid;
+  gap: 16px;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 20px 20px 48px;
+  box-sizing: border-box;
+}
+.alta-resumen__titulo {
+  margin: 0;
+  font-family: var(--gf-font-ui);
+  font-size: 16px;
+  color: var(--gf-ink);
+}
+.alta-resumen__datos {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 0;
+}
+.alta-resumen__datos dt {
+  font-size: 13px;
+  color: var(--gf-ink-faint);
+}
+.alta-resumen__datos dd {
+  margin: 0;
+  color: var(--gf-ink);
+}
+.alta-resumen__servicios {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.alta-resumen__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

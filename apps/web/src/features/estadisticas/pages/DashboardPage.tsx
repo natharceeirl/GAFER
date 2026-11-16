@@ -43,6 +43,8 @@ interface DashboardPageProps {
   rol: Rol;
   documentos: DocumentoResumen[];
   onAbrirDocumento: (id: string) => void;
+  /** GAF-99: acceso directo al alta rápida de cliente; solo se ofrece al Administrador. */
+  onNuevoCliente?: () => void;
 }
 
 function exportarAlertas(alertas: Alerta[], hoy: string) {
@@ -62,7 +64,7 @@ function exportarAlertas(alertas: Alerta[], hoy: string) {
  * servicios del día, pendientes); el resto cubre las estadísticas de §10.1,
  * el resumen de clientes y el control de actividades, con filtros.
  */
-export function DashboardPage({ rol, documentos, onAbrirDocumento }: DashboardPageProps) {
+export function DashboardPage({ rol, documentos, onAbrirDocumento, onNuevoCliente }: DashboardPageProps) {
   const hoy = fechaLocal();
   const { cartera } = useCartera();
   const { visitas } = useProgramacion();
@@ -100,9 +102,12 @@ export function DashboardPage({ rol, documentos, onAbrirDocumento }: DashboardPa
         title="Panel de control"
         meta={`Turno actual · ${NOMBRE_ROL[rol]}`}
         action={
-          <Button variant="secondary" onClick={() => exportarAlertas(alertas, hoy)} disabled={alertas.length === 0}>
-            Exportar alertas
-          </Button>
+          <span className="dashboard-page__acciones">
+            {rol === 'ADMINISTRADOR' && onNuevoCliente ? <Button onClick={onNuevoCliente}>Nuevo cliente</Button> : null}
+            <Button variant="secondary" onClick={() => exportarAlertas(alertas, hoy)} disabled={alertas.length === 0}>
+              Exportar alertas
+            </Button>
+          </span>
         }
       />
 

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { App } from './App';
 import { useSesion } from '../shared/api/sesion';
@@ -66,6 +66,53 @@ describe('App: acceso según la sesión del API', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Panel de control' }));
 
     expect(container.querySelector('.app-shell__stage')).toBe(contenidoAntes);
+  });
+});
+
+describe('App: acceso directo «Nuevo cliente» en el panel de control (GAF-99)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    window.localStorage.clear();
+    useSesion.setState({ token: null, usuario: null });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const cuerpo = String(url).includes('/catalogos-texto') ? [] : { total: 0, limit: 100, offset: 0, items: [] };
+        return new Response(JSON.stringify(cuerpo), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }),
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('el Administrador lo ve en el panel y lo lleva al paso 1 del alta rápida en Clientes', async () => {
+    useSesion.getState().iniciar('jwt', usuario('ADMINISTRADOR'));
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo cliente' }));
+
+    expect(await screen.findByRole('navigation', { name: 'Alta rápida de cliente' })).toHaveTextContent('Paso 1 de 3');
+    expect(screen.getByRole('button', { name: 'Clientes' })).toHaveClass('app-shell__nav-btn--activo');
+  });
+
+  it('volver a Clientes desde el menú abre la cartera, no el alta', async () => {
+    useSesion.getState().iniciar('jwt', usuario('ADMINISTRADOR'));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo cliente' }));
+    await screen.findByRole('navigation', { name: 'Alta rápida de cliente' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Panel de control' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clientes' }));
+
+    expect(await screen.findByRole('heading', { name: 'Cartera de clientes' })).toBeInTheDocument();
+  });
+
+  it('el Supervisor no ve el acceso directo', () => {
+    useSesion.getState().iniciar('jwt', usuario('SUPERVISOR'));
+    render(<App />);
+
+    expect(screen.queryByRole('button', { name: 'Nuevo cliente' })).not.toBeInTheDocument();
   });
 });
 

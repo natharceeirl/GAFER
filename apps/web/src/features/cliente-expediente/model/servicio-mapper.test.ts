@@ -52,8 +52,7 @@ describe('servicio-mapper', () => {
   });
 
   it('servicioDeApi toma PENDIENTE si un servidor anterior no envía el estado de trabajo (GAF-99)', () => {
-    const { estadoTrabajo: _e, ...sinEstado } = detalle;
-    expect(servicioDeApi(sinEstado).estadoTrabajo).toBe('PENDIENTE');
+    expect(servicioDeApi({ ...detalle, estadoTrabajo: undefined }).estadoTrabajo).toBe('PENDIENTE');
     const parcial = { ...detalle, insumosAutorizados: undefined, equiposAutorizados: undefined, dosisReferencial: undefined, requiereCertificado: undefined, vigenciaDias: undefined };
     expect(servicioDeApi(parcial)).toMatchObject({
       insumosAutorizados: [],
