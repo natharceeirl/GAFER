@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { EstadoActivoInactivoSchema } from './cliente';
+import { EstadoTrabajoSchema } from './estado-trabajo';
 
 export const TipoServicioSchema = z.enum(['DSF', 'DSS', 'DRT', 'LRA', 'LTG', 'LTS', 'LAM']);
 export type TipoServicio = z.infer<typeof TipoServicioSchema>;
@@ -63,6 +64,8 @@ export type ServicioContratadoRegistro = z.infer<typeof ServicioContratadoRegist
 export const ServicioContratadoDetalleSchema = ServicioContratadoBaseSchema.extend({
   id: z.string().uuid(),
   estado: EstadoActivoInactivoSchema,
+  /** Opcional solo por compatibilidad con servidores anteriores a GAF-99; el servidor actual siempre lo envía. */
+  estadoTrabajo: EstadoTrabajoSchema.optional().describe('Estado del trabajo: PENDIENTE, EN_CURSO, COMPLETADO o CANCELADO'),
 }).superRefine(aplicarReglasServicio);
 export type ServicioContratadoDetalle = z.infer<typeof ServicioContratadoDetalleSchema>;
 
