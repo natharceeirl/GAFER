@@ -13,6 +13,7 @@ const servicio = (s: Partial<ServicioContratado> & Pick<ServicioContratado, 'id'
   requiereCertificado: true,
   vigenciaDias: 180,
   estado: 'ACTIVO',
+  estadoTrabajo: 'PENDIENTE',
   ...s,
 });
 

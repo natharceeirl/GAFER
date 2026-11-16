@@ -1,4 +1,4 @@
-import type { ProyectoDetalle, ServicioContratadoDetalle } from '@gafer/contracts';
+import type { CambioEstadoTrabajo, EstadoTrabajo, ProyectoDetalle, ServicioContratadoDetalle } from '@gafer/contracts';
 import { apiFetch } from '../../../shared/api/http-client';
 import { actualizacionDeProyecto, proyectoDeApi, registroDeProyecto, type ProyectoExpediente } from '../model/proyecto-mapper';
 import { actualizacionDeServicio, registroDeServicio, servicioDeApi, type ServicioContratado } from '../model/servicio-mapper';
@@ -50,4 +50,11 @@ export async function actualizarServicio(id: string, datos: DatosServicio): Prom
 
 export async function cambiarEstadoServicio(id: string, accion: Accion): Promise<void> {
   await apiFetch(`${RUTA_SERVICIOS}/${id}/${accion}`, { metodo: 'PATCH' });
+}
+
+/** GAF-99: estado del trabajo (aparte de activar / desactivar). El motivo solo viaja si hay texto. */
+export async function cambiarEstadoTrabajo(id: string, estado: EstadoTrabajo, motivo?: string): Promise<ServicioContratado> {
+  const texto = motivo?.trim() ?? '';
+  const cuerpo: CambioEstadoTrabajo = texto === '' ? { estado } : { estado, motivo: texto };
+  return servicioDeApi(await apiFetch<ServicioContratadoDetalle>(`${RUTA_SERVICIOS}/${id}/estado`, { metodo: 'PATCH', cuerpo }));
 }

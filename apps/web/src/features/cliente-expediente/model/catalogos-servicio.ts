@@ -1,8 +1,8 @@
-import type { EstadoActivoInactivo, FrecuenciaServicio, TipoServicio } from '@gafer/contracts';
+import type { ColorAura, EstadoActivoInactivo, EstadoTrabajo, FrecuenciaServicio, TipoServicio } from '@gafer/contracts';
 
 /**
  * Único módulo donde el código del API se convierte en etiqueta de pantalla (y al revés) para los
- * servicios contratados: tipo, frecuencia y estado. Los componentes y las validaciones trabajan con
+ * servicios contratados: tipo, frecuencia, estado y estado de trabajo. Los componentes y las validaciones trabajan con
  * los códigos de `@gafer/contracts`; solo al dibujar el texto pasan por aquí.
  */
 
@@ -30,6 +30,22 @@ export const FRECUENCIAS: Array<{ codigo: FrecuenciaServicio; etiqueta: string }
 ];
 
 export const ETIQUETA_ESTADO: Record<EstadoActivoInactivo, string> = { ACTIVO: 'Activo', INACTIVO: 'Inactivo' };
+
+/** Estado del trabajo del servicio (GAF-99), con el color de su insignia. */
+export const ESTADOS_TRABAJO: Array<{ codigo: EstadoTrabajo; etiqueta: string; color: ColorAura }> = [
+  { codigo: 'PENDIENTE', etiqueta: 'Pendiente', color: 'SIN_COLOR' },
+  { codigo: 'EN_CURSO', etiqueta: 'En curso', color: 'AMARILLO' },
+  { codigo: 'COMPLETADO', etiqueta: 'Completado', color: 'VERDE' },
+  { codigo: 'CANCELADO', etiqueta: 'Cancelado', color: 'ROJO' },
+];
+
+export function etiquetaEstadoTrabajo(codigo: EstadoTrabajo): string {
+  return ESTADOS_TRABAJO.find((e) => e.codigo === codigo)?.etiqueta ?? codigo;
+}
+
+export function colorEstadoTrabajo(codigo: EstadoTrabajo): ColorAura {
+  return ESTADOS_TRABAJO.find((e) => e.codigo === codigo)?.color ?? 'SIN_COLOR';
+}
 
 export function etiquetaFrecuencia(codigo: FrecuenciaServicio): string {
   return FRECUENCIAS.find((f) => f.codigo === codigo)?.etiqueta ?? codigo;

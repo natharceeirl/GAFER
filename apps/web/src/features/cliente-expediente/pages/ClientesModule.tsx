@@ -13,6 +13,8 @@ import { camposDeErrorProyecto, datosDeProyecto } from '../model/proyecto-mapper
 import { camposDeErrorServicio, datosDeServicio } from '../model/servicio-mapper';
 import { etiquetaFrecuencia } from '../model/catalogos-servicio';
 import { mensajeDeError } from '../../../shared/api/errores';
+import { repartirError } from '../model/errores-servidor';
+import type { EstadoTrabajo } from '@gafer/contracts';
 import type { DatosCliente, DatosProyecto, DatosServicio } from '../model/validaciones';
 import { useActivarCliente, useActualizarCliente, useCliente, useClientes, useCrearCliente, useDesactivarCliente } from '../api/use-clientes';
 import {
@@ -20,6 +22,7 @@ import {
   useActivarServicio,
   useActualizarSede,
   useActualizarServicio,
+  useCambiarEstadoTrabajo,
   useCrearSede,
   useCrearServicio,
   useDesactivarSede,
@@ -94,6 +97,7 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
   const actualizarServicio = useActualizarServicio();
   const activarServicio = useActivarServicio();
   const desactivarServicio = useDesactivarServicio();
+  const cambiarEstadoTrabajo = useCambiarEstadoTrabajo();
 
   const erroresAlta = useMemo(() => (crear.error ? camposDeError(crear.error) : null), [crear.error]);
   const errorEdicion = actualizar.error ?? activar.error ?? desactivar.error;
@@ -104,7 +108,13 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
   const erroresSede = useMemo(() => (errorSede ? camposDeErrorProyecto(errorSede) : null), [errorSede]);
   const errorServicio = crearServicio.error ?? actualizarServicio.error;
   const erroresServicio = useMemo(() => (errorServicio ? camposDeErrorServicio(errorServicio) : null), [errorServicio]);
-  const cambiandoEstado = activarSede.isPending || desactivarSede.isPending || activarServicio.isPending || desactivarServicio.isPending;
+  const cambiandoEstado =
+    activarSede.isPending || desactivarSede.isPending || activarServicio.isPending || desactivarServicio.isPending || cambiarEstadoTrabajo.isPending;
+  const erroresEstadoTrabajo = useMemo(() => {
+    if (!cambiarEstadoTrabajo.error) return null;
+    const { campos, general } = repartirError(cambiarEstadoTrabajo.error, (ruta) => (ruta === 'motivo' ? 'motivo' : null));
+    return { motivo: campos.motivo, general: campos.motivo ? null : general };
+  }, [cambiarEstadoTrabajo.error]);
   const errorEstado = activarSede.error ?? desactivarSede.error ?? activarServicio.error ?? desactivarServicio.error;
   const errorCatalogos = insumos.error ?? equipos.error;
 
@@ -127,6 +137,7 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
       actualizarServicio,
       activarServicio,
       desactivarServicio,
+      cambiarEstadoTrabajo,
     ]) {
       mutacion.reset();
     }
@@ -201,6 +212,17 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
     activarServicio.reset();
     desactivarServicio.reset();
     (activa ? activarServicio : desactivarServicio).mutate(servicioId);
+  }
+
+  /** GAF-99: resuelve `true` si el servidor aceptó el cambio; el error queda en la mutación para mostrarlo. */
+  async function cambiarTrabajo(servicioId: string, estado: EstadoTrabajo, motivo?: string): Promise<boolean> {
+    cambiarEstadoTrabajo.reset();
+    try {
+      await cambiarEstadoTrabajo.mutateAsync({ id: servicioId, estado, motivo });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   const cliente = ficha.data;
@@ -362,6 +384,8 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
         onNuevoServicio={(proyectoId) => irA({ tipo: 'nuevo-servicio', clienteId: cliente.id, proyectoId })}
         onEditarServicio={(proyectoId, servicioId) => irA({ tipo: 'editar-servicio', clienteId: cliente.id, proyectoId, servicioId })}
         onCambiarEstadoServicio={cambiarEstadoServicio}
+        onCambiarEstadoTrabajo={cambiarTrabajo}
+        errorEstadoTrabajo={erroresEstadoTrabajo}
         onAbrirMapaMurino={() => onAbrirMapaMurino(cliente.id)}
       />
     );
