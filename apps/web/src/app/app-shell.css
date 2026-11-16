@@ -18,6 +18,55 @@
   overflow-y: auto;
 }
 
+/* Barra plegada: queda una franja angosta con el botón para volver a desplegarla. */
+.app-shell--barra-oculta .app-shell__rail {
+  flex-basis: 52px;
+  padding: 18px 8px;
+}
+
+.app-shell__opciones {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+/* Un display propio anula el atributo hidden: se refuerza para que la barra plegada no muestre las opciones. */
+.app-shell__opciones[hidden] {
+  display: none;
+}
+
+.app-shell__plegar {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  background: transparent;
+  color: var(--gf-ink-soft);
+  font-family: var(--gf-font-ui);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+}
+.app-shell__plegar:hover {
+  border-color: var(--gf-ink);
+  color: var(--gf-ink);
+}
+.app-shell--barra-oculta .app-shell__plegar {
+  align-self: center;
+}
+/* Plegada, la franja solo muestra la flecha; el texto queda para el lector de pantalla. */
+.app-shell--barra-oculta .app-shell__plegar-texto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .app-shell__nav {
   list-style: none;
   margin: 0;
@@ -123,8 +172,15 @@
     border-right: none;
     border-bottom: 2px solid var(--gf-ink);
   }
+  .app-shell__opciones,
   .app-shell__nav {
     flex-direction: row;
     flex-wrap: wrap;
+  }
+  .app-shell--barra-oculta .app-shell__rail {
+    padding: 10px 14px;
+  }
+  .app-shell__plegar {
+    align-self: flex-start;
   }
 }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { App } from './App';
 import { useSesion } from '../shared/api/sesion';
 
@@ -15,6 +15,7 @@ const usuario = (cargo: 'ADMINISTRADOR' | 'SUPERVISOR') => ({
 describe('App: acceso según la sesión del API', () => {
   beforeEach(() => {
     sessionStorage.clear();
+    window.localStorage.clear();
     useSesion.setState({ token: null, usuario: null });
   });
 
@@ -65,5 +66,90 @@ describe('App: acceso según la sesión del API', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Panel de control' }));
 
     expect(container.querySelector('.app-shell__stage')).toBe(contenidoAntes);
+  });
+});
+
+describe('App: barra lateral plegable', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    window.localStorage.clear();
+    useSesion.setState({ token: null, usuario: null });
+  });
+
+  it('empieza desplegada y se puede ocultar y volver a mostrar', () => {
+    useSesion.getState().iniciar('jwt', usuario('ADMINISTRADOR'));
+    render(<App />);
+
+    const ocultar = screen.getByRole('button', { name: 'Ocultar menú' });
+    expect(ocultar).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Programación' })).toBeInTheDocument();
+
+    fireEvent.click(ocultar);
+
+    expect(screen.queryByRole('button', { name: 'Programación' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cerrar sesión' })).not.toBeInTheDocument();
+    const mostrar = screen.getByRole('button', { name: 'Mostrar menú' });
+    expect(mostrar).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(mostrar);
+
+    expect(screen.getByRole('button', { name: 'Programación' })).toBeInTheDocument();
+  });
+
+  it('con la barra oculta el contenido sigue en pantalla', () => {
+    useSesion.getState().iniciar('jwt', usuario('ADMINISTRADOR'));
+    const { container } = render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ocultar menú' }));
+
+    expect(container.querySelector('.app-shell__stage')).not.toBeNull();
+    expect(container.querySelector('.app-shell--barra-oculta')).not.toBeNull();
+  });
+
+  it('recuerda la preferencia al recargar', () => {
+    useSesion.getState().iniciar('jwt', usuario('ADMINISTRADOR'));
+    const { unmount } = render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ocultar menú' }));
+    unmount();
+
+    render(<App />);
+
+    expect(screen.getByRole('button', { name: 'Mostrar menú' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Programación' })).not.toBeInTheDocument();
+  });
+
+  it('la preferencia es de cada usuario: otro usuario en el mismo navegador la ve desplegada', () => {
+    useSesion.getState().iniciar('jwt', usuario('ADMINISTRADOR'));
+    const { unmount } = render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ocultar menú' }));
+    unmount();
+
+    useSesion.getState().iniciar('jwt', { ...usuario('SUPERVISOR'), usuario: 'd.amamani' });
+    render(<App />);
+
+    expect(screen.getByRole('button', { name: 'Ocultar menú' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Programación' })).toBeInTheDocument();
+  });
+
+  it('al cambiar de usuario sin recargar no se hereda la preferencia del anterior', () => {
+    useSesion.getState().iniciar('jwt', usuario('ADMINISTRADOR'));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ocultar menú' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mostrar menú' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }));
+    window.localStorage.setItem('gafer-barra-lateral:r.agarate', 'oculta');
+
+    act(() => {
+      useSesion.getState().iniciar('jwt', { ...usuario('SUPERVISOR'), usuario: 'd.amamani' });
+    });
+
+    expect(screen.getByRole('button', { name: 'Ocultar menú' })).toBeInTheDocument();
+
+    act(() => {
+      useSesion.getState().cerrar();
+      useSesion.getState().iniciar('jwt', usuario('ADMINISTRADOR'));
+    });
+
+    expect(screen.getByRole('button', { name: 'Mostrar menú' })).toBeInTheDocument();
   });
 });

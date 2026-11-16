@@ -31,4 +31,11 @@ describe('estilos globales', () => {
     expect(hover).toMatch(/background:\s*var\(--gf-rojo\)/);
     expect(hover).toMatch(/color:\s*var\(--gf-rojo-ink\)/);
   });
+
+  it('las opciones de la barra plegada se ocultan de verdad: su display propio no anula el atributo hidden', () => {
+    const css = leerCss('../../app/app-shell.css');
+
+    expect(reglaDe('\\.app-shell__opciones', css)).toMatch(/display:\s*flex/);
+    expect(reglaDe('\\.app-shell__opciones\\[hidden\\]', css)).toMatch(/display:\s*none/);
+  });
 });
