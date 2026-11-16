@@ -130,8 +130,15 @@ export class ServicioContratadoResponseDto {
   @ApiProperty({ example: 30, nullable: true })
   vigenciaDias!: number | null;
 
-  @ApiProperty({ example: 'ACTIVO', enum: ['ACTIVO', 'INACTIVO'] })
+  @ApiProperty({ example: 'ACTIVO', enum: ['ACTIVO', 'INACTIVO'], description: 'Baja lógica del servicio' })
   estado!: 'ACTIVO' | 'INACTIVO';
+
+  @ApiProperty({
+    example: 'EN_CURSO',
+    enum: ['PENDIENTE', 'EN_CURSO', 'COMPLETADO', 'CANCELADO'],
+    description: 'Estado del trabajo del servicio (GAF-99)',
+  })
+  estadoTrabajo!: 'PENDIENTE' | 'EN_CURSO' | 'COMPLETADO' | 'CANCELADO';
 }
 
 export class InsumoResponseDto {

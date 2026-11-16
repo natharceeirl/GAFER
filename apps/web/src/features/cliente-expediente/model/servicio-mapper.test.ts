@@ -31,6 +31,7 @@ const detalle: ServicioContratadoDetalle = {
   requiereCertificado: true,
   vigenciaDias: 180,
   estado: 'ACTIVO',
+  estadoTrabajo: 'EN_CURSO',
 };
 
 const datos: DatosServicio = {
@@ -48,6 +49,10 @@ const datos: DatosServicio = {
 describe('servicio-mapper', () => {
   it('servicioDeApi conserva los códigos del contrato y completa lo que falte', () => {
     expect(servicioDeApi(detalle)).toEqual(detalle);
+  });
+
+  it('servicioDeApi toma PENDIENTE si un servidor anterior no envía el estado de trabajo (GAF-99)', () => {
+    expect(servicioDeApi({ ...detalle, estadoTrabajo: undefined }).estadoTrabajo).toBe('PENDIENTE');
     const parcial = { ...detalle, insumosAutorizados: undefined, equiposAutorizados: undefined, dosisReferencial: undefined, requiereCertificado: undefined, vigenciaDias: undefined };
     expect(servicioDeApi(parcial)).toMatchObject({
       insumosAutorizados: [],

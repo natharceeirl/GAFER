@@ -37,6 +37,7 @@ const servicioBase = {
   requiereCertificado: true,
   vigenciaDias: 180,
   estado: 'ACTIVO' as const,
+  estadoTrabajo: 'PENDIENTE' as const,
   insumosAutorizados: ['i1', 'i4'],
   dosisReferencial: { i1: '1 bloque por estación', i4: '8 ml/L' },
   equiposAutorizados: ['e2', 'e3'],

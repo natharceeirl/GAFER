@@ -6,7 +6,16 @@ import { Button } from '../../../shared/ui/atoms/Button';
 import { Badge } from '../../../shared/ui/atoms/Badge';
 import type { ClienteFila } from '../model/clientes-mock';
 import type { ProyectoExpediente } from '../model/proyecto-mapper';
-import { ETIQUETA_ESTADO, etiquetaFrecuencia, etiquetaTipoServicio } from '../model/catalogos-servicio';
+import type { EstadoTrabajo } from '@gafer/contracts';
+import {
+  ETIQUETA_ESTADO,
+  colorEstadoTrabajo,
+  etiquetaEstadoTrabajo,
+  etiquetaFrecuencia,
+  etiquetaTipoServicio,
+} from '../model/catalogos-servicio';
+import { accionesDeEstadoTrabajo, estadoDeSede, type AccionEstadoTrabajo } from '../model/estado-trabajo';
+import { DialogoEstadoTrabajo } from '../components/DialogoEstadoTrabajo';
 import { EstadoCargando, EstadoError } from '../components/EstadoConsulta';
 import { alertaVencimiento, carpetaDelCliente, correlativos, historialPorProyecto, type PdfCarpeta } from '../model/expediente';
 import type { EstacionCritica, ServicioRegistro } from '../../estadisticas/model/estadisticas';
@@ -43,8 +52,26 @@ interface Props {
   onNuevoServicio: (proyectoId: string) => void;
   onEditarServicio: (proyectoId: string, servicioId: string) => void;
   onCambiarEstadoServicio: (servicioId: string, activar: boolean) => void;
+  /** GAF-99: cambia el estado de trabajo; resuelve `true` si el servidor lo aceptó. */
+  onCambiarEstadoTrabajo: (servicioId: string, estado: EstadoTrabajo, motivo?: string) => Promise<boolean>;
+  /** Error del último cambio de estado de trabajo: el del motivo va al campo del diálogo, el resto como mensaje. */
+  errorEstadoTrabajo?: { motivo?: string; general: string | null } | null;
   onAbrirMapaMurino: () => void;
 }
+
+/** Servicio y acción que esperan confirmación con motivo. */
+interface Confirmacion {
+  servicioId: string;
+  accion: AccionEstadoTrabajo;
+  titulo: string;
+}
+
+const TEXTO_CONFIRMAR: Record<AccionEstadoTrabajo['id'], string> = {
+  iniciar: 'Confirmar inicio',
+  completar: 'Confirmar',
+  cancelar: 'Confirmar cancelación',
+  reabrir: 'Confirmar reapertura',
+};
 
 const fechaLarga = (f: string) => new Date(`${f}T00:00:00`).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' });
 const fechaCorta = (f: string) => new Date(`${f}T00:00:00`).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -53,6 +80,22 @@ function agruparPorRuta(pdfs: PdfCarpeta[]) {
   const grupos = new Map<string, PdfCarpeta[]>();
   for (const pdf of pdfs) grupos.set(pdf.ruta, [...(grupos.get(pdf.ruta) ?? []), pdf]);
   return [...grupos.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
+
+/** Estado de la sede calculado a partir de sus servicios activos (GAF-99); sin servicios activos no se muestra. */
+function EstadoSede({ sedeId, servicios }: { sedeId: string; servicios: ProyectoExpediente['servicios'] }) {
+  const estado = estadoDeSede(servicios);
+  if (!estado) return null;
+  return (
+    <span className="expediente-proyecto__estado">
+      <span id={`estado-sede-${sedeId}`} className="expediente-proyecto__estado-etiqueta">
+        Estado de la sede
+      </span>
+      <span aria-labelledby={`estado-sede-${sedeId}`}>
+        <Badge color={colorEstadoTrabajo(estado)}>{etiquetaEstadoTrabajo(estado)}</Badge>
+      </span>
+    </span>
+  );
 }
 
 /** Expediente digital del cliente — spec §2 y §3: ficha, sedes, historial, numeración y carpeta de PDF. */
@@ -78,6 +121,8 @@ export function ClienteExpedientePage({
   onNuevoServicio,
   onEditarServicio,
   onCambiarEstadoServicio,
+  onCambiarEstadoTrabajo,
+  errorEstadoTrabajo = null,
   onAbrirMapaMurino,
 }: Props) {
   const proyectosActivos = proyectos.filter((p) => p.estado === 'ACTIVO');
@@ -89,6 +134,23 @@ export function ClienteExpedientePage({
   const alerta = cliente.estado === 'ACTIVO' ? alertaVencimiento(cliente.proximoVencimiento, hoy, cliente.anticipacionAlertaDias) : null;
   const { contacto } = cliente;
   const [verApp, setVerApp] = useState(false);
+  const [confirmando, setConfirmando] = useState<Confirmacion | null>(null);
+  /** Con el diálogo abierto, sus errores se muestran dentro de él. */
+  const errorTrabajoGeneral = confirmando ? null : (errorEstadoTrabajo?.general ?? null);
+
+  async function aplicarAccion(servicioId: string, accion: AccionEstadoTrabajo, titulo: string) {
+    if (accion.pideMotivo) {
+      setConfirmando({ servicioId, accion, titulo });
+      return;
+    }
+    setConfirmando(null);
+    await onCambiarEstadoTrabajo(servicioId, accion.destino);
+  }
+
+  async function confirmar(motivo: string) {
+    if (!confirmando) return;
+    if (await onCambiarEstadoTrabajo(confirmando.servicioId, confirmando.accion.destino, motivo)) setConfirmando(null);
+  }
 
   return (
     <div className="expediente-page">
@@ -200,9 +262,9 @@ export function ClienteExpedientePage({
           ) : null}
         </div>
 
-        {errorEstado ? (
+        {errorEstado || errorTrabajoGeneral ? (
           <p className="expediente-alerta expediente-alerta--vencido" role="alert">
-            {errorEstado}
+            {errorEstado ?? errorTrabajoGeneral}
           </p>
         ) : null}
 
@@ -229,6 +291,7 @@ export function ClienteExpedientePage({
                           {p.direccion}
                           {p.distrito ? `, ${p.distrito}` : ''}
                         </span>
+                        <EstadoSede sedeId={p.id} servicios={p.servicios} />
                         {puedeDarDeAlta ? (
                           <span className="expediente-proyecto__acciones">
                             <button type="button" className="expediente-proyecto__agregar" aria-label={`Editar sede ${p.nombre}`} onClick={() => onEditarProyecto(p.id)}>
@@ -255,6 +318,7 @@ export function ClienteExpedientePage({
                         <ul className="expediente-proyecto__servicios">
                           {p.servicios.map((s) => (
                             <li key={s.id} className={s.estado === 'INACTIVO' ? 'expediente-servicio expediente-servicio--inactivo' : 'expediente-servicio'}>
+                              <Badge color={colorEstadoTrabajo(s.estadoTrabajo)}>{etiquetaEstadoTrabajo(s.estadoTrabajo)}</Badge>
                               <span>
                                 {etiquetaTipoServicio(s.tipoServicio)}{' '}
                                 <span className="expediente-proyecto__frecuencia">
@@ -266,6 +330,23 @@ export function ClienteExpedientePage({
                               </span>
                               {puedeDarDeAlta ? (
                                 <span className="expediente-proyecto__acciones">
+                                  {s.estado === 'ACTIVO'
+                                    ? accionesDeEstadoTrabajo(s.estadoTrabajo).map((accion) => {
+                                        const titulo = `${accion.etiqueta} servicio ${s.tipoServicio} en ${p.nombre}`;
+                                        return (
+                                          <button
+                                            key={accion.id}
+                                            type="button"
+                                            className="expediente-proyecto__agregar"
+                                            aria-label={titulo}
+                                            disabled={cambiandoEstado}
+                                            onClick={() => void aplicarAccion(s.id, accion, titulo)}
+                                          >
+                                            {accion.etiqueta}
+                                          </button>
+                                        );
+                                      })
+                                    : null}
                                   <button
                                     type="button"
                                     className="expediente-proyecto__agregar"
@@ -284,6 +365,18 @@ export function ClienteExpedientePage({
                                     {s.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'}
                                   </button>
                                 </span>
+                              ) : null}
+                              {puedeDarDeAlta && confirmando?.servicioId === s.id ? (
+                                <DialogoEstadoTrabajo
+                                  key={`${s.id}-${confirmando.accion.id}`}
+                                  titulo={confirmando.titulo}
+                                  confirmar={TEXTO_CONFIRMAR[confirmando.accion.id]}
+                                  enviando={cambiandoEstado}
+                                  errorMotivo={errorEstadoTrabajo?.motivo}
+                                  errorGeneral={errorEstadoTrabajo?.general ?? null}
+                                  onConfirmar={(motivo) => void confirmar(motivo)}
+                                  onVolver={() => setConfirmando(null)}
+                                />
                               ) : null}
                             </li>
                           ))}

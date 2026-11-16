@@ -20,6 +20,7 @@ import { DesactivarProyectoUseCase } from './application/desactivar-proyecto.use
 import { ActualizarServicioContratadoUseCase } from './application/actualizar-servicio-contratado.usecase';
 import { ActivarServicioContratadoUseCase } from './application/activar-servicio-contratado.usecase';
 import { DesactivarServicioContratadoUseCase } from './application/desactivar-servicio-contratado.usecase';
+import { CambiarEstadoTrabajoServicioUseCase } from './application/cambiar-estado-trabajo-servicio.usecase';
 import { ActualizarInsumoUseCase } from './application/actualizar-insumo.usecase';
 import { DesactivarInsumoUseCase } from './application/desactivar-insumo.usecase';
 import { ActivarInsumoUseCase } from './application/activar-insumo.usecase';
@@ -78,6 +79,7 @@ import { AuthModule } from '../auth/auth.module';
     ActualizarServicioContratadoUseCase,
     ActivarServicioContratadoUseCase,
     DesactivarServicioContratadoUseCase,
+    CambiarEstadoTrabajoServicioUseCase,
     RegistrarInsumoUseCase,
     ActualizarInsumoUseCase,
     DesactivarInsumoUseCase,

@@ -89,9 +89,41 @@ describe('Database Migration and Schema Configuration (T2.1)', () => {
   it('el repositorio trae 002 con la columna clave_hash de personal y su reversa', async () => {
     const up = await leerMigraciones('up');
     const down = await leerMigraciones('down');
-    expect(up.map((m) => m.nombre)).toEqual(['001_initial_schema.up.sql', '002_personal_clave_hash.up.sql']);
-    expect(down.map((m) => m.nombre)).toEqual(['002_personal_clave_hash.down.sql', '001_initial_schema.down.sql']);
-    expect(up[1].sql).toContain('ADD COLUMN IF NOT EXISTS clave_hash');
-    expect(down[0].sql).toContain('DROP COLUMN IF EXISTS clave_hash');
+    const subida = up.find((m) => m.nombre === '002_personal_clave_hash.up.sql');
+    const bajada = down.find((m) => m.nombre === '002_personal_clave_hash.down.sql');
+    expect(subida?.sql).toContain('ADD COLUMN IF NOT EXISTS clave_hash');
+    expect(bajada?.sql).toContain('DROP COLUMN IF EXISTS clave_hash');
+  });
+
+  it('el repositorio trae 004 (estado de trabajo del servicio, GAF-99) y su reversa; el hueco del 003 no altera el orden', async () => {
+    const up = (await leerMigraciones('up')).map((m) => m.nombre);
+    const down = (await leerMigraciones('down')).map((m) => m.nombre);
+    expect(up.slice(0, 2)).toEqual(['001_initial_schema.up.sql', '002_personal_clave_hash.up.sql']);
+    expect(up).toContain('004_servicio_estado_trabajo.up.sql');
+    expect(up.indexOf('004_servicio_estado_trabajo.up.sql')).toBeGreaterThan(up.indexOf('002_personal_clave_hash.up.sql'));
+    expect(down[0]).toBe('004_servicio_estado_trabajo.down.sql');
+    expect(down.slice(-2)).toEqual(['002_personal_clave_hash.down.sql', '001_initial_schema.down.sql']);
+  });
+
+  it('lee migraciones con huecos en la numeración (por ejemplo, 003 en otra rama sin integrar)', async () => {
+    const directorio = fs.mkdtempSync(path.join(os.tmpdir(), 'gafer-huecos-'));
+    try {
+      for (const archivo of ['001_a.up.sql', '004_d.up.sql', '002_b.up.sql', '004_d.down.sql', '001_a.down.sql', '002_b.down.sql']) {
+        fs.writeFileSync(path.join(directorio, archivo), `-- ${archivo}`);
+      }
+      expect((await leerMigraciones('up', directorio)).map((m) => m.nombre)).toEqual(['001_a.up.sql', '002_b.up.sql', '004_d.up.sql']);
+      expect((await leerMigraciones('down', directorio)).map((m) => m.nombre)).toEqual(['004_d.down.sql', '002_b.down.sql', '001_a.down.sql']);
+    } finally {
+      fs.rmSync(directorio, { recursive: true, force: true });
+    }
+  });
+
+  it('004 es idempotente: agrega la columna con su CHECK solo si falta y siembra el estado inicial una sola vez', async () => {
+    const up = (await leerMigraciones('up')).find((m) => m.nombre === '004_servicio_estado_trabajo.up.sql');
+    const down = (await leerMigraciones('down')).find((m) => m.nombre === '004_servicio_estado_trabajo.down.sql');
+    expect(up?.sql).toContain('estado_trabajo');
+    expect(up?.sql).toContain("CHECK (estado_trabajo IN ('PENDIENTE', 'EN_CURSO', 'COMPLETADO', 'CANCELADO'))");
+    expect(up?.sql).toMatch(/IF NOT EXISTS/);
+    expect(down?.sql).toContain('DROP COLUMN IF EXISTS estado_trabajo');
   });
 });

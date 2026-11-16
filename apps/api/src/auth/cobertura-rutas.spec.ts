@@ -35,6 +35,7 @@ const MATRIZ_ESPERADA: Array<[string, string]> = [
   ['PATCH /api/mantenimiento/servicios-contratados/:id', 'A'],
   ['PATCH /api/mantenimiento/servicios-contratados/:id/desactivar', 'A'],
   ['PATCH /api/mantenimiento/servicios-contratados/:id/activar', 'A'],
+  ['PATCH /api/mantenimiento/servicios-contratados/:id/estado', 'A'],
   // Mantenimiento: insumos y equipos (el Técnico los lee para el formulario de campo; el Supervisor no)
   ['POST /api/mantenimiento/insumos', 'A'],
   ['GET /api/mantenimiento/insumos', 'AT'],

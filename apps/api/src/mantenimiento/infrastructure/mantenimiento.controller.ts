@@ -31,6 +31,7 @@ import { DesactivarProyectoUseCase } from '../application/desactivar-proyecto.us
 import { ActualizarServicioContratadoUseCase } from '../application/actualizar-servicio-contratado.usecase';
 import { ActivarServicioContratadoUseCase } from '../application/activar-servicio-contratado.usecase';
 import { DesactivarServicioContratadoUseCase } from '../application/desactivar-servicio-contratado.usecase';
+import { CambiarEstadoTrabajoServicioUseCase } from '../application/cambiar-estado-trabajo-servicio.usecase';
 import { ActualizarInsumoUseCase } from '../application/actualizar-insumo.usecase';
 import { DesactivarInsumoUseCase } from '../application/desactivar-insumo.usecase';
 import { ActivarInsumoUseCase } from '../application/activar-insumo.usecase';
@@ -92,6 +93,7 @@ import {
   ActualizarProyectoDto,
   CrearServicioContratadoDto,
   ActualizarServicioContratadoDto,
+  CambiarEstadoTrabajoServicioDto,
   CrearInsumoDto,
   ActualizarInsumoDto,
   CrearEquipoDto,
@@ -151,6 +153,7 @@ import {
   ApiActualizarServicioContratadoDoc,
   ApiDesactivarServicioContratadoDoc,
   ApiActivarServicioContratadoDoc,
+  ApiCambiarEstadoTrabajoServicioDoc,
   ApiCrearInsumoDoc,
   ApiListarInsumosDoc,
   ApiObtenerInsumoDoc,
@@ -198,6 +201,7 @@ export class MantenimientoController {
     private readonly actualizarServicioContratadoUseCase: ActualizarServicioContratadoUseCase,
     private readonly activarServicioContratadoUseCase: ActivarServicioContratadoUseCase,
     private readonly desactivarServicioContratadoUseCase: DesactivarServicioContratadoUseCase,
+    private readonly cambiarEstadoTrabajoServicioUseCase: CambiarEstadoTrabajoServicioUseCase,
     private readonly registrarInsumoUseCase: RegistrarInsumoUseCase,
     private readonly actualizarInsumoUseCase: ActualizarInsumoUseCase,
     private readonly desactivarInsumoUseCase: DesactivarInsumoUseCase,
@@ -538,6 +542,24 @@ export class MantenimientoController {
     return { id: servicio.id, estado: servicio.getEstado() };
   }
 
+  /** GAF-99: estado del trabajo (aparte de activar / desactivar); el actor sale del token y queda en la auditoría. */
+  @Patch('servicios-contratados/:id/estado')
+  @Roles('ADMINISTRADOR')
+  @ApiCambiarEstadoTrabajoServicioDoc()
+  async cambiarEstadoTrabajoServicio(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: CambiarEstadoTrabajoServicioDto,
+    @UsuarioActual() usuario: TokenPayload,
+  ): Promise<ServicioContratadoResponseDto> {
+    const servicio = await this.cambiarEstadoTrabajoServicioUseCase.execute({
+      id,
+      estado: dto.estado,
+      motivo: dto.motivo,
+      ...this.resolverActor(usuario),
+    });
+    return this.mapServicioResponse(servicio);
+  }
+
   private mapServicioResponse(s: ServicioContratado): ServicioContratadoResponseDto {
     return {
       id: s.id,
@@ -552,6 +574,7 @@ export class MantenimientoController {
       requiereCertificado: s.requiereCertificado,
       vigenciaDias: s.vigenciaDias,
       estado: s.getEstado(),
+      estadoTrabajo: s.getEstadoTrabajo(),
     };
   }
 
