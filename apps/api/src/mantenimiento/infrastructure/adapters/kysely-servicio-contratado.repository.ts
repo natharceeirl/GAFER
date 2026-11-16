@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Kysely } from 'kysely';
 import { GaferDatabase } from '../../../database/types';
-import { ServicioContratado, TipoServicio, FrecuenciaServicio } from '../../domain/servicio-contratado';
+import { EstadoTrabajo, ServicioContratado, TipoServicio, FrecuenciaServicio } from '../../domain/servicio-contratado';
 import { EstadoGeneral } from '../../domain/cliente';
 import { ServicioContratadoRepository } from '../../domain/ports/servicio-contratado.repository';
 
@@ -25,6 +25,7 @@ export class KyselyServicioContratadoRepository implements ServicioContratadoRep
         requiere_certificado: servicio.requiereCertificado,
         vigencia_dias: servicio.vigenciaDias,
         estado: servicio.getEstado(),
+        estado_trabajo: servicio.getEstadoTrabajo(),
       })
       .onConflict((oc) =>
         oc.column('id').doUpdateSet({
@@ -38,6 +39,7 @@ export class KyselyServicioContratadoRepository implements ServicioContratadoRep
           requiere_certificado: servicio.requiereCertificado,
           vigencia_dias: servicio.vigenciaDias,
           estado: servicio.getEstado(),
+          estado_trabajo: servicio.getEstadoTrabajo(),
         }),
       )
       .execute();
@@ -92,6 +94,7 @@ export class KyselyServicioContratadoRepository implements ServicioContratadoRep
       requiereCertificado: Boolean(row.requiere_certificado),
       vigenciaDias: row.vigencia_dias ? Number(row.vigencia_dias) : null,
       estado: row.estado as EstadoGeneral,
+      estadoTrabajo: row.estado_trabajo as EstadoTrabajo,
     });
   }
 }

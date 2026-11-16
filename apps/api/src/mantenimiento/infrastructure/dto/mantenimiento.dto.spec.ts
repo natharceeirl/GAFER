@@ -5,6 +5,7 @@ import {
   ActualizarInsumoDto,
   AgregarItemCatalogoTextoDto,
   CambiarEstadoEquipoDto,
+  CambiarEstadoTrabajoServicioDto,
   ConsultaAuditoriaDto,
   CrearClienteDto,
   CrearEquipoDto,
@@ -153,6 +154,22 @@ describe('CrearServicioContratadoDto', () => {
     const { vigenciaDias: _v, ...sinVigencia } = servicio;
     expect(rutasRechazadas(CrearServicioContratadoDto, sinVigencia)).toEqual(['vigenciaDias']);
     expect(rutasRechazadas(CrearServicioContratadoDto, { ...servicio, vigenciaDias: 0 })).toEqual(['vigenciaDias']);
+  });
+});
+
+describe('CambiarEstadoTrabajoServicioDto (GAF-99)', () => {
+  it('acepta iniciar sin motivo y cancelar con motivo', () => {
+    expect(validarDto(CambiarEstadoTrabajoServicioDto, { estado: 'EN_CURSO' })).toEqual({ estado: 'EN_CURSO' });
+    expect(validarDto(CambiarEstadoTrabajoServicioDto, { estado: 'CANCELADO', motivo: 'Cliente suspendió' })).toEqual({
+      estado: 'CANCELADO',
+      motivo: 'Cliente suspendió',
+    });
+  });
+
+  it('rechaza cancelar sin motivo o con un motivo corto, y un estado fuera del catálogo', () => {
+    expect(rutasRechazadas(CambiarEstadoTrabajoServicioDto, { estado: 'CANCELADO' })).toEqual(['motivo']);
+    expect(rutasRechazadas(CambiarEstadoTrabajoServicioDto, { estado: 'CANCELADO', motivo: 'no' })).toEqual(['motivo']);
+    expect(rutasRechazadas(CambiarEstadoTrabajoServicioDto, { estado: 'ACTIVO' })).toEqual(['estado']);
   });
 });
 

@@ -43,6 +43,7 @@ describe('MantenimientoController', () => {
   let mockServicioUseCase: jest.Mocked<RegistrarServicioContratadoUseCase>;
   let mockActualizarServicioUseCase: jest.Mocked<any>;
   let mockActivarServicioUseCase: jest.Mocked<any>;
+  let mockCambiarEstadoTrabajoUseCase: jest.Mocked<any>;
   let mockDesactivarServicioUseCase: jest.Mocked<any>;
   let mockInsumoUseCase: jest.Mocked<RegistrarInsumoUseCase>;
   let mockActualizarInsumoUseCase: jest.Mocked<any>;
@@ -86,6 +87,7 @@ describe('MantenimientoController', () => {
     mockActualizarServicioUseCase = { execute: jest.fn() } as any;
     mockActivarServicioUseCase = { execute: jest.fn() } as any;
     mockDesactivarServicioUseCase = { execute: jest.fn() } as any;
+    mockCambiarEstadoTrabajoUseCase = { execute: jest.fn() } as any;
     mockInsumoUseCase = { execute: jest.fn() } as any;
     mockActualizarInsumoUseCase = { execute: jest.fn() } as any;
     mockDesactivarInsumoUseCase = { execute: jest.fn() } as any;
@@ -166,6 +168,7 @@ describe('MantenimientoController', () => {
       mockActualizarServicioUseCase,
       mockActivarServicioUseCase,
       mockDesactivarServicioUseCase,
+      mockCambiarEstadoTrabajoUseCase,
       mockInsumoUseCase,
       mockActualizarInsumoUseCase,
       mockDesactivarInsumoUseCase,
@@ -415,6 +418,34 @@ describe('MantenimientoController', () => {
       expect(res.tipoServicio).toBe('DRT');
       expect(res.insumosAutorizados).toEqual(['i-2']);
       expect(res.dosisReferencial).toEqual({ 'i-2': '1 bloque' });
+      expect(res.estadoTrabajo).toBe('PENDIENTE');
+    });
+
+    it('debe cambiar el estado de trabajo con el actor del token y devolver el servicio (GAF-99)', async () => {
+      const { ServicioContratado } = await import('../domain/servicio-contratado');
+      const servicio = new ServicioContratado({
+        id: 's-1',
+        proyectoId: 'p-1',
+        tipoServicio: 'DRT',
+        frecuencia: 'QUINCENAL',
+        areaTotalM2: 1000,
+        areaTratarM2: 500,
+        estadoTrabajo: 'CANCELADO',
+      });
+      mockCambiarEstadoTrabajoUseCase.execute.mockResolvedValue(servicio);
+      const usuario = { id: 'u-1', usuario: 'ADMIN.GAFER', cargo: 'ADMINISTRADOR' } as any;
+
+      const res = await controller.cambiarEstadoTrabajoServicio('s-1', { estado: 'CANCELADO', motivo: 'Cliente suspendió' } as any, usuario);
+
+      expect(mockCambiarEstadoTrabajoUseCase.execute).toHaveBeenCalledWith({
+        id: 's-1',
+        estado: 'CANCELADO',
+        motivo: 'Cliente suspendió',
+        actorId: 'u-1',
+        actorUsuario: 'ADMIN.GAFER',
+        actorRol: 'ADMINISTRADOR',
+      });
+      expect(res).toEqual(expect.objectContaining({ id: 's-1', estado: 'ACTIVO', estadoTrabajo: 'CANCELADO' }));
     });
   });
 

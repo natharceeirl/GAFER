@@ -1,9 +1,36 @@
 import { randomUUID } from 'crypto';
 import { EstadoGeneral } from './cliente';
 
-import type { FrecuenciaServicio, TipoServicio } from '@gafer/contracts';
+import { EstadoTrabajoSchema, MOTIVO_MINIMO_CARACTERES } from '@gafer/contracts';
+import type { EstadoTrabajo, FrecuenciaServicio, TipoServicio } from '@gafer/contracts';
 
-export type { FrecuenciaServicio, TipoServicio };
+export type { EstadoTrabajo, FrecuenciaServicio, TipoServicio };
+
+/**
+ * Transiciones del estado de trabajo (GAF-99). COMPLETADO y CANCELADO son finales: solo salen por una
+ * reapertura explícita a EN_CURSO, con motivo. Cancelar también exige motivo.
+ */
+const TRANSICIONES_ESTADO_TRABAJO: Record<EstadoTrabajo, readonly EstadoTrabajo[]> = {
+  PENDIENTE: ['EN_CURSO', 'CANCELADO'],
+  EN_CURSO: ['COMPLETADO', 'CANCELADO'],
+  COMPLETADO: ['EN_CURSO'],
+  CANCELADO: ['EN_CURSO'],
+};
+
+const ESTADOS_FINALES: readonly EstadoTrabajo[] = ['COMPLETADO', 'CANCELADO'];
+
+/** La transición pedida no está permitida desde el estado actual. */
+export class TransicionEstadoTrabajoError extends Error {}
+
+/** Cancelar o reabrir sin un motivo suficiente. */
+export class MotivoObligatorioError extends Error {}
+
+export interface CambioEstadoTrabajoRealizado {
+  anterior: EstadoTrabajo;
+  nuevo: EstadoTrabajo;
+  /** El servicio estaba terminado (completado o cancelado) y vuelve a EN_CURSO. */
+  reapertura: boolean;
+}
 
 export interface ServicioContratadoProps {
   id?: string;
@@ -18,6 +45,7 @@ export interface ServicioContratadoProps {
   requiereCertificado?: boolean;
   vigenciaDias?: number | null;
   estado?: EstadoGeneral;
+  estadoTrabajo?: EstadoTrabajo;
 }
 
 export class ServicioContratado {
@@ -33,6 +61,7 @@ export class ServicioContratado {
   public requiereCertificado: boolean;
   public vigenciaDias: number | null;
   private estado: EstadoGeneral;
+  private estadoTrabajo: EstadoTrabajo;
 
   constructor(props: ServicioContratadoProps) {
     const tiposValidos: TipoServicio[] = ['DSF', 'DSS', 'DRT', 'LRA', 'LTG', 'LTS', 'LAM'];
@@ -68,6 +97,12 @@ export class ServicioContratado {
     this.requiereCertificado = props.requiereCertificado ?? false;
     this.vigenciaDias = props.vigenciaDias ?? null;
     this.estado = props.estado ?? 'ACTIVO';
+
+    const estadoTrabajo = props.estadoTrabajo ?? 'PENDIENTE';
+    if (!EstadoTrabajoSchema.safeParse(estadoTrabajo).success) {
+      throw new Error(`Estado de trabajo no válido: ${estadoTrabajo}`);
+    }
+    this.estadoTrabajo = estadoTrabajo;
   }
 
   actualizarDatos(props: {
@@ -118,5 +153,32 @@ export class ServicioContratado {
 
   getEstado(): EstadoGeneral {
     return this.estado;
+  }
+
+  getEstadoTrabajo(): EstadoTrabajo {
+    return this.estadoTrabajo;
+  }
+
+  /** Cambia el estado de trabajo según las transiciones permitidas; la baja lógica no se toca. */
+  cambiarEstadoTrabajo(nuevo: EstadoTrabajo, motivo?: string): CambioEstadoTrabajoRealizado {
+    if (this.estado !== 'ACTIVO') {
+      throw new TransicionEstadoTrabajoError('No se puede cambiar el estado de trabajo de un servicio inactivo');
+    }
+
+    const anterior = this.estadoTrabajo;
+    if (!TRANSICIONES_ESTADO_TRABAJO[anterior].includes(nuevo)) {
+      throw new TransicionEstadoTrabajoError(`No se puede pasar el servicio de ${anterior} a ${nuevo}`);
+    }
+
+    const reapertura = ESTADOS_FINALES.includes(anterior);
+    if ((nuevo === 'CANCELADO' || reapertura) && (motivo ?? '').trim().length < MOTIVO_MINIMO_CARACTERES) {
+      const accion = reapertura ? 'reabrir' : 'cancelar';
+      throw new MotivoObligatorioError(
+        `El motivo es obligatorio para ${accion} el servicio y debe tener al menos ${MOTIVO_MINIMO_CARACTERES} caracteres`,
+      );
+    }
+
+    this.estadoTrabajo = nuevo;
+    return { anterior, nuevo, reapertura };
   }
 }
