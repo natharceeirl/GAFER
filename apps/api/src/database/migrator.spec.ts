@@ -86,12 +86,22 @@ describe('Database Migration and Schema Configuration (T2.1)', () => {
     });
   });
 
-  it('el repositorio trae 002 con la columna clave_hash de personal y su reversa', async () => {
+  it('el repositorio trae 002 y 003 con sus columnas y reversas', async () => {
     const up = await leerMigraciones('up');
     const down = await leerMigraciones('down');
-    expect(up.map((m) => m.nombre)).toEqual(['001_initial_schema.up.sql', '002_personal_clave_hash.up.sql']);
-    expect(down.map((m) => m.nombre)).toEqual(['002_personal_clave_hash.down.sql', '001_initial_schema.down.sql']);
+    expect(up.map((m) => m.nombre)).toEqual([
+      '001_initial_schema.up.sql',
+      '002_personal_clave_hash.up.sql',
+      '003_montos_opcionales.up.sql',
+    ]);
+    expect(down.map((m) => m.nombre)).toEqual([
+      '003_montos_opcionales.down.sql',
+      '002_personal_clave_hash.down.sql',
+      '001_initial_schema.down.sql',
+    ]);
     expect(up[1].sql).toContain('ADD COLUMN IF NOT EXISTS clave_hash');
-    expect(down[0].sql).toContain('DROP COLUMN IF EXISTS clave_hash');
+    expect(down[1].sql).toContain('DROP COLUMN IF EXISTS clave_hash');
+    expect(up[2].sql).toContain('monto');
+    expect(down[0].sql).toContain('DROP COLUMN IF EXISTS monto');
   });
 });

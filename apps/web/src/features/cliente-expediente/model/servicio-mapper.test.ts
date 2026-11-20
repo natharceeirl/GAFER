@@ -69,6 +69,8 @@ describe('servicio-mapper', () => {
       equipos: [EQUIPO],
       requiereCertificado: true,
       vigenciaDias: '180',
+      monto: '',
+      moneda: 'PEN',
     });
     expect(datosDeServicio(servicioDeApi({ ...detalle, requiereCertificado: false, vigenciaDias: null })).vigenciaDias).toBe('');
   });
@@ -88,6 +90,31 @@ describe('servicio-mapper', () => {
       vigenciaDias: 180,
     });
     expect(ServicioContratadoRegistroSchema.safeParse(cuerpo).success).toBe(true);
+  });
+
+  it('mapea monto y moneda cuando están presentes (GAF-105)', () => {
+    const conMonto: ServicioContratadoDetalle = {
+      ...detalle,
+      monto: 850.5,
+      moneda: 'USD',
+    };
+    const serv = servicioDeApi(conMonto);
+    expect(serv.monto).toBe(850.5);
+    expect(serv.moneda).toBe('USD');
+
+    const datosForm = datosDeServicio(serv);
+    expect(datosForm.monto).toBe('850.5');
+    expect(datosForm.moneda).toBe('USD');
+
+    const reg = registroDeServicio(PROYECTO, { ...datosForm, monto: '1200', moneda: 'PEN' });
+    expect(reg.monto).toBe(1200);
+    expect(reg.moneda).toBe('PEN');
+    expect(ServicioContratadoRegistroSchema.safeParse(reg).success).toBe(true);
+
+    const act = actualizacionDeServicio({ ...datosForm, monto: '', moneda: 'PEN' });
+    expect(act.monto).toBeNull();
+    expect(act.moneda).toBeNull();
+    expect(ServicioContratadoActualizacionSchema.safeParse(act).success).toBe(true);
   });
 
   it('sin certificado la vigencia viaja como null aunque el campo tenga texto', () => {

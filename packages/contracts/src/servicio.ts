@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { EstadoActivoInactivoSchema } from './cliente';
+import { MonedaSchema } from './comun';
 
 export const TipoServicioSchema = z.enum(['DSF', 'DSS', 'DRT', 'LRA', 'LTG', 'LTS', 'LAM']);
 export type TipoServicio = z.infer<typeof TipoServicioSchema>;
@@ -38,6 +39,8 @@ const ServicioContratadoBaseSchema = z.object({
   dosisReferencial: z.record(z.string()).optional().describe('Dosis referencial por insumo, indexada por id de insumo'),
   requiereCertificado: z.boolean().optional().describe('Si emite certificado de saneamiento'),
   vigenciaDias: z.number().int().positive().nullish().describe('Vigencia del certificado en días (obligatoria si requiere certificado)'),
+  monto: z.number().nonnegative().nullish().describe('Monto pactado del servicio (opcional, GAF-105)'),
+  moneda: MonedaSchema.nullish().describe('Moneda del monto pactado (PEN o USD, opcional, GAF-105)'),
 });
 
 interface ReglasServicio {
@@ -77,6 +80,8 @@ export const ServicioContratadoActualizacionSchema = z
     dosisReferencial: z.record(z.string()).optional().describe('Dosis referencial por insumo'),
     requiereCertificado: z.boolean().optional().describe('Si emite certificado de saneamiento'),
     vigenciaDias: z.number().int().positive().nullish().describe('Vigencia del certificado en días'),
+    monto: z.number().nonnegative().nullish().describe('Monto pactado del servicio (opcional, GAF-105)'),
+    moneda: MonedaSchema.nullish().describe('Moneda del monto pactado (PEN o USD, opcional, GAF-105)'),
   })
   .superRefine((servicio, ctx) => {
     if (

@@ -94,3 +94,52 @@ describe('ServicioContratadoActualizacionSchema', () => {
     );
   });
 });
+
+describe('Montos y pagos opcionales en servicio contratado (GAF-105)', () => {
+  it('acepta monto positivo o cero con moneda PEN o USD', () => {
+    expect(
+      ServicioContratadoRegistroSchema.safeParse({
+        ...registro,
+        monto: 1500.5,
+        moneda: 'PEN',
+      }).success,
+    ).toBe(true);
+
+    expect(
+      ServicioContratadoActualizacionSchema.safeParse({
+        monto: 500,
+        moneda: 'USD',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('permite registrar o actualizar dejando el monto y moneda vacíos o nulos', () => {
+    expect(
+      ServicioContratadoRegistroSchema.safeParse({
+        ...registro,
+        monto: null,
+        moneda: null,
+      }).success,
+    ).toBe(true);
+
+    expect(
+      ServicioContratadoActualizacionSchema.safeParse({
+        monto: undefined,
+        moneda: undefined,
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rechaza montos negativos o monedas no soportadas', () => {
+    esperarFallaEn(
+      ServicioContratadoRegistroSchema,
+      { ...registro, monto: -10 },
+      'monto',
+    );
+    esperarFallaEn(
+      ServicioContratadoRegistroSchema,
+      { ...registro, moneda: 'EUR' },
+      'moneda',
+    );
+  });
+});

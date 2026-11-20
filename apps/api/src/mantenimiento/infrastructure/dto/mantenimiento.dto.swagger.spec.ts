@@ -41,7 +41,7 @@ const documentados: [string, Parameters<typeof metadatosOpenApi>[0], { obligator
     CrearProyectoDto,
     {
       obligatorios: ['clienteId', 'nombre', 'direccionSede', 'distrito', 'provincia', 'departamento', 'contactoNombre', 'contactoCargo', 'contactoTelefono'],
-      opcionales: ['observaciones'],
+      opcionales: ['observaciones', 'montoPresupuestado', 'moneda'],
     },
   ],
   [
@@ -49,7 +49,7 @@ const documentados: [string, Parameters<typeof metadatosOpenApi>[0], { obligator
     CrearServicioContratadoDto,
     {
       obligatorios: ['proyectoId', 'tipoServicio', 'frecuencia', 'areaTotalM2', 'areaTratarM2'],
-      opcionales: ['insumosAutorizados', 'equiposAutorizados', 'dosisReferencial', 'requiereCertificado', 'vigenciaDias'],
+      opcionales: ['insumosAutorizados', 'equiposAutorizados', 'dosisReferencial', 'requiereCertificado', 'vigenciaDias', 'monto', 'moneda'],
     },
   ],
   [
