@@ -9,6 +9,7 @@ import { SqliteDatabasePort, obtenerBaseDeDatos } from '../../../shared/db/sqlit
 import { OutboxQueue } from '../../../shared/db/outbox';
 import { generarUuid } from '../../../shared/utils/uuid';
 import { BorradorInspeccion, MetadataBorrador } from './use-borrador-store';
+import { fusionarActasColaborativas } from './trabajo-colaborativo';
 import {
   cerrarFormulario,
   FormularioCampo,
@@ -39,12 +40,16 @@ export class BorradorRepository {
   private mapearFilaABorrador(fila: FilaBorradorDb): BorradorInspeccion {
     let datosDrt: ActaServicioDrt | undefined;
     let datosCampo: FormularioCampo | undefined;
+    let guardadoPorInfo: { tecnicoId?: string; nombre?: string; cargo?: string } | undefined;
 
     if (fila.datos_json) {
       try {
         const parsed = JSON.parse(fila.datos_json);
         if (parsed.planillaEstaciones || parsed.actividad) {
           datosDrt = parsed;
+          if (parsed.guardadoPor) {
+            guardadoPorInfo = parsed.guardadoPor;
+          }
         } else if (parsed.insumos || parsed.metodos || parsed.clienteRazon) {
           datosCampo = parsed;
         }
@@ -53,6 +58,12 @@ export class BorradorRepository {
         datosCampo = undefined;
       }
     }
+
+    const estaBloqueada = !!(
+      datosDrt?.cerradaEnRevision ||
+      fila.sync_status === 'LOCKED' ||
+      fila.sync_status === 'CLOSED'
+    );
 
     return {
       servicioId: fila.servicio_id,
@@ -64,6 +75,16 @@ export class BorradorRepository {
       observaciones: fila.observaciones ?? '',
       datosDrt,
       datosCampo,
+      actualizadoEn: fila.actualizado_en,
+      guardadoPor: guardadoPorInfo || (datosDrt ? {
+        nombre: datosDrt.actualizadoPor || datosDrt.firmas?.personalResponsableNombre,
+        cargo: datosDrt.firmas?.personalResponsableCargo,
+      } : undefined),
+      bloqueada: estaBloqueada,
+      motivoBloqueo: estaBloqueada
+        ? 'La inspección está cerrada y no acepta más sincronizaciones ni modificaciones de campo (Sección 8.2)'
+        : undefined,
+      syncStatus: fila.sync_status,
     };
   }
 
@@ -130,12 +151,27 @@ export class BorradorRepository {
   }
 
   /**
-   * Guarda de forma durable el formulario completo del Acta de Servicio DRT (§2.4).
+   * Guarda de forma durable el formulario completo del Acta de Servicio DRT (§2.4, §8.2).
+   * Registra técnico, fecha y hora de actualización.
    */
   async guardarDrt(
     acta: ActaServicioDrt,
     metadata?: MetadataBorrador,
   ): Promise<BorradorInspeccion> {
+    const ahora = new Date().toISOString();
+    const guardadoPor = {
+      tecnicoId: metadata?.tecnicoId ?? metadata?.usuarioId,
+      nombre: metadata?.tecnicoNombre ?? acta.firmas?.personalResponsableNombre,
+      cargo: metadata?.tecnicoCargo ?? acta.firmas?.personalResponsableCargo,
+    };
+    // Autoría del último guardado para la fusión LWW entre técnicos (§8.2, GAF-37).
+    const actaConMetadata: ActaServicioDrt = {
+      ...acta,
+      actualizadoEn: ahora,
+      actualizadoPor:
+        metadata?.tecnicoNombre ?? acta.actualizadoPor ?? acta.firmas?.personalResponsableNombre,
+    };
+
     // El acta es la fuente de las observaciones del DRT.
     return this.guardarFormulario({
       servicioId: acta.servicioId,
@@ -145,7 +181,67 @@ export class BorradorRepository {
       numeroOrden: metadata?.numeroOrden,
       servicioTipo: metadata?.servicioTipo ?? 'DESRATIZACION_DRT',
       observaciones: acta.resultadosRecomendaciones || '',
-      datosJson: JSON.stringify(acta),
+      datosJson: JSON.stringify({ ...actaConMetadata, guardadoPor }),
+      bloquear: !!acta.cerradaEnRevision,
+    });
+  }
+
+  /**
+   * Bloquea localmente un borrador cuando el servidor o un técnico colaborador cierra la inspección (§8.2).
+   */
+  async marcarBloqueada(
+    servicioId: string,
+    motivo = 'La inspección está cerrada y no acepta más sincronizaciones de campo (Sección 8.2)',
+  ): Promise<void> {
+    const db = this.getDb();
+    const ahora = new Date().toISOString();
+
+    // Lectura y escritura en la misma transacción: un guardado concurrente no se pierde.
+    await db.withExclusiveTransactionAsync(async (tx) => {
+      const fila = await tx.getFirstAsync<FilaBorradorDb>(
+        `SELECT * FROM borradores_inspeccion WHERE servicio_id = ?;`,
+        [servicioId],
+      );
+      const borradorActual = fila ? this.mapearFilaABorrador(fila) : null;
+
+      let datosJsonActualizado: string | null = null;
+      if (borradorActual?.datosDrt) {
+        const actaBloqueada: ActaServicioDrt = {
+          ...borradorActual.datosDrt,
+          cerradaEnRevision: true,
+          actualizadoEn: ahora,
+        };
+        datosJsonActualizado = JSON.stringify(actaBloqueada);
+      }
+
+      await tx.runAsync(
+        `UPDATE borradores_inspeccion 
+         SET sync_status = 'LOCKED',
+             actualizado_en = ?,
+             datos_json = COALESCE(?, datos_json)
+         WHERE servicio_id = ?;`,
+        [ahora, datosJsonActualizado, servicioId],
+      );
+    });
+  }
+
+  /**
+   * Fusiona un borrador recibido de otro técnico colaborador aplicando la regla Last-Write-Wins (§8.2).
+   */
+  async fusionarBorradorRemoto(
+    servicioId: string,
+    actaRemota: ActaServicioDrt,
+  ): Promise<BorradorInspeccion> {
+    const local = await this.obtenerPorServicioId(servicioId);
+    if (!local || !local.datosDrt) {
+      return this.guardarDrt(actaRemota);
+    }
+
+    const { acta: actaFusionada } = fusionarActasColaborativas(local.datosDrt, actaRemota);
+    return this.guardarDrt(actaFusionada, {
+      clienteRazonSocial: local.clienteRazonSocial,
+      sedeNombre: local.sedeNombre,
+      servicioTipo: local.servicioTipo,
     });
   }
 
@@ -186,9 +282,12 @@ export class BorradorRepository {
     servicioTipo?: string;
     observaciones: string;
     datosJson: string;
+    /** Marca el borrador como LOCKED (inspección cerrada en revisión, §8.2). */
+    bloquear?: boolean;
   }): Promise<BorradorInspeccion> {
     const db = this.getDb();
     const ahora = new Date().toISOString();
+    const estadoSync = datos.bloquear ? 'LOCKED' : 'PENDING_SYNC';
 
     return db.withExclusiveTransactionAsync(async (tx) => {
       await tx.runAsync(
@@ -204,7 +303,7 @@ export class BorradorRepository {
           actualizado_en,
           server_version,
           sync_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'PENDING_SYNC')
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
         ON CONFLICT(servicio_id) DO UPDATE SET
           usuario_id = COALESCE(excluded.usuario_id, borradores_inspeccion.usuario_id),
           cliente_razon_social = COALESCE(excluded.cliente_razon_social, borradores_inspeccion.cliente_razon_social),
@@ -214,7 +313,12 @@ export class BorradorRepository {
           observaciones = excluded.observaciones,
           datos_json = excluded.datos_json,
           actualizado_en = excluded.actualizado_en,
-          sync_status = 'PENDING_SYNC';`,
+          -- Una inspección bloqueada sigue bloqueada: un guardado normal no la reabre.
+          sync_status = CASE
+            WHEN borradores_inspeccion.sync_status IN ('LOCKED', 'CLOSED')
+              THEN borradores_inspeccion.sync_status
+            ELSE excluded.sync_status
+          END;`,
         [
           datos.servicioId,
           datos.usuarioId ?? null,
@@ -225,6 +329,7 @@ export class BorradorRepository {
           datos.observaciones,
           datos.datosJson,
           ahora,
+          estadoSync,
         ],
       );
 
