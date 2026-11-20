@@ -88,12 +88,10 @@ function ficha(d: DatosProyecto) {
 
 /** Cuerpo de `POST /mantenimiento/proyectos`; el estado inicial lo fija el servidor (ACTIVO). */
 export function registroDeProyecto(clienteId: string, d: DatosProyecto): ProyectoRegistro {
-  const f = ficha(d);
-  if (f.montoPresupuestado === null) {
-    delete (f as any).montoPresupuestado;
-    delete (f as any).moneda;
-  }
-  return { clienteId, nombre: d.nombre.trim(), ...f };
+  const { montoPresupuestado, moneda, ...resto } = ficha(d);
+  // Al registrar, un monto vacío se omite del cuerpo (no se envía null).
+  const montos = montoPresupuestado === null ? {} : { montoPresupuestado, moneda };
+  return { clienteId, nombre: d.nombre.trim(), ...resto, ...montos };
 }
 
 /** Cuerpo de `PATCH /mantenimiento/proyectos/:id`: el cliente propietario no cambia. */

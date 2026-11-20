@@ -100,12 +100,16 @@ function ficha(d: DatosServicio) {
 
 /** Cuerpo de `POST /mantenimiento/servicios-contratados`; quien llama garantiza tipo y frecuencia ya validados. */
 export function registroDeServicio(proyectoId: string, d: DatosServicio): ServicioContratadoRegistro {
-  const f = ficha(d);
-  if (f.monto === null) {
-    delete (f as any).monto;
-    delete (f as any).moneda;
-  }
-  return { proyectoId, tipoServicio: d.tipo as TipoServicio, frecuencia: d.frecuencia as FrecuenciaServicio, ...f };
+  const { monto, moneda, ...resto } = ficha(d);
+  // Al registrar, un monto vacío se omite del cuerpo (no se envía null).
+  const montos = monto === null ? {} : { monto, moneda };
+  return {
+    proyectoId,
+    tipoServicio: d.tipo as TipoServicio,
+    frecuencia: d.frecuencia as FrecuenciaServicio,
+    ...resto,
+    ...montos,
+  };
 }
 
 /** Cuerpo de `PATCH /mantenimiento/servicios-contratados/:id`: el tipo y la sede no cambian. */
