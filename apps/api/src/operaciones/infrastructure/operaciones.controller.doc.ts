@@ -176,3 +176,50 @@ export function ApiSincronizarInspeccionDoc() {
     }),
   );
 }
+
+export function ApiListarMisServiciosDoc() {
+  return applyDecorators(
+    ApiOperation({
+      summary: 'Listar servicios cerrados del técnico autenticado (GAF-104)',
+      description:
+        'Devuelve la lista de servicios/inspecciones cerrados donde el técnico participó, en modo solo lectura.',
+    }),
+    ApiResponse({
+      status: 200,
+      description: 'Listado de servicios del técnico',
+    }),
+  );
+}
+
+export function ApiSolicitarCorreccionDoc() {
+  return applyDecorators(
+    ApiOperation({
+      summary: 'Solicitar corrección sobre un servicio cerrado a supervisión (GAF-104)',
+      description:
+        'Permite al operador técnico solicitar una corrección sobre un servicio ya cerrado, registrando el motivo en auditoría para que lo apruebe o gestione supervisión.',
+    }),
+    ApiParam({
+      name: 'id',
+      description: 'UUID de la inspección cerrada a corregir',
+      example: 'insp-1111111-1111-1111-1111-111111111111',
+    }),
+    ApiResponse({
+      status: 200,
+      description: 'Solicitud de corrección registrada y enviada a supervisión',
+    }),
+    ApiResponse({
+      status: 400,
+      description: 'Motivo inválido o la inspección no está cerrada',
+      type: BadRequestErrorDto,
+    }),
+    ApiResponse({
+      status: 403,
+      description: 'El técnico no tiene permisos sobre esta inspección',
+    }),
+    ApiResponse({
+      status: 404,
+      description: 'Inspección no encontrada',
+      type: NotFoundErrorDto,
+    }),
+  );
+}

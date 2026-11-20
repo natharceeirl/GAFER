@@ -1,4 +1,12 @@
-import { LoginRequest, LoginResponse, LoginResponseSchema } from '@gafer/contracts';
+import {
+  LoginRequest,
+  LoginResponse,
+  LoginResponseSchema,
+  ResumenServicioTecnico,
+  ResumenServicioTecnicoSchema,
+  SolicitudCorreccion,
+  SolicitudCorreccionSchema,
+} from '@gafer/contracts';
 
 export class ApiError extends Error {
   constructor(
@@ -134,5 +142,104 @@ export class MobileApiClient {
 
     const raw = await response.json();
     return LoginResponseSchema.parse(raw);
+  }
+
+  /**
+   * Consulta el listado de servicios cerrados donde participó el técnico autenticado (GAF-104).
+   * Se consume en modo solo lectura para auditoría y consulta en campo.
+   */
+  async obtenerMisServicios(token?: string): Promise<ResumenServicioTecnico[]> {
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    try {
+      const response = await this.fetchFn(
+        `${this.activeBaseUrl}/api/operaciones/inspecciones/mis-servicios`,
+        {
+          method: 'GET',
+          headers,
+          signal: controller.signal as any,
+        },
+      );
+
+      if (!response.ok) {
+        throw new ApiError(`Error al consultar mis servicios (${response.status})`, response.status);
+      }
+
+      const data = await response.json();
+      if (!Array.isArray(data)) {
+        throw new ApiError('Respuesta inesperada: se esperaba un listado de servicios', response.status);
+      }
+      return data.map((item) => ResumenServicioTecnicoSchema.parse(item));
+    } catch (err: unknown) {
+      if (err instanceof ApiError) throw err;
+      throw new ErrorDeConexion(`No se pudo conectar para listar servicios en ${this.activeBaseUrl}`);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /**
+   * Envía una solicitud formal de corrección para un servicio cerrado (GAF-104).
+   * Registra el motivo en auditoría para que lo gestione o autorice supervisión.
+   */
+  async solicitarCorreccion(
+    inspeccionId: string,
+    motivo: string,
+    token?: string,
+  ): Promise<{ ok: boolean; mensaje: string; inspeccionId: string; solicitadaEn: string }> {
+    const payload: SolicitudCorreccion = { motivo: motivo.trim() };
+    SolicitudCorreccionSchema.parse(payload);
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    try {
+      const response = await this.fetchFn(
+        `${this.activeBaseUrl}/api/operaciones/inspecciones/${inspeccionId}/solicitar-correccion`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+          signal: controller.signal as any,
+        },
+      );
+
+      if (!response.ok) {
+        let errorData: any = null;
+        try {
+          errorData = await response.json();
+        } catch {}
+        const mensaje = errorData?.message || `Error al solicitar corrección (${response.status})`;
+        throw new ApiError(mensaje, response.status, errorData);
+      }
+
+      return (await response.json()) as {
+        ok: boolean;
+        mensaje: string;
+        inspeccionId: string;
+        solicitadaEn: string;
+      };
+    } catch (err: unknown) {
+      if (err instanceof ApiError) throw err;
+      throw new ErrorDeConexion(`No se pudo conectar para solicitar corrección en ${this.activeBaseUrl}`);
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 }
