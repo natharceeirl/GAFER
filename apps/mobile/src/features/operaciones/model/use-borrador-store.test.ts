@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ActaServicioDrt } from '@gafer/contracts';
 import { useBorradorStore, MENSAJE_ERROR_PERSISTENCIA } from './use-borrador-store';
 import { BorradorRepository } from './borrador-repository';
+import { crearFormularioCampo, FormularioCampo } from './formulario-campo';
 import { inicializarBaseDeDatos, cerrarBaseDeDatos } from '../../../shared/db/sqlite';
 
 function reiniciarStore() {
@@ -147,5 +148,30 @@ describe('useBorradorStore (Mobile)', () => {
     expect(estado.borrador?.datosDrt?.planillaEstaciones.length).toBe(2);
     // El upsert del acta conserva al dueño del borrador (hallazgo 5 del PR #29).
     expect(estado.borrador?.usuarioId).toBe('tec-drt');
+  });
+
+  it('actualiza y almacena el formulario de campo por bloques (GAF-34)', async () => {
+    const f: FormularioCampo = crearFormularioCampo({
+      cliente: { razonSocial: 'SAN FERNANDO S.A.' },
+      sede: { nombre: 'PLANTA_CHORRILLOS' },
+      servicio: {
+        id: 'srv-sanfernando-01',
+        tipo: 'DESINSECTACION Y DESRATIZACION',
+        tipoServicio: 'DSS',
+        requiereCertificado: false,
+      },
+      tecnicoNombre: 'Marco Ipusari',
+    });
+
+    f.observacionesLibre = 'Aplicación focalizada en almacén 3.';
+
+    const ok = await useBorradorStore.getState().actualizarCampo(f);
+    expect(ok).toBe(true);
+    const estado = useBorradorStore.getState();
+    expect(estado.borrador?.servicioId).toBe('srv-sanfernando-01');
+    expect(estado.borrador?.clienteRazonSocial).toBe('SAN FERNANDO S.A.');
+    expect(estado.borrador?.datosCampo?.tipoServicio).toBe('DSS');
+    expect(estado.borrador?.datosCampo?.insumos.length).toBeGreaterThan(0);
+    expect(estado.borrador?.observaciones).toBe('Aplicación focalizada en almacén 3.');
   });
 });
