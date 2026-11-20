@@ -146,13 +146,20 @@ export interface AgendaState {
   cargando: boolean;
   error: string | null;
   fechaAgenda: string;
+  /** Técnico de la sesión para el que se cargó la agenda; dueño de los borradores que abra. */
+  tecnicoId: string | null;
 
   setFiltroModo: (modo: ModoFiltroAgenda) => void;
   seleccionarSede: (sede: SedeActiva | null) => void;
   seleccionarVisita: (visita: ItemAgenda | null) => void;
   cargarAgenda: (tecnicoId: string) => Promise<void>;
-  iniciarAtencionVisita: (visitaId: string) => boolean;
-  iniciarAtencionEnSede: (sede: SedeActiva, servicioId?: string) => void;
+  /**
+   * Abre la visita y su borrador. Resuelve a false si la visita no existe o si el
+   * borrador no se pudo guardar en disco (la visita no pasa a EN_CURSO).
+   */
+  iniciarAtencionVisita: (visitaId: string) => Promise<boolean>;
+  /** Resuelve a false si el borrador no se pudo guardar en disco. */
+  iniciarAtencionEnSede: (sede: SedeActiva, servicioId?: string) => Promise<boolean>;
   reiniciarEstado: () => void;
 }
 
@@ -165,6 +172,7 @@ export const useAgendaStore = create<AgendaState>((set, get) => ({
   cargando: false,
   error: null,
   fechaAgenda: new Date().toISOString().split('T')[0],
+  tecnicoId: null,
 
   setFiltroModo: (modo) => set({ filtroModo: modo }),
 
@@ -173,7 +181,7 @@ export const useAgendaStore = create<AgendaState>((set, get) => ({
   seleccionarVisita: (visita) => set({ visitaSeleccionada: visita }),
 
   cargarAgenda: async (tecnicoId: string) => {
-    set({ cargando: true, error: null });
+    set({ cargando: true, error: null, tecnicoId });
 
     try {
       const hoy = new Date().toISOString().split('T')[0];
@@ -255,44 +263,48 @@ export const useAgendaStore = create<AgendaState>((set, get) => ({
     }
   },
 
-  iniciarAtencionVisita: (visitaId: string): boolean => {
-    const { items } = get();
-    const visita = items.find((v) => v.id === visitaId);
+  iniciarAtencionVisita: async (visitaId: string): Promise<boolean> => {
+    const visita = get().items.find((v) => v.id === visitaId);
     if (!visita) return false;
 
-    // Actualizar estado de la visita a EN_CURSO
-    const actualizados = items.map((v) =>
-      v.id === visitaId ? { ...v, estadoCampo: 'EN_CURSO' as EstadoCampo } : v,
+    // Una sola escritura, esperada: las notas de la visita solo se usan si el borrador
+    // es nuevo. Si ya existía (visita reabierta), se conservan las notas del técnico.
+    const guardado = await useBorradorStore.getState().iniciarBorrador(
+      visita.servicioId,
+      {
+        usuarioId: get().tecnicoId ?? undefined,
+        clienteRazonSocial: visita.clienteRazonSocial,
+        sedeNombre: visita.sedeNombre,
+        numeroOrden: visita.numeroOrden,
+        servicioTipo: visita.servicioTipo,
+      },
+      visita.observaciones ?? '',
     );
+    if (!guardado) return false;
 
-    // Conectar reactivamente con el borrador de inspección de campo
-    useBorradorStore.getState().iniciarBorrador(visita.servicioId, {
-      clienteRazonSocial: visita.clienteRazonSocial,
-      sedeNombre: visita.sedeNombre,
-      numeroOrden: visita.numeroOrden,
-      servicioTipo: visita.servicioTipo,
-    });
-    if (visita.observaciones) {
-      useBorradorStore.getState().actualizarObservaciones(visita.observaciones);
-    }
-
-    set({
-      items: actualizados,
+    set((state) => ({
+      items: state.items.map((v) =>
+        v.id === visitaId ? { ...v, estadoCampo: 'EN_CURSO' as EstadoCampo } : v,
+      ),
       visitaSeleccionada: { ...visita, estadoCampo: 'EN_CURSO' },
-    });
+    }));
 
     return true;
   },
 
-  iniciarAtencionEnSede: (sede: SedeActiva, servicioId?: string) => {
+  iniciarAtencionEnSede: async (sede: SedeActiva, servicioId?: string): Promise<boolean> => {
     const idServicio = servicioId || `contingencia-${sede.id.substring(0, 8)}`;
-    useBorradorStore.getState().iniciarBorrador(idServicio, {
+    const guardado = await useBorradorStore.getState().iniciarBorrador(idServicio, {
+      usuarioId: get().tecnicoId ?? undefined,
       clienteRazonSocial: sede.clienteRazonSocial,
       sedeNombre: sede.nombre,
       numeroOrden: 'CONTINGENCIA',
       servicioTipo: 'ATENCIÓN EN SEDE ACTIVA',
     });
+    if (!guardado) return false;
+
     set({ sedeSeleccionada: sede });
+    return true;
   },
 
   reiniciarEstado: () => {
@@ -303,6 +315,7 @@ export const useAgendaStore = create<AgendaState>((set, get) => ({
       filtroModo: 'MIS_VISITAS',
       cargando: false,
       error: null,
+      tecnicoId: null,
     });
   },
 }));

@@ -5,8 +5,12 @@
  * para ejecutar migraciones reales, transacciones exclusivas y consultas SQL idénticas
  * a las de Android/iOS sin depender de TurboModules de Expo ni mocks frágiles.
  * En navegadores web incluye fallback de memoria para evitar excepciones.
+ *
+ * Igual que ExpoSqliteAdapter, serializa las operaciones con ColaSerial para que dos
+ * transacciones lanzadas a la vez no se intercalen (mismo comportamiento que en el dispositivo).
  */
 
+import { ColaSerial } from './cola-serial';
 import { QueryResult, SqliteDatabasePort } from './database-port';
 
 function getDatabaseSync(): any {
@@ -34,27 +38,22 @@ function getDatabaseSync(): any {
   return null;
 }
 
-export class MemorySqliteAdapter implements SqliteDatabasePort {
-  private nativeDb: any;
-  private userVersion = 0;
+/** Acceso directo al motor, sin cola. Se entrega dentro de las transacciones. */
+class MotorMemoria implements SqliteDatabasePort {
+  nativeDb: any;
+  userVersion = 0;
 
   constructor() {
     this.nativeDb = getDatabaseSync();
   }
 
   async execAsync(sql: string): Promise<void> {
-    if (this.nativeDb) {
-      const match = sql.match(/PRAGMA\s+user_version\s*=\s*(\d+)/i);
-      if (match) {
-        this.userVersion = parseInt(match[1], 10);
-      }
-      this.nativeDb.exec(sql);
-      return;
-    }
-
     const match = sql.match(/PRAGMA\s+user_version\s*=\s*(\d+)/i);
     if (match) {
       this.userVersion = parseInt(match[1], 10);
+    }
+    if (this.nativeDb) {
+      this.nativeDb.exec(sql);
     }
   }
 
@@ -74,8 +73,7 @@ export class MemorySqliteAdapter implements SqliteDatabasePort {
   async getAllAsync<T = unknown>(sql: string, params: unknown[] = []): Promise<T[]> {
     if (this.nativeDb) {
       const stmt = this.nativeDb.prepare(sql);
-      const rows = stmt.all(...params);
-      return rows as T[];
+      return stmt.all(...params) as T[];
     }
 
     return [];
@@ -84,42 +82,25 @@ export class MemorySqliteAdapter implements SqliteDatabasePort {
   async getFirstAsync<T = unknown>(sql: string, params: unknown[] = []): Promise<T | null> {
     if (sql.trim().toUpperCase().startsWith('PRAGMA USER_VERSION')) {
       if (this.nativeDb) {
-        const stmt = this.nativeDb.prepare('PRAGMA user_version;');
-        const row = stmt.get() as any;
+        const row = this.nativeDb.prepare('PRAGMA user_version;').get() as any;
         return (row ?? { user_version: this.userVersion }) as T;
       }
       return { user_version: this.userVersion } as T;
     }
 
     if (this.nativeDb) {
-      const stmt = this.nativeDb.prepare(sql);
-      const row = stmt.get(...params);
+      const row = this.nativeDb.prepare(sql).get(...params);
       return (row ?? null) as T | null;
     }
 
     return null;
   }
 
+  /** Una transacción anidada se une a la transacción en curso. */
   async withExclusiveTransactionAsync<T>(
     action: (db: SqliteDatabasePort) => Promise<T>,
   ): Promise<T> {
-    if (this.nativeDb) {
-      this.nativeDb.exec('BEGIN EXCLUSIVE TRANSACTION;');
-      try {
-        const result = await action(this);
-        this.nativeDb.exec('COMMIT;');
-        return result;
-      } catch (error) {
-        try {
-          this.nativeDb.exec('ROLLBACK;');
-        } catch {
-          // Ignorar si ya se hizo rollback
-        }
-        throw error;
-      }
-    }
-
-    return await action(this);
+    return action(this);
   }
 
   async closeAsync(): Promise<void> {
@@ -127,5 +108,55 @@ export class MemorySqliteAdapter implements SqliteDatabasePort {
       this.nativeDb.close();
       this.nativeDb = null;
     }
+  }
+}
+
+export class MemorySqliteAdapter implements SqliteDatabasePort {
+  private readonly cola = new ColaSerial();
+  private readonly motor = new MotorMemoria();
+
+  execAsync(sql: string): Promise<void> {
+    return this.cola.ejecutar(() => this.motor.execAsync(sql));
+  }
+
+  runAsync(sql: string, params: unknown[] = []): Promise<QueryResult> {
+    return this.cola.ejecutar(() => this.motor.runAsync(sql, params));
+  }
+
+  getAllAsync<T = unknown>(sql: string, params: unknown[] = []): Promise<T[]> {
+    return this.cola.ejecutar(() => this.motor.getAllAsync<T>(sql, params));
+  }
+
+  getFirstAsync<T = unknown>(sql: string, params: unknown[] = []): Promise<T | null> {
+    return this.cola.ejecutar(() => this.motor.getFirstAsync<T>(sql, params));
+  }
+
+  withExclusiveTransactionAsync<T>(
+    action: (db: SqliteDatabasePort) => Promise<T>,
+  ): Promise<T> {
+    return this.cola.ejecutar(async () => {
+      const nativeDb = this.motor.nativeDb;
+      if (!nativeDb) {
+        return action(this.motor);
+      }
+
+      nativeDb.exec('BEGIN IMMEDIATE TRANSACTION;');
+      try {
+        const result = await action(this.motor);
+        nativeDb.exec('COMMIT;');
+        return result;
+      } catch (error) {
+        try {
+          nativeDb.exec('ROLLBACK;');
+        } catch {
+          // Ignorar si ya se hizo rollback
+        }
+        throw error;
+      }
+    });
+  }
+
+  closeAsync(): Promise<void> {
+    return this.cola.ejecutar(() => this.motor.closeAsync());
   }
 }

@@ -5,7 +5,7 @@
 
 import { SqliteDatabasePort } from './database-port';
 
-export const ESQUEMA_VERSION_ACTUAL = 1;
+export const ESQUEMA_VERSION_ACTUAL = 2;
 
 export interface Migracion {
   version: number;
@@ -115,8 +115,23 @@ export const MIGRACIONES: Migracion[] = [
           purged_at TEXT
         );
 
-        CREATE INDEX IF NOT EXISTS idx_files_inspection 
+        CREATE INDEX IF NOT EXISTS idx_files_inspection
           ON files_local(inspection_id, upload_status);
+      `);
+    },
+  },
+  {
+    version: 2,
+    descripcion:
+      'Borradores por usuario: usuario_id en borradores_inspeccion para no mostrar el borrador de otro técnico en un celular compartido',
+    ejecutar: async (db: SqliteDatabasePort) => {
+      // Las filas creadas antes de esta versión quedan con usuario_id NULL: no se
+      // restauran para nadie, pero se conservan en disco para no perder datos de campo.
+      await db.execAsync(`
+        ALTER TABLE borradores_inspeccion ADD COLUMN usuario_id TEXT;
+
+        CREATE INDEX IF NOT EXISTS idx_borradores_usuario_actualizado
+          ON borradores_inspeccion(usuario_id, actualizado_en);
       `);
     },
   },

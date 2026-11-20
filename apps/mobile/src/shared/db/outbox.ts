@@ -73,6 +73,7 @@ interface FilaSyncOutboxDb {
 
 export class OutboxQueue {
   private cola: OutboxRecord[] = [];
+  private readonly contadoresEnMemoria = new Map<string, number>();
   private readonly storageKey = 'gafer_outbox_queue_v1';
   private db?: SqliteDatabasePort;
   private storage?: OutboxStorage;
@@ -151,26 +152,95 @@ export class OutboxQueue {
   }
 
   /**
+   * Siguiente número de secuencia del agregado, calculado dentro de la transacción del INSERT.
+   *
+   * La secuencia se cuenta por `aggregate_id` (sin importar el `aggregate_type`), porque
+   * el lote que se envía al servidor agrupa por `agregadoId`: así las operaciones de
+   * distinto tipo sobre la misma inspección conservan el orden en que se registraron.
+   *
+   * Usa el mayor entre el contador persistido en `sync_metadata` y el MAX(aggregate_seq)
+   * de la tabla, así que nunca retrocede: ni al limpiar las operaciones sincronizadas
+   * ni al reiniciar la app. Un `aggregateSeq` explícito se respeta y adelanta el contador.
+   */
+  private async reservarSecuencia(
+    tx: SqliteDatabasePort,
+    aggregateId: string,
+    seqExplicita?: number,
+  ): Promise<number> {
+    const clave = `outbox_seq:${aggregateId}`;
+    const contador = await tx.getFirstAsync<{ value: string }>(
+      `SELECT value FROM sync_metadata WHERE key = ?;`,
+      [clave],
+    );
+    const maximo = await tx.getFirstAsync<{ max_seq: number | null }>(
+      `SELECT MAX(aggregate_seq) AS max_seq FROM sync_outbox WHERE aggregate_id = ?;`,
+      [aggregateId],
+    );
+
+    const ultima = Math.max(Number(contador?.value ?? 0), Number(maximo?.max_seq ?? 0));
+    const seq = seqExplicita ?? ultima + 1;
+
+    await tx.runAsync(
+      `INSERT INTO sync_metadata (key, value, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at;`,
+      [clave, String(Math.max(seq, ultima)), new Date().toISOString()],
+    );
+    return seq;
+  }
+
+  /** Versión en memoria de reservarSecuencia para el modo OutboxStorage (sin SQLite). */
+  private siguienteSecuenciaEnMemoria(aggregateId: string): number {
+    const usadas = this.cola
+      .filter((r) => r.operacion.agregadoId === aggregateId)
+      .map((r) => r.aggregateSeq ?? 0);
+    const ultima = Math.max(this.contadoresEnMemoria.get(aggregateId) ?? 0, 0, ...usadas);
+    this.contadoresEnMemoria.set(aggregateId, ultima + 1);
+    return ultima + 1;
+  }
+
+  /**
    * Encola una operación en la base de datos local SQLite bajo una transacción exclusiva.
+   * Es idempotente por `operationId`: encolar dos veces la misma operación no la duplica
+   * ni le cambia la secuencia o el estado.
    */
   async encolar(
     operacion: OperacionSync,
     opciones?: OpcionesEncolarOutbox,
   ): Promise<OutboxRecord> {
-    const seq = opciones?.aggregateSeq ?? this.cola.length + 1;
+    const enMemoria = this.cola.find((r) => r.operacion.operationId === operacion.operationId);
+    if (enMemoria) {
+      return enMemoria;
+    }
+
     const prioridad = opciones?.priority ?? 'HIGH';
+    const aggregateType = opciones?.aggregateType ?? 'INSPECCION';
     const record: OutboxRecord = {
       operacion,
       intentos: 0,
       sincronizado: false,
-      aggregateSeq: seq,
+      aggregateSeq: undefined,
       priority: prioridad,
     };
 
     if (this.db) {
-      await this.db.withExclusiveTransactionAsync(async (tx) => {
+      const existente = await this.db.withExclusiveTransactionAsync(async (tx) => {
+        const previa = await tx.getFirstAsync<{ aggregate_seq: number; status: string }>(
+          `SELECT aggregate_seq, status FROM sync_outbox WHERE operation_id = ?;`,
+          [operacion.operationId],
+        );
+        if (previa) {
+          return previa;
+        }
+
+        const seq = await this.reservarSecuencia(
+          tx,
+          operacion.agregadoId,
+          opciones?.aggregateSeq,
+        );
+        record.aggregateSeq = seq;
+
         await tx.runAsync(
-          `INSERT OR REPLACE INTO sync_outbox (
+          `INSERT INTO sync_outbox (
             operation_id,
             device_id,
             user_id,
@@ -196,7 +266,7 @@ export class OutboxQueue {
             operacion.operationId,
             opciones?.deviceId ?? 'device-local-id',
             operacion.actorId,
-            opciones?.aggregateType ?? 'INSPECCION',
+            aggregateType,
             operacion.agregadoId,
             operacion.tipo,
             opciones?.baseVersion ?? 0,
@@ -215,7 +285,19 @@ export class OutboxQueue {
             null,
           ],
         );
+        return null;
       });
+
+      if (existente) {
+        // Ya estaba en disco (por ejemplo, otra instancia de la cola la encoló).
+        return {
+          ...record,
+          aggregateSeq: existente.aggregate_seq,
+          sincronizado: existente.status === 'SYNCED',
+        };
+      }
+    } else {
+      record.aggregateSeq = opciones?.aggregateSeq ?? this.siguienteSecuenciaEnMemoria(operacion.agregadoId);
     }
 
     this.cola.push(record);
@@ -266,9 +348,10 @@ export class OutboxQueue {
     inspeccionId: string,
     fetchFn: typeof fetch = fetch,
   ): Promise<LoteSyncResponse | null> {
-    const pendientes = this.obtenerPendientes().filter(
-      (r) => r.operacion.agregadoId === inspeccionId,
-    );
+    // Dentro de una inspección el orden lo da la secuencia, no la prioridad.
+    const pendientes = this.obtenerPendientes()
+      .filter((r) => r.operacion.agregadoId === inspeccionId)
+      .sort((a, b) => (a.aggregateSeq ?? 0) - (b.aggregateSeq ?? 0));
     if (pendientes.length === 0) return null;
 
     const loteRequest: LoteSyncRequest = {

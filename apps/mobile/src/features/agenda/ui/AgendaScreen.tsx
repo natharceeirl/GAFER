@@ -36,10 +36,14 @@ export const AgendaScreen: React.FC = () => {
     cargarAgenda,
     iniciarAtencionVisita,
     iniciarAtencionEnSede,
+    reiniciarEstado: reiniciarAgenda,
   } = useAgendaStore();
 
   const borrador = useBorradorStore((state) => state.borrador);
   const limpiarBorrador = useBorradorStore((state) => state.limpiar);
+  const descargarBorrador = useBorradorStore((state) => state.descargarDeMemoria);
+  const errorPersistencia = useBorradorStore((state) => state.errorPersistencia);
+  const limpiarErrorPersistencia = useBorradorStore((state) => state.limpiarErrorPersistencia);
 
   const [vistaActiva, setVistaActiva] = useState<VistaAgenda>('MIS_VISITAS');
   const [busquedaSede, setBusquedaSede] = useState('');
@@ -63,6 +67,10 @@ export const AgendaScreen: React.FC = () => {
         text: 'Cerrar Sesión',
         style: 'destructive',
         onPress: async () => {
+          // El borrador queda en disco (no se pierde trabajo sin sincronizar), pero sale
+          // de la pantalla: el siguiente técnico que use el celular no lo ve.
+          descargarBorrador();
+          reiniciarAgenda();
           await cerrarSesion();
         },
       },
@@ -285,6 +293,15 @@ export const AgendaScreen: React.FC = () => {
         <AlertBanner
           tipo="error"
           mensaje={error}
+          style={styles.alertaMensaje}
+        />
+      ) : null}
+
+      {errorPersistencia ? (
+        <AlertBanner
+          tipo="error"
+          mensaje={errorPersistencia}
+          onCerrar={limpiarErrorPersistencia}
           style={styles.alertaMensaje}
         />
       ) : null}
