@@ -72,13 +72,27 @@ export const ItemEstacionPlanillaSchema = z.object({
 });
 export type ItemEstacionPlanilla = z.infer<typeof ItemEstacionPlanillaSchema>;
 
+export const FotoEvidenciaDrtSchema = z.object({
+  id: z.string().uuid(),
+  nombre: z.string(),
+  rutaLocalRelativa: z.string(),
+  tamanoBytes: z.number().int().positive().max(1024 * 1024, 'La foto no debe superar 1 MB (Decisión C15)'),
+  sha256: z.string(),
+  mimeType: z.string().default('image/jpeg'),
+  capturadaEn: z.string(),
+  descripcion: z.string().optional(),
+});
+export type FotoEvidenciaDrt = z.infer<typeof FotoEvidenciaDrtSchema>;
+
 export const FirmaConformidadDrtSchema = z.object({
   personalResponsableNombre: z.string().min(1, 'El nombre del responsable es requerido'),
   personalResponsableCargo: z.string().min(1, 'El cargo del responsable es requerido'),
-  clienteConformidadNombre: z.string().min(1, 'El nombre del contacto del cliente es requerido'),
-  clienteConformidadCargo: z.string().min(1, 'El cargo del contacto del cliente es requerido'),
+  clienteConformidadNombre: z.string().optional().default(''),
+  clienteConformidadCargo: z.string().optional().default(''),
   fecha: FechaSchema,
   firmaDigitalBase64: z.string().optional(),
+  responsableNoDisponible: z.boolean().optional().default(false),
+  motivoNoDisponible: z.string().optional(),
 });
 export type FirmaConformidadDrt = z.infer<typeof FirmaConformidadDrtSchema>;
 
@@ -119,5 +133,8 @@ export const ActaServicioDrtSchema = z.object({
 
   // 8. Planilla de Estaciones de Control
   planillaEstaciones: z.array(ItemEstacionPlanillaSchema).default([]),
+
+  // 9. Fotografías de evidencia (§13, C15)
+  fotos: z.array(FotoEvidenciaDrtSchema).default([]),
 });
 export type ActaServicioDrt = z.infer<typeof ActaServicioDrtSchema>;
