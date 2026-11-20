@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -157,30 +157,49 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
   const ultimaActaRef = useRef(acta);
   ultimaActaRef.current = acta;
 
+  const usuarioId = usuario?.id;
+
+  // Guarda el acta en SQLite. Devuelve false si no quedó en disco (el store expone el error).
+  const guardarActa = useCallback(
+    (actaAGuardar: ActaServicioDrt) =>
+      actualizarDrt(actaAGuardar, {
+        usuarioId,
+        clienteRazonSocial: actaAGuardar.clienteRazonSocial,
+        sedeNombre: actaAGuardar.sedeDireccion,
+        servicioTipo: 'DESRATIZACION_DRT',
+      }),
+    [actualizarDrt, usuarioId],
+  );
+
   // Auto-guardado en segundo plano en SQLite (debounced 2.5s) bajo la regla §2.4: Durable before visible
   useEffect(() => {
     const timer = setTimeout(() => {
-      actualizarDrt(ultimaActaRef.current, {
-        clienteRazonSocial: ultimaActaRef.current.clienteRazonSocial,
-        sedeNombre: ultimaActaRef.current.sedeDireccion,
-        servicioTipo: 'DESRATIZACION_DRT',
-      })
-        .then(() => {
-          setMensajeGuardado(`Guardado localmente en SQLite a las ${horaActualIso()}`);
-        })
-        .catch(() => {});
+      guardarActa(ultimaActaRef.current).then((ok) => {
+        setMensajeGuardado(
+          ok
+            ? `Guardado localmente en SQLite a las ${horaActualIso()}`
+            : 'No se pudo guardar en el teléfono. No cierre la app.',
+        );
+      });
     }, 2500);
 
     return () => clearTimeout(timer);
-  }, [acta, actualizarDrt]);
+  }, [acta, guardarActa]);
 
-  // Manejador seguro para regresar: garantiza que todo cambio se guarde en SQLite antes de desmontar
-  const handleVolver = () => {
-    actualizarDrt(ultimaActaRef.current, {
-      clienteRazonSocial: ultimaActaRef.current.clienteRazonSocial,
-      sedeNombre: ultimaActaRef.current.sedeDireccion,
-      servicioTipo: 'DESRATIZACION_DRT',
-    }).catch(() => {});
+  // Manejador seguro para regresar: espera a que el acta quede en SQLite antes de desmontar
+  const handleVolver = async () => {
+    const ok = await guardarActa(ultimaActaRef.current);
+    if (!ok) {
+      Alert.alert(
+        'No se pudo guardar',
+        'El acta no quedó guardada en el teléfono. Si sale ahora puede perder los últimos cambios.',
+        [
+          { text: 'Permanecer', style: 'cancel' },
+          { text: 'Salir de todos modos', style: 'destructive', onPress: onVolver },
+        ],
+      );
+      return;
+    }
     onVolver();
   };
 
@@ -236,11 +255,10 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
     try {
       setGuardando(true);
       setErrorValidacion(null);
-      await actualizarDrt(acta, {
-        clienteRazonSocial: acta.clienteRazonSocial,
-        sedeNombre: acta.sedeDireccion,
-        servicioTipo: 'DESRATIZACION_DRT',
-      });
+      const ok = await guardarActa(acta);
+      if (!ok) {
+        throw new Error('No se pudo guardar el acta en SQLite');
+      }
       const hora = horaActualIso();
       setMensajeGuardado(`Borrador guardado en SQLite local a las ${hora}`);
     } catch {
