@@ -1,6 +1,12 @@
 import { create } from 'zustand';
-import { VisitaProgramada, EstadoCampo } from '@gafer/contracts';
+import { VisitaProgramada, EstadoCampo, TipoServicio } from '@gafer/contracts';
 import { useBorradorStore } from '../../operaciones/model/use-borrador-store';
+import {
+  EquipoCatalogoItem,
+  EQUIPOS_CATALOGO_SEMILLA,
+  INSUMOS_CATALOGO_SEMILLA,
+  InsumoServicioConfig,
+} from '../../operaciones/model/formulario-campo';
 import { generarUuid } from '../../../shared/utils/uuid';
 
 export type ModoFiltroAgenda = 'MIS_VISITAS' | 'TODAS' | 'DISPONIBLES';
@@ -11,6 +17,11 @@ export interface ItemAgenda extends VisitaProgramada {
   sedeNombre: string;
   sedeDireccion: string;
   servicioTipo: string;
+  tipoServicio?: TipoServicio;
+  requiereCertificado?: boolean;
+  insumosAutorizados?: Array<string | InsumoServicioConfig>;
+  dosisReferencial?: Record<string, string>;
+  equiposAutorizados?: Array<string | EquipoCatalogoItem>;
   tecnicoTitularNombre?: string | null;
   numeroOrden?: string;
 }
@@ -204,6 +215,20 @@ export const useAgendaStore = create<AgendaState>((set, get) => ({
           sedeDireccion: 'Av. Argentina 4793',
           servicioId: 'd1111111-1111-4000-8000-000000000001',
           servicioTipo: 'DESINSECTACION Y DESRATIZACION',
+          tipoServicio: 'DRT',
+          requiereCertificado: true,
+          insumosAutorizados: [
+            INSUMOS_CATALOGO_SEMILLA[1].id,
+            INSUMOS_CATALOGO_SEMILLA[0].id,
+          ],
+          dosisReferencial: {
+            [INSUMOS_CATALOGO_SEMILLA[1].id]: '1 bloque (20 g) por estación',
+            [INSUMOS_CATALOGO_SEMILLA[0].id]: '10 ml por litro de agua',
+          },
+          equiposAutorizados: [
+            EQUIPOS_CATALOGO_SEMILLA[0].id,
+            EQUIPOS_CATALOGO_SEMILLA[4].id,
+          ],
           tecnicoTitularId: tecnicoId,
           observaciones: 'Ingreso por garita 2 con EPP completo. Revisión de estaciones cebaderas perimetrales.',
           estadoCampo: 'PENDIENTE',
@@ -220,6 +245,20 @@ export const useAgendaStore = create<AgendaState>((set, get) => ({
           sedeDireccion: 'Autopista Ramiro Prialé Km 8.5',
           servicioId: 'd2222222-2222-4000-8000-000000000002',
           servicioTipo: 'DESINFECCION AMBIENTAL',
+          tipoServicio: 'DSF',
+          requiereCertificado: false,
+          insumosAutorizados: [
+            INSUMOS_CATALOGO_SEMILLA[5].id,
+            INSUMOS_CATALOGO_SEMILLA[6].id,
+          ],
+          dosisReferencial: {
+            [INSUMOS_CATALOGO_SEMILLA[5].id]: '5 ml por litro de agua',
+            [INSUMOS_CATALOGO_SEMILLA[6].id]: '5 ml por litro de agua',
+          },
+          equiposAutorizados: [
+            EQUIPOS_CATALOGO_SEMILLA[1].id,
+            EQUIPOS_CATALOGO_SEMILLA[5].id,
+          ],
           tecnicoTitularId: null, // Decisión C12: Sin titular, disponible para cualquier técnico
           observaciones: 'Visita abierta disponible. Aplicación en áreas de almacenamiento y vestuarios.',
           estadoCampo: 'PENDIENTE',
@@ -236,6 +275,16 @@ export const useAgendaStore = create<AgendaState>((set, get) => ({
           sedeDireccion: 'Av. Javier Prado Este 2050',
           servicioId: 'd3333333-3333-4000-8000-000000000003',
           servicioTipo: 'CONTROL DE ROEDORES (MURINO)',
+          tipoServicio: 'DRT',
+          requiereCertificado: true,
+          insumosAutorizados: [INSUMOS_CATALOGO_SEMILLA[1].id],
+          dosisReferencial: {
+            [INSUMOS_CATALOGO_SEMILLA[1].id]: '1 bloque (20 g) por estación',
+          },
+          equiposAutorizados: [
+            EQUIPOS_CATALOGO_SEMILLA[4].id,
+            EQUIPOS_CATALOGO_SEMILLA[5].id,
+          ],
           tecnicoTitularId: 'e9999999-9999-4000-8000-000000000999',
           tecnicoTitularNombre: 'Carlos Paredes',
           observaciones: 'Inspección de lámparas UV y trampas de golpe en trastienda.',
@@ -282,6 +331,13 @@ export const useAgendaStore = create<AgendaState>((set, get) => ({
     const visita = get().items.find((v) => v.id === visitaId);
     if (!visita) return false;
 
+    const tieneConfigServicio =
+      visita.tipoServicio !== undefined ||
+      visita.requiereCertificado !== undefined ||
+      visita.insumosAutorizados !== undefined ||
+      visita.dosisReferencial !== undefined ||
+      visita.equiposAutorizados !== undefined;
+
     // Una sola escritura, esperada: las notas de la visita solo se usan si el borrador
     // es nuevo. Si ya existía (visita reabierta), se conservan las notas del técnico.
     const guardado = await useBorradorStore.getState().iniciarBorrador(
@@ -292,6 +348,15 @@ export const useAgendaStore = create<AgendaState>((set, get) => ({
         sedeNombre: visita.sedeNombre,
         numeroOrden: visita.numeroOrden,
         servicioTipo: visita.servicioTipo,
+        configServicio: tieneConfigServicio
+          ? {
+              tipoServicio: visita.tipoServicio,
+              requiereCertificado: visita.requiereCertificado,
+              insumosAutorizados: visita.insumosAutorizados,
+              dosisReferencial: visita.dosisReferencial,
+              equiposAutorizados: visita.equiposAutorizados,
+            }
+          : undefined,
       },
       visita.observaciones ?? '',
     );
@@ -315,6 +380,9 @@ export const useAgendaStore = create<AgendaState>((set, get) => ({
       sedeNombre: sede.nombre,
       numeroOrden: 'CONTINGENCIA',
       servicioTipo: 'ATENCIÓN EN SEDE ACTIVA',
+      configServicio: {
+        requiereCertificado: false,
+      },
     });
     if (!guardado) return false;
 

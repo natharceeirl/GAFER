@@ -14,6 +14,50 @@ import { SqliteDatabasePort, obtenerBaseDeDatos } from '../../../shared/db/sqlit
 import { OutboxQueue } from '../../../shared/db/outbox';
 import { generarUuid } from '../../../shared/utils/uuid';
 import { BorradorInspeccion, MetadataBorrador } from './use-borrador-store';
+import {
+  cerrarFormulario,
+  ConfigServicioBorrador,
+  FormularioCampo,
+} from './formulario-campo';
+
+interface DatosBorradorJson {
+  datosDrt?: ActaServicioDrt;
+  datosCampo?: FormularioCampo;
+  configServicio?: ConfigServicioBorrador;
+}
+
+function parsearDatosJson(raw: string | null): DatosBorradorJson {
+  if (!raw) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+
+    if ('datosDrt' in parsed || 'datosCampo' in parsed || 'configServicio' in parsed) {
+      return {
+        datosDrt: parsed.datosDrt as ActaServicioDrt | undefined,
+        datosCampo: parsed.datosCampo as FormularioCampo | undefined,
+        configServicio: parsed.configServicio as ConfigServicioBorrador | undefined,
+      };
+    }
+
+    // Retrocompatibilidad con filas guardadas sin envoltorio compuesto.
+    if (parsed.planillaEstaciones || parsed.actividad) {
+      return { datosDrt: parsed as ActaServicioDrt };
+    }
+    if (parsed.insumos || parsed.metodos || parsed.clienteRazon) {
+      return { datosCampo: parsed as FormularioCampo };
+    }
+
+    return {};
+  } catch {
+    return {};
+  }
+}
 
 interface FilaBorradorDb {
   servicio_id: string;
@@ -37,14 +81,7 @@ export class BorradorRepository {
   }
 
   private mapearFilaABorrador(fila: FilaBorradorDb): BorradorInspeccion {
-    let datosDrt: ActaServicioDrt | undefined;
-    if (fila.datos_json) {
-      try {
-        datosDrt = JSON.parse(fila.datos_json);
-      } catch {
-        datosDrt = undefined;
-      }
-    }
+    const { datosDrt, datosCampo, configServicio } = parsearDatosJson(fila.datos_json);
 
     return {
       servicioId: fila.servicio_id,
@@ -54,7 +91,9 @@ export class BorradorRepository {
       numeroOrden: fila.numero_orden ?? undefined,
       servicioTipo: fila.servicio_tipo ?? undefined,
       observaciones: fila.observaciones ?? '',
+      configServicio,
       datosDrt,
+      datosCampo,
     };
   }
 
@@ -112,6 +151,21 @@ export class BorradorRepository {
         ],
       );
 
+      if (metadata?.configServicio !== undefined) {
+        const previa = await tx.getFirstAsync<{ datos_json: string | null }>(
+          `SELECT datos_json FROM borradores_inspeccion WHERE servicio_id = ? AND usuario_id = ?;`,
+          [servicioId, usuarioId],
+        );
+        const combinado = parsearDatosJson(previa?.datos_json ?? null);
+        if (!combinado.configServicio) {
+          combinado.configServicio = metadata.configServicio;
+          await tx.runAsync(
+            `UPDATE borradores_inspeccion SET datos_json = ? WHERE servicio_id = ? AND usuario_id = ?;`,
+            [JSON.stringify(combinado), servicioId, usuarioId],
+          );
+        }
+      }
+
       const fila = await tx.getFirstAsync<FilaBorradorDb>(
         `SELECT * FROM borradores_inspeccion WHERE servicio_id = ? AND usuario_id = ?;`,
         [servicioId, usuarioId],
@@ -125,19 +179,88 @@ export class BorradorRepository {
 
   /**
    * Guarda de forma durable el formulario completo del Acta de Servicio DRT (§2.4).
+   * Preserva `datosCampo` y `configServicio` coexistentes para el mismo `(servicio_id, usuario_id)`.
    */
   async guardarDrt(
     acta: ActaServicioDrt,
     metadata?: MetadataBorrador,
   ): Promise<BorradorInspeccion> {
+    return this.guardarFormulario({
+      servicioId: acta.servicioId,
+      usuarioId: metadata?.usuarioId,
+      clienteRazonSocial: metadata?.clienteRazonSocial ?? acta.clienteRazonSocial,
+      sedeNombre: metadata?.sedeNombre ?? acta.sedeDireccion,
+      numeroOrden: metadata?.numeroOrden,
+      servicioTipo: metadata?.servicioTipo ?? 'DESRATIZACION_DRT',
+      observaciones: acta.resultadosRecomendaciones || '',
+      datosDrt: acta,
+      configServicio: metadata?.configServicio,
+    });
+  }
+
+  /**
+   * Guarda de forma durable el formulario de campo por bloques (§4, §8.2).
+   * Preserva `datosDrt` y `configServicio` coexistentes para el mismo `(servicio_id, usuario_id)`.
+   */
+  async guardarCampo(
+    formulario: FormularioCampo,
+    metadata?: MetadataBorrador,
+  ): Promise<BorradorInspeccion> {
+    const observaciones =
+      formulario.observacionesLibre ||
+      (formulario.observaciones.length > 0 ? formulario.observaciones.join('. ') : '');
+
+    return this.guardarFormulario({
+      servicioId: formulario.servicioId,
+      usuarioId: metadata?.usuarioId,
+      clienteRazonSocial: metadata?.clienteRazonSocial ?? formulario.clienteRazon,
+      sedeNombre: metadata?.sedeNombre ?? formulario.proyectoNombre,
+      numeroOrden: metadata?.numeroOrden,
+      servicioTipo: metadata?.servicioTipo ?? formulario.servicioEtiqueta,
+      observaciones,
+      datosCampo: formulario,
+      configServicio: metadata?.configServicio,
+    });
+  }
+
+  /**
+   * Upsert del formulario de un borrador (acta DRT y/o formulario de campo).
+   * Fusiona `datos_json` dentro de la misma transacción exclusiva para que `datosDrt`,
+   * `datosCampo` y `configServicio` coexistan sin sobrescribirse destructivamente.
+   */
+  private async guardarFormulario(datos: {
+    servicioId: string;
+    usuarioId?: string;
+    clienteRazonSocial?: string;
+    sedeNombre?: string;
+    numeroOrden?: string;
+    servicioTipo?: string;
+    observaciones: string;
+    datosDrt?: ActaServicioDrt;
+    datosCampo?: FormularioCampo;
+    configServicio?: ConfigServicioBorrador;
+  }): Promise<BorradorInspeccion> {
     const db = this.getDb();
     const ahora = new Date().toISOString();
-    const datosJson = JSON.stringify(acta);
-    const propietario = metadata?.usuarioId ?? '';
+    const propietario = datos.usuarioId ?? '';
 
-    // Upsert (no INSERT OR REPLACE): conserva usuario_id, server_version y la cabecera
-    // que la metadata no traiga. El acta es la fuente de las observaciones del DRT.
     return db.withExclusiveTransactionAsync(async (tx) => {
+      const previa = await tx.getFirstAsync<{ datos_json: string | null }>(
+        `SELECT datos_json FROM borradores_inspeccion WHERE servicio_id = ? AND usuario_id = ?;`,
+        [datos.servicioId, propietario],
+      );
+      const combinado = parsearDatosJson(previa?.datos_json ?? null);
+      if (datos.datosDrt !== undefined) {
+        combinado.datosDrt = datos.datosDrt;
+      }
+      if (datos.datosCampo !== undefined) {
+        combinado.datosCampo = datos.datosCampo;
+      }
+      if (datos.configServicio !== undefined) {
+        combinado.configServicio = datos.configServicio;
+      }
+      const datosJsonCombinado = JSON.stringify(combinado);
+
       await tx.runAsync(
         `INSERT INTO borradores_inspeccion (
           servicio_id,
@@ -157,31 +280,48 @@ export class BorradorRepository {
           sede_nombre = COALESCE(excluded.sede_nombre, borradores_inspeccion.sede_nombre),
           numero_orden = COALESCE(excluded.numero_orden, borradores_inspeccion.numero_orden),
           servicio_tipo = COALESCE(borradores_inspeccion.servicio_tipo, excluded.servicio_tipo),
-          observaciones = excluded.observaciones,
+          observaciones = CASE
+            WHEN excluded.observaciones != '' THEN excluded.observaciones
+            ELSE borradores_inspeccion.observaciones
+          END,
           datos_json = excluded.datos_json,
           actualizado_en = excluded.actualizado_en,
           sync_status = 'PENDING_SYNC';`,
         [
-          acta.servicioId,
+          datos.servicioId,
           propietario,
-          metadata?.clienteRazonSocial ?? acta.clienteRazonSocial ?? null,
-          metadata?.sedeNombre ?? acta.sedeDireccion ?? null,
-          metadata?.numeroOrden ?? null,
-          metadata?.servicioTipo ?? 'DESRATIZACION_DRT',
-          acta.resultadosRecomendaciones || '',
-          datosJson,
+          datos.clienteRazonSocial ?? null,
+          datos.sedeNombre ?? null,
+          datos.numeroOrden ?? null,
+          datos.servicioTipo ?? null,
+          datos.observaciones,
+          datosJsonCombinado,
           ahora,
         ],
       );
 
       const fila = await tx.getFirstAsync<FilaBorradorDb>(
         `SELECT * FROM borradores_inspeccion WHERE servicio_id = ? AND usuario_id = ?;`,
-        [acta.servicioId, propietario],
+        [datos.servicioId, propietario],
       );
       if (!fila) {
-        throw new Error(`No se pudo guardar el acta DRT del servicio ${acta.servicioId}`);
+        throw new Error(`No se pudo guardar el borrador del servicio ${datos.servicioId}`);
       }
       return this.mapearFilaABorrador(fila);
+    });
+  }
+
+  /** Encola la operación y quita el borrador en UNA transacción (todo o nada). */
+  private async encolarYQuitarBorrador(
+    operacion: OperacionSync,
+    opciones: { deviceId: string; aggregateType: string },
+  ): Promise<void> {
+    await this.getDb().withExclusiveTransactionAsync(async (tx) => {
+      await new OutboxQueue(tx).encolar(operacion, { ...opciones, priority: 'HIGH' });
+      await tx.runAsync(
+        `DELETE FROM borradores_inspeccion WHERE servicio_id = ? AND usuario_id = ?;`,
+        [operacion.agregadoId, operacion.actorId],
+      );
     });
   }
 
@@ -197,7 +337,6 @@ export class BorradorRepository {
     const parsed = ActaServicioDrtSchema.parse(acta);
     const operationId = generarUuid();
     const ahora = new Date().toISOString();
-    const db = this.getDb();
 
     const operacion: OperacionSync = OperacionSyncSchema.parse({
       operationId,
@@ -208,18 +347,39 @@ export class BorradorRepository {
       payload: parsed as unknown as Record<string, unknown>,
     });
 
-    // Encolar y quitar el borrador en UNA transacción: si la app se cierra a mitad,
-    // o quedan ambos cambios o ninguno (no hay envío duplicado ni borrador huérfano).
-    await db.withExclusiveTransactionAsync(async (tx) => {
-      await new OutboxQueue(tx).encolar(operacion, {
-        deviceId,
-        aggregateType: 'SERVICIO_DRT',
-        priority: 'HIGH',
-      });
-      await tx.runAsync(
-        `DELETE FROM borradores_inspeccion WHERE servicio_id = ? AND usuario_id = ?;`,
-        [parsed.servicioId, usuarioId],
-      );
+    // Si la app se cierra a mitad, o quedan ambos cambios o ninguno
+    // (no hay envío duplicado ni borrador huérfano).
+    await this.encolarYQuitarBorrador(operacion, { deviceId, aggregateType: 'SERVICIO_DRT' });
+
+    return { operationId };
+  }
+
+  /**
+   * Finaliza la inspección de campo por bloques (§4, §8.3): valida los bloques requeridos,
+   * valida la operación contra `OperacionSyncSchema` antes de encolar, inserta en `sync_outbox`
+   * y remueve el borrador local de forma atómica.
+   */
+  async finalizarYEncolarCampo(
+    formulario: FormularioCampo,
+    usuarioId: string,
+    deviceId = 'device-mobile-local',
+  ): Promise<{ operationId: string }> {
+    const ahora = new Date().toISOString();
+    const cerrado = cerrarFormulario(formulario, usuarioId, ahora);
+    const operationId = generarUuid();
+
+    const operacion: OperacionSync = OperacionSyncSchema.parse({
+      operationId,
+      tipo: 'REGISTRO_SERVICIO_CAMPO',
+      agregadoId: cerrado.servicioId,
+      actorId: usuarioId,
+      clienteTimestamp: ahora,
+      payload: cerrado as unknown as Record<string, unknown>,
+    });
+
+    await this.encolarYQuitarBorrador(operacion, {
+      deviceId,
+      aggregateType: 'INSPECCION_CAMPO',
     });
 
     return { operationId };

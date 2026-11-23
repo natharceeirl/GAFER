@@ -478,6 +478,11 @@ export function createReactNativeMock() {
     Alert: {
       alert: alertMock,
     },
+    PanResponder: {
+      create: <T extends Record<string, unknown>>(config: T) => ({
+        panHandlers: config,
+      }),
+    },
     BackHandler: {
       addEventListener: vi.fn((event: string, handler: () => boolean) => {
         if (event === 'hardwareBackPress') {

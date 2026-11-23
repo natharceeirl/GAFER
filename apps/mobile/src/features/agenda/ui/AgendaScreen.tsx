@@ -22,7 +22,7 @@ import {
   ModoFiltroAgenda,
 } from '../model/agenda';
 import { useBorradorStore } from '../../operaciones/model/use-borrador-store';
-import { FormularioDrtScreen, DetalleServicioCerradoModal } from '../../operaciones';
+import { FormularioDrtScreen, FormularioCampoScreen, DetalleServicioCerradoModal } from '../../operaciones';
 import {
   etiquetaEstadoInspeccion,
   etiquetaTipoServicio,
@@ -57,6 +57,7 @@ export const AgendaScreen: React.FC = () => {
   const [vistaActiva, setVistaActiva] = useState<VistaAgenda>('MIS_VISITAS');
   const [busquedaSede, setBusquedaSede] = useState('');
   const [modoFormularioDrt, setModoFormularioDrt] = useState(false);
+  const [modoFormularioCampo, setModoFormularioCampo] = useState(false);
   const iniciandoAtencionRef = useRef(false);
 
   // GAF-104: Estado de servicios cerrados en solo lectura
@@ -128,7 +129,7 @@ export const AgendaScreen: React.FC = () => {
     try {
       const iniciado = await iniciarAtencionVisita(visita.id);
       if (iniciado) {
-        setModoFormularioDrt(true);
+        setModoFormularioCampo(true);
       }
     } finally {
       iniciandoAtencionRef.current = false;
@@ -141,7 +142,7 @@ export const AgendaScreen: React.FC = () => {
     try {
       const iniciado = await iniciarAtencionEnSede(sede);
       if (iniciado) {
-        setModoFormularioDrt(true);
+        setModoFormularioCampo(true);
       }
     } finally {
       iniciandoAtencionRef.current = false;
@@ -327,6 +328,18 @@ export const AgendaScreen: React.FC = () => {
     );
   };
 
+  if (modoFormularioCampo) {
+    return (
+      <FormularioCampoScreen
+        onVolver={() => setModoFormularioCampo(false)}
+        onAbrirPlanillaDrt={() => {
+          setModoFormularioCampo(false);
+          setModoFormularioDrt(true);
+        }}
+      />
+    );
+  }
+
   if (modoFormularioDrt) {
     return <FormularioDrtScreen onVolver={() => setModoFormularioDrt(false)} />;
   }
@@ -367,7 +380,7 @@ export const AgendaScreen: React.FC = () => {
         <View style={styles.placaInspeccionActiva}>
           <TouchableOpacity
             style={styles.placaInspeccionInfo}
-            onPress={() => setModoFormularioDrt(true)}
+            onPress={() => setModoFormularioCampo(true)}
             activeOpacity={0.8}
           >
             <View style={styles.indicadorEnServicio}>
@@ -385,9 +398,18 @@ export const AgendaScreen: React.FC = () => {
           </TouchableOpacity>
           <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
             <TouchableOpacity
+              testID="boton-abrir-formulario-campo"
+              onPress={() => setModoFormularioCampo(true)}
+              style={styles.botonAbrirActaDrt}
+              accessibilityRole="button"
+              accessibilityLabel="Abrir formulario de campo"
+            >
+              <Text style={styles.textoBotonAbrirActaDrt}>FORMULARIO</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               testID="boton-abrir-acta-drt"
               onPress={() => setModoFormularioDrt(true)}
-              style={styles.botonAbrirActaDrt}
+              style={[styles.botonAbrirActaDrt, { backgroundColor: '#3b82f6' }]}
               accessibilityRole="button"
               accessibilityLabel="Abrir acta de servicio DRT"
             >

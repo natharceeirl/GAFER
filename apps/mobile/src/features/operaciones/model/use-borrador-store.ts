@@ -10,6 +10,7 @@
 import { create } from 'zustand';
 import { ActaServicioDrt } from '@gafer/contracts';
 import { BorradorRepository } from './borrador-repository';
+import { ConfigServicioBorrador, FormularioCampo } from './formulario-campo';
 
 export interface MetadataBorrador {
   /** Técnico dueño del borrador en este dispositivo. */
@@ -18,6 +19,8 @@ export interface MetadataBorrador {
   sedeNombre?: string;
   numeroOrden?: string;
   servicioTipo?: string;
+  /** Configuración precargada del servicio contratado (§8.2). */
+  configServicio?: ConfigServicioBorrador;
 }
 
 export interface BorradorInspeccion {
@@ -28,7 +31,9 @@ export interface BorradorInspeccion {
   sedeNombre?: string;
   numeroOrden?: string;
   servicioTipo?: string;
+  configServicio?: ConfigServicioBorrador;
   datosDrt?: ActaServicioDrt;
+  datosCampo?: FormularioCampo;
 }
 
 export const MENSAJE_ERROR_PERSISTENCIA =
@@ -52,7 +57,10 @@ interface BorradorStore {
   actualizarObservaciones: (observaciones: string) => Promise<boolean>;
   /** Guarda el acta DRT en disco y luego la muestra. Devuelve false si no se pudo guardar. */
   actualizarDrt: (acta: ActaServicioDrt, metadata?: MetadataBorrador) => Promise<boolean>;
+  /** Guarda el formulario de campo en disco y luego lo muestra. Devuelve false si no se pudo guardar. */
+  actualizarCampo: (formulario: FormularioCampo, metadata?: MetadataBorrador) => Promise<boolean>;
   finalizarServicioDrt: (acta: ActaServicioDrt, usuarioId: string) => Promise<{ operationId: string }>;
+  finalizarServicioCampo: (formulario: FormularioCampo, usuarioId: string) => Promise<{ operationId: string }>;
   marcarComoPendienteDeSincronizar: () => void;
   restaurarBorrador: (borrador: BorradorInspeccion | null) => void;
   /**
@@ -147,10 +155,45 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
     }
   },
 
+  actualizarCampo: async (formulario, metadata) => {
+    const revisionPropia = ++revisionEstado;
+    try {
+      const repo = new BorradorRepository();
+      // El formulario pertenece al técnico dueño del borrador activo (clave compuesta servicio+usuario).
+      const persistido = await repo.guardarCampo(formulario, {
+        ...metadata,
+        usuarioId: metadata?.usuarioId ?? get().borrador?.usuarioId,
+      });
+      if (revisionEstado !== revisionPropia) {
+        return true;
+      }
+      set({ borrador: persistido, errorPersistencia: null });
+      return true;
+    } catch (error) {
+      set({ errorPersistencia: describirError(error) });
+      return false;
+    }
+  },
+
   finalizarServicioDrt: async (acta, usuarioId) => {
     revisionEstado += 1;
     const repo = new BorradorRepository();
     const resultado = await repo.finalizarYEncolarDrt(acta, usuarioId);
+
+    revisionEstado += 1;
+    set({
+      borrador: null,
+      colaEnvioPendiente: true,
+      errorPersistencia: null,
+    });
+
+    return resultado;
+  },
+
+  finalizarServicioCampo: async (formulario, usuarioId) => {
+    revisionEstado += 1;
+    const repo = new BorradorRepository();
+    const resultado = await repo.finalizarYEncolarCampo(formulario, usuarioId);
 
     revisionEstado += 1;
     set({
