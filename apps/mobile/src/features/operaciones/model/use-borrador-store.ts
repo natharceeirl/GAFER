@@ -51,6 +51,15 @@ interface BorradorStore {
   marcarComoPendienteDeSincronizar: () => void;
   restaurarBorrador: (borrador: BorradorInspeccion | null) => void;
   /**
+   * Recupera desde SQLite el borrador activo del usuario autenticado y lo carga en memoria.
+   * Si mientras se lee disco ocurre una mutación más reciente (p. ej. iniciar otra visita o
+   * cerrar sesión), el resultado obsoleto se descarta sin sobrescribir el estado actual.
+   */
+  restaurarActivoDeUsuario: (
+    usuarioId: string,
+    repo?: Pick<BorradorRepository, 'obtenerActivo'>,
+  ) => Promise<BorradorInspeccion | null>;
+  /**
    * Quita el borrador de la pantalla sin borrarlo del disco (al cerrar sesión).
    * El borrador vuelve a aparecer cuando su dueño inicia sesión otra vez.
    */
@@ -65,15 +74,19 @@ function describirError(error: unknown): string {
   return `${MENSAJE_ERROR_PERSISTENCIA} (${detalle})`;
 }
 
+let revisionEstado = 0;
+
 export const useBorradorStore = create<BorradorStore>((set, get) => ({
   borrador: null,
   colaEnvioPendiente: false,
   errorPersistencia: null,
 
   iniciarBorrador: async (servicioId, metadata, observacionesIniciales = '') => {
+    revisionEstado += 1;
     try {
       const repo = new BorradorRepository();
       const persistido = await repo.guardar(servicioId, metadata, observacionesIniciales);
+      revisionEstado += 1;
       set({ borrador: persistido, colaEnvioPendiente: false, errorPersistencia: null });
       return true;
     } catch (error) {
@@ -90,16 +103,18 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
 
     try {
       const repo = new BorradorRepository();
-      await repo.actualizarObservaciones(actual.servicioId, observaciones);
+      await repo.actualizarObservaciones(actual.servicioId, observaciones, actual.usuarioId);
     } catch (error) {
       set({ errorPersistencia: describirError(error) });
       return false;
     }
 
+    revisionEstado += 1;
     set((state) => ({
       // Si mientras se guardaba se cambió de borrador, no se mezclan los datos.
       borrador:
-        state.borrador?.servicioId === actual.servicioId
+        state.borrador?.servicioId === actual.servicioId &&
+        state.borrador?.usuarioId === actual.usuarioId
           ? { ...state.borrador, observaciones }
           : state.borrador,
       errorPersistencia: null,
@@ -109,10 +124,34 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
 
   marcarComoPendienteDeSincronizar: () => set({ colaEnvioPendiente: true }),
 
-  restaurarBorrador: (borrador) => set({ borrador, colaEnvioPendiente: false }),
+  restaurarBorrador: (borrador) => {
+    revisionEstado += 1;
+    set({ borrador, colaEnvioPendiente: false });
+  },
 
-  descargarDeMemoria: () =>
-    set({ borrador: null, colaEnvioPendiente: false, errorPersistencia: null }),
+  restaurarActivoDeUsuario: async (usuarioId, repo) => {
+    if (!usuarioId) {
+      revisionEstado += 1;
+      set({ borrador: null, colaEnvioPendiente: false, errorPersistencia: null });
+      return null;
+    }
+
+    const revisionPropia = ++revisionEstado;
+    const repositorio = repo ?? new BorradorRepository();
+    const borradorActivo = await repositorio.obtenerActivo(usuarioId);
+
+    if (revisionEstado !== revisionPropia) {
+      return get().borrador;
+    }
+
+    set({ borrador: borradorActivo, colaEnvioPendiente: false });
+    return borradorActivo;
+  },
+
+  descargarDeMemoria: () => {
+    revisionEstado += 1;
+    set({ borrador: null, colaEnvioPendiente: false, errorPersistencia: null });
+  },
 
   limpiar: async () => {
     const actual = get().borrador;
@@ -120,7 +159,7 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
     if (actual) {
       try {
         const repo = new BorradorRepository();
-        await repo.eliminar(actual.servicioId);
+        await repo.eliminar(actual.servicioId, actual.usuarioId);
       } catch (error) {
         // Se conserva en pantalla: lo que está en disco y lo visible deben coincidir.
         set({ errorPersistencia: describirError(error) });
@@ -128,6 +167,7 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
       }
     }
 
+    revisionEstado += 1;
     set({ borrador: null, colaEnvioPendiente: false, errorPersistencia: null });
   },
 
