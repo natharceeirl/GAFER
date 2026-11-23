@@ -23,6 +23,11 @@ import {
 } from '../model/agenda';
 import { useBorradorStore } from '../../operaciones/model/use-borrador-store';
 import { FormularioDrtScreen, DetalleServicioCerradoModal } from '../../operaciones';
+import {
+  etiquetaEstadoInspeccion,
+  etiquetaTipoServicio,
+  formatearHorarioServicio,
+} from '../../operaciones/model/formato-servicio';
 import { MobileApiClient } from '../../../shared/api/api-client';
 import { Button, AlertBanner } from '../../../shared/ui';
 import { TOKENS } from '../../../shared/theme/tokens';
@@ -57,8 +62,10 @@ export const AgendaScreen: React.FC = () => {
   // GAF-104: Estado de servicios cerrados en solo lectura
   const [serviciosCerrados, setServiciosCerrados] = useState<ResumenServicioTecnico[]>([]);
   const [cargandoCerrados, setCargandoCerrados] = useState(false);
+  const [errorCerrados, setErrorCerrados] = useState<string | null>(null);
   const [servicioDetalle, setServicioDetalle] = useState<ResumenServicioTecnico | null>(null);
   const [modalDetalleVisible, setModalDetalleVisible] = useState(false);
+  const [abrirModalConCorreccion, setAbrirModalConCorreccion] = useState(false);
 
   const tecnicoId = usuario?.id || 'tecnico-defecto-id';
 
@@ -66,60 +73,25 @@ export const AgendaScreen: React.FC = () => {
     cargarAgenda(tecnicoId);
   }, [cargarAgenda, tecnicoId]);
 
-  // GAF-104: Cargar servicios cerrados desde la API con fallback offline / contingencia
+  // GAF-104: Cargar servicios cerrados reales desde la API
   const cargarServiciosCerrados = useCallback(async () => {
     setCargandoCerrados(true);
+    setErrorCerrados(null);
     try {
       const client = new MobileApiClient();
       const res = await client.obtenerMisServicios(token || undefined);
-      if (res && res.length > 0) {
-        setServiciosCerrados(res);
-      } else {
-        throw new Error('Sin servicios devueltos');
-      }
-    } catch {
-      // Si la API no está alcanzable o en modo demo/offline, proveer servicios cerrados de contingencia
-      const hoy = new Date().toISOString().split('T')[0];
-      setServiciosCerrados([
-        {
-          id: 'c1111111-2222-4000-8000-000000000001',
-          servicioId: 's1111111-1111-4000-8000-000000000001',
-          codigoInspeccion: 'GAFER-2026-ALICORP-001',
-          estado: 'CERRADO',
-          versionSync: 2,
-          fechaEjecucion: hoy,
-          horaInicio: '08:30',
-          horaFin: '11:00',
-          tecnicosParticipantes: [
-            { id: tecnicoId, nombre: usuario ? `${usuario.nombres} ${usuario.apellidos}` : 'Técnico Operador' },
-          ],
-          puedeSolicitarCorreccion: true,
-          clienteRazonSocial: 'ALICORP S.A.A.',
-          sedeNombre: 'PLANTA_CALLAO (Av. Argentina 4793)',
-          servicioTipo: 'DESINSECTACION Y DESRATIZACION (DRT)',
-        },
-        {
-          id: 'c1111111-2222-4000-8000-000000000002',
-          servicioId: 's1111111-1111-4000-8000-000000000002',
-          codigoInspeccion: 'GAFER-2026-GLORIA-004',
-          estado: 'CERRADO',
-          versionSync: 1,
-          fechaEjecucion: hoy,
-          horaInicio: '14:00',
-          horaFin: '16:30',
-          tecnicosParticipantes: [
-            { id: tecnicoId, nombre: usuario ? `${usuario.nombres} ${usuario.apellidos}` : 'Técnico Operador' },
-          ],
-          puedeSolicitarCorreccion: true,
-          clienteRazonSocial: 'GRUPO GLORIA S.A.',
-          sedeNombre: 'PLANTA_HUACHIPA (Autopista Ramiro Prialé)',
-          servicioTipo: 'DESRATIZACION (DRT)',
-        },
-      ]);
+      setServiciosCerrados(res);
+    } catch (err: unknown) {
+      setServiciosCerrados([]);
+      const mensaje =
+        err instanceof Error && err.message
+          ? err.message
+          : 'No se pudieron cargar los servicios cerrados. Verifique su conexión.';
+      setErrorCerrados(mensaje);
     } finally {
       setCargandoCerrados(false);
     }
-  }, [token, tecnicoId, usuario]);
+  }, [token]);
 
   useEffect(() => {
     if (vistaActiva === 'CERRADOS') {
@@ -301,26 +273,35 @@ export const AgendaScreen: React.FC = () => {
 
   // GAF-104: Renderizado de tarjetas de servicios cerrados en solo lectura
   const renderItemServicioCerrado = ({ item }: { item: ResumenServicioTecnico }) => {
+    const etiquetaEstado = etiquetaEstadoInspeccion(item.estado);
     return (
-      <View style={styles.tarjetaCerrado}>
+      <View style={styles.tarjetaCerrado} testID={`tarjeta-cerrado-${item.id}`}>
         <View style={styles.cabeceraCerrado}>
           <Text style={styles.codigoCerrado}>{item.codigoInspeccion}</Text>
           <View style={styles.badgeCerradoSoloLectura}>
-            <Text style={styles.textoBadgeCerrado}>🔒 CERRADO</Text>
+            <Text style={styles.textoBadgeCerrado}>🔒 {etiquetaEstado}</Text>
           </View>
         </View>
 
-        <Text style={styles.clienteCerrado}>{item.clienteRazonSocial || 'Cliente GAFER'}</Text>
-        <Text style={styles.sedeCerrado}>Sede: {item.sedeNombre || 'Planta Principal'}</Text>
-        <Text style={styles.servicioCerrado}>Servicio: {item.servicioTipo || 'Desratización (DRT)'}</Text>
+        <Text style={styles.clienteCerrado}>
+          {item.clienteRazonSocial || 'Cliente no especificado'}
+        </Text>
+        <Text style={styles.sedeCerrado}>
+          Sede: {item.sedeNombre || 'No especificada'}
+        </Text>
+        <Text style={styles.servicioCerrado}>
+          Servicio: {etiquetaTipoServicio(item.servicioTipo)}
+        </Text>
         <Text style={styles.horarioCerrado}>
-          📅 {item.fechaEjecucion} · {item.horaInicio || '08:00'} - {item.horaFin || 'Fin'}
+          📅 {item.fechaEjecucion} · {formatearHorarioServicio(item.horaInicio, item.horaFin)}
         </Text>
 
         <View style={styles.accionesCerrado}>
           <TouchableOpacity
+            testID={`boton-ver-reporte-${item.id}`}
             style={styles.botonVerReporte}
             onPress={() => {
+              setAbrirModalConCorreccion(false);
               setServicioDetalle(item);
               setModalDetalleVisible(true);
             }}
@@ -328,15 +309,19 @@ export const AgendaScreen: React.FC = () => {
             <Text style={styles.textoBotonVerReporte}>👁️ Ver Reporte</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.botonPedirCorreccion}
-            onPress={() => {
-              setServicioDetalle(item);
-              setModalDetalleVisible(true);
-            }}
-          >
-            <Text style={styles.textoBotonPedirCorreccion}>📝 Pedir Corrección</Text>
-          </TouchableOpacity>
+          {item.puedeSolicitarCorreccion ? (
+            <TouchableOpacity
+              testID={`boton-pedir-correccion-${item.id}`}
+              style={styles.botonPedirCorreccion}
+              onPress={() => {
+                setAbrirModalConCorreccion(true);
+                setServicioDetalle(item);
+                setModalDetalleVisible(true);
+              }}
+            >
+              <Text style={styles.textoBotonPedirCorreccion}>📝 Pedir Corrección</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
     );
@@ -438,6 +423,23 @@ export const AgendaScreen: React.FC = () => {
         />
       ) : null}
 
+      {vistaActiva === 'CERRADOS' && errorCerrados ? (
+        <View style={styles.alertaMensaje}>
+          <AlertBanner
+            tipo="error"
+            mensaje={errorCerrados}
+            onCerrar={() => setErrorCerrados(null)}
+          />
+          <Button
+            testID="boton-reintentar-cerrados"
+            titulo="Reintentar carga"
+            onPress={cargarServiciosCerrados}
+            variante="secundario"
+            style={{ marginTop: 6 }}
+          />
+        </View>
+      ) : null}
+
       {/* Pestañas de control de visitas (Decisión C12 + Sedes Activas §8.2 + Cerrados GAF-104) */}
       <View style={styles.tabsContainer}>
         <TouchableOpacity
@@ -474,6 +476,7 @@ export const AgendaScreen: React.FC = () => {
         </TouchableOpacity>
 
         <TouchableOpacity
+          testID="tab-cerrados"
           style={[styles.tab, vistaActiva === 'CERRADOS' && styles.tabActivo]}
           onPress={() => setVistaActiva('CERRADOS')}
         >
@@ -565,7 +568,11 @@ export const AgendaScreen: React.FC = () => {
         visible={modalDetalleVisible}
         servicio={servicioDetalle}
         token={token || undefined}
-        onCerrar={() => setModalDetalleVisible(false)}
+        abrirConCorreccion={abrirModalConCorreccion}
+        onCerrar={() => {
+          setModalDetalleVisible(false);
+          setAbrirModalConCorreccion(false);
+        }}
         onCorreccionEnviada={() => {
           cargarServiciosCerrados();
         }}

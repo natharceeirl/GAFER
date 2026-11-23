@@ -26,6 +26,9 @@ export interface InspeccionProps {
   snapshotCatalogos?: Record<string, unknown>;
   versionSync?: number;
   estado?: EstadoInspeccion;
+  clienteRazonSocial?: string;
+  sedeNombre?: string;
+  servicioTipo?: string;
 }
 
 export class Inspeccion {
@@ -36,6 +39,9 @@ export class Inspeccion {
   public readonly horaInicio: string | null;
   public readonly horaFin: string | null;
   public readonly tecnicosParticipantes: Array<{ id: string; nombre: string }>;
+  public readonly clienteRazonSocial?: string;
+  public readonly sedeNombre?: string;
+  public readonly servicioTipo?: string;
   private snapshotCatalogos: Record<string, unknown>;
   private versionSync: number;
   private estado: EstadoInspeccion;
@@ -71,6 +77,9 @@ export class Inspeccion {
       this.horaInicio = props.horaInicio ?? null;
       this.horaFin = props.horaFin ?? null;
       this.tecnicosParticipantes = props.tecnicosParticipantes ?? [];
+      this.clienteRazonSocial = props.clienteRazonSocial;
+      this.sedeNombre = props.sedeNombre;
+      this.servicioTipo = props.servicioTipo;
       this.snapshotCatalogos = props.snapshotCatalogos ?? {};
       this.versionSync = props.versionSync ?? 1;
       this.estado = props.estado ?? 'BORRADOR';
