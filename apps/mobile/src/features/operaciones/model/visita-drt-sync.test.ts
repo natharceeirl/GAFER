@@ -87,6 +87,7 @@ describe('Flujo E2E: Registro de Estaciones de Roedores y Sincronización (§5.1
         clienteConformidadCargo: 'Jefe de Planta',
         fecha: '2026-11-03',
         responsableNoDisponible: false,
+        firmaDigitalBase64: 'data:image/svg+xml;base64,PHN2Zz48cGF0aCBkPSJNIDAgMCBMIDEwIDEwIi8+PC9zdmc+',
       },
       planillaEstaciones: estacionesConfiguradas,
       fotos: [],
@@ -98,8 +99,8 @@ describe('Flujo E2E: Registro de Estaciones de Roedores y Sincronización (§5.1
     expect(validacion.valido).toBe(true);
 
     // 2. Persistir borrador en SQLite de forma durable ("Durable before visible")
-    await repo.guardarDrt(actaPrimeraVisita);
-    const guardado = await repo.obtenerPorServicioId(servicioId);
+    await repo.guardarDrt(actaPrimeraVisita, { usuarioId: tecnicoId });
+    const guardado = await repo.obtenerPorServicioId(servicioId, tecnicoId);
     expect(guardado?.datosDrt?.primeraVisita).toBe(true);
     expect(guardado?.datosDrt?.planillaEstaciones[0].esInstalacion).toBe(true);
     expect(guardado?.datosDrt?.planillaEstaciones[0].huboConsumo).toBe(false);
@@ -112,18 +113,27 @@ describe('Flujo E2E: Registro de Estaciones de Roedores y Sincronización (§5.1
     expect(resultado.estacionesOperacionesIds).toHaveLength(2);
 
     // 4. Verificar que se removió el borrador activo y las operaciones están en sync_outbox
-    expect(await repo.obtenerPorServicioId(servicioId)).toBeNull();
+    expect(await repo.obtenerPorServicioId(servicioId, tecnicoId)).toBeNull();
 
     const outbox = new OutboxQueue();
     await outbox.inicializar();
     const pendientes = outbox.obtenerPendientes();
     expect(pendientes).toHaveLength(3); // 2 estaciones + 1 servicio DRT
 
+    for (const p of pendientes) {
+      expect(() => OperacionSyncSchema.parse(p.operacion)).not.toThrow();
+      if (p.operacion.tipo === 'REGISTRO_ESTACION') {
+        expect(() => PayloadEstacionSyncSchema.parse(p.operacion.payload)).not.toThrow();
+      }
+    }
+
     const opEstacion1 = pendientes.find((p) => (p.operacion.payload as any).numeroEstacion === 1);
     expect(opEstacion1).toBeDefined();
     expect(opEstacion1?.operacion.tipo).toBe('REGISTRO_ESTACION');
     expect((opEstacion1?.operacion.payload as any).esInstalacion).toBe(true);
     expect((opEstacion1?.operacion.payload as any).huboConsumo).toBe(false);
+    expect((opEstacion1?.operacion.payload as any).colorIcono).toBe('VERDE');
+    expect((opEstacion1?.operacion.payload as any).colorAura).toBe('SIN_COLOR');
   });
 
   it('registra una visita regular completa con porcentajes de consumo (0, 25, 50, 75, 100%), estado físico, reposición y sincroniza vía outbox (Listo cuando)', async () => {
@@ -248,6 +258,7 @@ describe('Flujo E2E: Registro de Estaciones de Roedores y Sincronización (§5.1
         clienteConformidadCargo: 'Supervisora de Calidad',
         fecha: '2026-11-03',
         responsableNoDisponible: false,
+        firmaDigitalBase64: 'data:image/svg+xml;base64,PHN2Zz48cGF0aCBkPSJNIDAgMCBMIDEwIDEwIi8+PC9zdmc+',
       },
       planillaEstaciones: estaciones,
       fotos: [],
@@ -256,8 +267,8 @@ describe('Flujo E2E: Registro de Estaciones de Roedores y Sincronización (§5.1
     expect(() => ActaServicioDrtSchema.parse(actaRegular)).not.toThrow();
 
     // 1. Guardar de forma durable en SQLite
-    await repo.guardarDrt(actaRegular);
-    const borradorLocal = await repo.obtenerPorServicioId(servicioId);
+    await repo.guardarDrt(actaRegular, { usuarioId: tecnicoId });
+    const borradorLocal = await repo.obtenerPorServicioId(servicioId, tecnicoId);
     expect(borradorLocal).not.toBeNull();
     expect(borradorLocal?.datosDrt?.planillaEstaciones).toHaveLength(5);
 
@@ -267,6 +278,7 @@ describe('Flujo E2E: Registro de Estaciones de Roedores y Sincronización (§5.1
     });
     expect(finalizado.operationId).toBeDefined();
     expect(finalizado.estacionesOperacionesIds).toHaveLength(5);
+    expect(await repo.obtenerPorServicioId(servicioId, tecnicoId)).toBeNull();
 
     // 3. Verificar estado en OutboxQueue
     const outbox = new OutboxQueue();
@@ -280,6 +292,13 @@ describe('Flujo E2E: Registro de Estaciones de Roedores y Sincronización (§5.1
         expect(() => PayloadEstacionSyncSchema.parse(p.operacion.payload)).not.toThrow();
       }
     }
+
+    // Estación 5 en malas condiciones físicas en visita regular: colorAura NO se deriva de estadoFisico
+    const opEstacion5 = pendientesAntes.find(
+      (p) => p.operacion.tipo === 'REGISTRO_ESTACION' && (p.operacion.payload as any).numeroEstacion === 5,
+    );
+    expect((opEstacion5?.operacion.payload as any).colorIcono).toBe('ROJO');
+    expect((opEstacion5?.operacion.payload as any).colorAura).toBeUndefined();
 
     // 4. SIMULACIÓN DE SINCRONIZACIÓN CON EL SERVIDOR ("se registra una visita completa y se sincroniza")
     const mockFetch: typeof fetch = async (url, options) => {

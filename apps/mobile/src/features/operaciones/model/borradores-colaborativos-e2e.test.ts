@@ -22,6 +22,8 @@ import {
 } from '../../../shared/db/sqlite';
 import { OutboxQueue } from '../../../shared/db/outbox';
 import { BorradorRepository } from './borrador-repository';
+import { useBorradorStore } from './use-borrador-store';
+import { crearFormularioCampo } from './formulario-campo';
 import {
   fusionarActasColaborativas,
   fusionarEstacionesLww,
@@ -106,10 +108,12 @@ describe('E2E: Borradores y Trabajo Colaborativo Multi-Técnico (§8.2, GAF-37)'
       expect(borradorDb?.actualizadoEn).toBeDefined();
       expect(borradorDb?.guardadoPor?.nombre).toBe('Mario Silva');
 
-      // Formato legible de fecha y hora
+      // Formato legible de fecha y hora en zona local (F6)
       const detalleTexto = formatearDetalleBorrador(borradorDb?.actualizadoEn, borradorDb?.guardadoPor?.nombre);
+      const fechaEsperadaLocal = new Date(borradorDb!.actualizadoEn!);
+      const fechaLocalStr = `${fechaEsperadaLocal.getFullYear()}-${String(fechaEsperadaLocal.getMonth() + 1).padStart(2, '0')}-${String(fechaEsperadaLocal.getDate()).padStart(2, '0')}`;
       expect(detalleTexto).toContain('Mario Silva');
-      expect(detalleTexto).toContain(new Date().toISOString().slice(0, 10));
+      expect(detalleTexto).toContain(fechaLocalStr);
     });
   });
 
@@ -233,10 +237,10 @@ describe('E2E: Borradores y Trabajo Colaborativo Multi-Técnico (§8.2, GAF-37)'
       };
 
       // 2. Persistir como inspección cerrada
-      await repo1.guardarDrt(actaCerrada);
+      await repo1.guardarDrt(actaCerrada, { usuarioId: 'tec-1', tecnicoNombre: 'Mario Silva' });
 
       // 3. Verificar estado bloqueado
-      const borrador = await repo1.obtenerPorServicioId(servicioId);
+      const borrador = await repo1.obtenerPorServicioId(servicioId, 'tec-1');
       expect(borrador).not.toBeNull();
       expect(borrador?.bloqueada).toBe(true);
       expect(borrador?.syncStatus).toBe('LOCKED');
@@ -246,17 +250,46 @@ describe('E2E: Borradores y Trabajo Colaborativo Multi-Técnico (§8.2, GAF-37)'
       expect(estadoBloqueo.bloqueada).toBe(true);
       expect(estadoBloqueo.cerradaPor).toBe('Mario Silva');
 
-      // 4. Un guardado tardío de otro técnico (acta sin el cierre) no reabre la inspección.
+      // 4. Un guardado tardío sobre el borrador bloqueado NO reabre ni corrompe datosDrt, observaciones ni cabecera (F1)
       await repo1.guardarDrt(
-        { ...actaCerrada, cerradaEnRevision: false, cerradoPor: undefined },
-        { usuarioId: 'tec-2', tecnicoNombre: 'Ana Rivas' },
+        {
+          ...actaCerrada,
+          clienteRazonSocial: 'CLIENTE CORRUPTO',
+          resultadosRecomendaciones: 'Sobrescrito tardíamente',
+          cerradaEnRevision: false,
+          cerradoPor: undefined,
+          planillaEstaciones: [],
+          firmas: {
+            ...actaCerrada.firmas,
+            firmaDigitalBase64: undefined,
+            responsableNoDisponible: true,
+          },
+        },
+        { usuarioId: 'tec-1', tecnicoNombre: 'Ana Rivas' },
       );
-      const trasGuardadoTardio = await repo1.obtenerPorServicioId(servicioId);
+
+      const trasGuardadoTardio = await repo1.obtenerPorServicioId(servicioId, 'tec-1');
       expect(trasGuardadoTardio?.syncStatus).toBe('LOCKED');
       expect(trasGuardadoTardio?.bloqueada).toBe(true);
+      expect(trasGuardadoTardio?.clienteRazonSocial).toBe('NESTLÉ PERÚ S.A.');
+      expect(trasGuardadoTardio?.observaciones).toBe('Servicio concluido a conformidad.');
+      expect(trasGuardadoTardio?.datosDrt?.cerradaEnRevision).toBe(true);
+      expect(trasGuardadoTardio?.datosDrt?.cerradoPor).toBe('Mario Silva');
+      expect(trasGuardadoTardio?.datosDrt?.planillaEstaciones).toHaveLength(2);
+      expect(trasGuardadoTardio?.datosDrt?.firmas.firmaDigitalBase64).toBe('base64-firma-valida');
+
+      // Tampoco debe permitir mutar cabecera con guardar() ni observaciones con actualizarObservaciones()
+      const trasReabrir = await repo1.guardar(servicioId, {
+        usuarioId: 'tec-1',
+        clienteRazonSocial: 'OTRO CLIENTE',
+      });
+      expect(trasReabrir.clienteRazonSocial).toBe('NESTLÉ PERÚ S.A.');
+      await expect(
+        repo1.actualizarObservaciones(servicioId, 'Cambio prohibido', 'tec-1'),
+      ).rejects.toThrow(/cerrada|bloqueada/i);
     });
 
-    it('Outbox detecta rechazo 409 de inspección cerrada en el servidor y bloquea el borrador local', async () => {
+    it('Outbox detecta rechazo 409 de inspección cerrada, bloquea el borrador y no reenvía en bucle (F2)', async () => {
       const outbox = new OutboxQueue(dbDispositivo1);
 
       // Crear borrador local
@@ -294,6 +327,47 @@ describe('E2E: Borradores y Trabajo Colaborativo Multi-Técnico (§8.2, GAF-37)'
       const borradorBloqueado = await repo1.obtenerPorServicioId(servicioId);
       expect(borradorBloqueado?.syncStatus).toBe('LOCKED');
       expect(borradorBloqueado?.bloqueada).toBe(true);
+
+      // Las operaciones rechazadas no siguen pendientes ni se reenvían en el siguiente intento (F2)
+      expect(outbox.obtenerPendientes()).toHaveLength(0);
+      expect(outbox.obtenerRechazadas()).toHaveLength(1);
+      await outbox.enviarLote('http://localhost:3000', servicioId, mockFetch409 as any);
+      expect(mockFetch409).toHaveBeenCalledTimes(1);
+    });
+
+    it('errores 500/503 con texto "cerrada" NO rechazan el lote ni bloquean el borrador local (F2)', async () => {
+      const outbox = new OutboxQueue(dbDispositivo1);
+      await repo1.guardar(servicioId, {
+        clienteRazonSocial: 'GLORIA S.A.',
+        sedeNombre: 'Huachipa',
+      });
+      await outbox.encolar({
+        operationId: '22222222-2222-3333-4444-555555555555',
+        tipo: 'REGISTRO_ESTACION',
+        agregadoId: servicioId,
+        actorId: 'usr-tec-02',
+        clienteTimestamp: new Date().toISOString(),
+        payload: { numeroEstacion: 5, huboConsumo: false },
+      });
+
+      const mockFetch503 = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+        json: async () => ({
+          statusCode: 503,
+          message: 'Conexión cerrada temporalmente por mantenimiento del proxy',
+        }),
+      });
+
+      await outbox.inicializar();
+      await outbox.enviarLote('http://localhost:3000', servicioId, mockFetch503 as any);
+
+      // Debe seguir pendiente para reintento y el borrador NO debe bloquearse
+      expect(outbox.obtenerPendientes()).toHaveLength(1);
+      const borrador = await repo1.obtenerPorServicioId(servicioId);
+      expect(borrador?.syncStatus).toBe('PENDING_SYNC');
+      expect(borrador?.bloqueada).toBe(false);
     });
   });
 
@@ -416,6 +490,94 @@ describe('E2E: Borradores y Trabajo Colaborativo Multi-Técnico (§8.2, GAF-37)'
       const borradorConsolidado = await repo1.guardarDrt(actaFinal);
       expect(borradorConsolidado.bloqueada).toBe(true);
       expect(borradorConsolidado.syncStatus).toBe('LOCKED');
+    });
+
+    it('BorradorRepository.fusionarBorradorRemoto y marcarBloqueada operan de forma atómica con clave compuesta y preservan datosCampo (F8)', async () => {
+      const usuarioId = '33333333-3333-4000-8000-000000000011';
+      const campo = crearFormularioCampo({
+        cliente: { razonSocial: 'SAN FERNANDO S.A.' },
+        sede: { nombre: 'Granja 04, Huaral' },
+        servicio: { id: servicioId, tipo: 'DESRATIZACION_DRT' },
+        tecnicoNombre: 'Juan Quispe',
+        tecnicoId: usuarioId,
+      });
+      campo.observacionesLibre = 'Notas de campo preservadas tras fusión LWW';
+      await repo1.guardarCampo(campo, { usuarioId });
+
+      const actaLocal: ActaServicioDrt = {
+        servicioId,
+        clienteRazonSocial: 'SAN FERNANDO S.A.',
+        sedeDireccion: 'Granja 04, Huaral',
+        fecha: '2026-11-03',
+        horaInicio: '07:30',
+        horaTermino: '12:30',
+        actividad: 'MONITOREO',
+        tipoCebo: 'BLOQUE_10G',
+        cebosInstalados: 40,
+        cebosConsumidos: 1,
+        cebosRepuestos: 1,
+        tipoTrampa: 'MECANICA',
+        trampasInstaladas: 10,
+        trampasActivadas: 1,
+        roedoresDetectados: ['R_NORVEGICUS'],
+        resultadosRecomendaciones: 'Sector norte revisado.',
+        observacionesCliente: 'Turno mañana.',
+        firmas: {
+          personalResponsableNombre: 'Juan Quispe',
+          personalResponsableCargo: 'Técnico Operador',
+          clienteConformidadNombre: '',
+          clienteConformidadCargo: '',
+          fecha: '2026-11-03',
+          responsableNoDisponible: false,
+        },
+        planillaEstaciones: [
+          { numero: 1, estado: 'SIN_ACTIVIDAD', actualizadoEn: '2026-11-03T08:00:00Z', actualizadoPor: 'Juan' },
+          { numero: 2, estado: 'SIN_ACTIVIDAD', actualizadoEn: '2026-11-03T08:10:00Z', actualizadoPor: 'Juan' },
+        ],
+        fotos: [],
+      };
+
+      await repo1.guardarDrt(actaLocal, { usuarioId, tecnicoNombre: 'Juan Quispe' });
+
+      const actaRemota: ActaServicioDrt = {
+        ...actaLocal,
+        roedoresDetectados: ['R_RATTUS'],
+        cebosConsumidos: 3,
+        resultadosRecomendaciones: 'Sector sur revisado.',
+        planillaEstaciones: [
+          { numero: 2, estado: 'CON_CONSUMO', consumoGramos: 15, repuestoGramos: 15, actualizadoEn: '2026-11-03T08:30:00Z', actualizadoPor: 'Pedro' },
+          { numero: 3, estado: 'SIN_ACTIVIDAD', actualizadoEn: '2026-11-03T08:35:00Z', actualizadoPor: 'Pedro' },
+        ],
+        actualizadoEn: '2026-11-03T08:35:00Z',
+        actualizadoPor: 'Pedro Gomez',
+      };
+
+      const fusionado = await repo1.fusionarBorradorRemoto(servicioId, actaRemota, { usuarioId });
+      expect(fusionado.datosDrt?.planillaEstaciones.map((e) => e.numero)).toEqual([1, 2, 3]);
+      expect(fusionado.datosDrt?.planillaEstaciones.find((e) => e.numero === 2)?.consumoGramos).toBe(15);
+      expect(fusionado.datosDrt?.roedoresDetectados).toEqual(['R_NORVEGICUS', 'R_RATTUS']);
+      expect(fusionado.datosCampo?.observacionesLibre).toBe('Notas de campo preservadas tras fusión LWW');
+      expect(fusionado.bloqueada).toBe(false);
+
+      // Bloqueo durable desde repositorio + store
+      useBorradorStore.getState().restaurarBorrador(fusionado);
+      const bloqueadoOk = await useBorradorStore
+        .getState()
+        .marcarBloqueada(servicioId, { usuarioId, cerradoPor: 'Supervisor Central' });
+      expect(bloqueadoOk).toBe(true);
+      expect(useBorradorStore.getState().borrador?.bloqueada).toBe(true);
+      expect(useBorradorStore.getState().borrador?.datosDrt?.cerradaEnRevision).toBe(true);
+      expect(useBorradorStore.getState().borrador?.datosDrt?.cerradoPor).toBe('Supervisor Central');
+
+      // Una fusión remota posterior sobre un borrador ya bloqueado no debe sobrescribirlo
+      const trasBloqueo = await repo1.fusionarBorradorRemoto(
+        servicioId,
+        { ...actaRemota, planillaEstaciones: [], cerradaEnRevision: false },
+        { usuarioId },
+      );
+      expect(trasBloqueo.bloqueada).toBe(true);
+      expect(trasBloqueo.datosDrt?.planillaEstaciones).toHaveLength(3);
+      expect(trasBloqueo.datosDrt?.cerradoPor).toBe('Supervisor Central');
     });
   });
 });

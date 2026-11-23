@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { OperacionSyncSchema } from '@gafer/contracts';
 import {
   inicializarBaseDeDatos,
   cerrarBaseDeDatos,
@@ -14,6 +15,10 @@ import {
   INSUMOS_CATALOGO_SEMILLA,
   EQUIPOS_CATALOGO_SEMILLA,
 } from './formulario-campo';
+import { generarSvgFirmaBase64 } from './firma-svg';
+
+const SERVICIO_UUID = 'd1111111-1111-4000-8000-000000000001';
+const TECNICO_UUID = '33333333-3333-4000-8000-000000000001';
 
 describe('Flujo de Inspección Móvil de Punta a Punta (DoD GAF-34)', () => {
   let repo: BorradorRepository;
@@ -32,10 +37,10 @@ describe('Flujo de Inspección Móvil de Punta a Punta (DoD GAF-34)', () => {
 
   it('completa un servicio de ejemplo de punta a punta sin conexion (Offline-First)', async () => {
     // 1. El técnico selecciona una visita o sede de la agenda y se precarga el formulario (§8.2)
+    // Sin tipoServicio explícito: "DESINSECTACION Y DESRATIZACION (DRT)" debe clasificarse como DRT (F4)
     const servicioEjemplo = {
-      id: 'srv-e2e-001',
+      id: SERVICIO_UUID,
       tipo: 'DESINSECTACION Y DESRATIZACION (DRT)',
-      tipoServicio: 'DRT' as const,
       requiereCertificado: true,
       insumosAutorizados: [
         {
@@ -56,22 +61,23 @@ describe('Flujo de Inspección Móvil de Punta a Punta (DoD GAF-34)', () => {
 
     const formulario = crearFormularioCampo({
       cliente: {
-        id: 'cli-e2e-01',
+        id: 'c1a2c3d4-0001-4000-8000-000000000001',
         codigo: 'ALICORP',
         razonSocial: 'ALICORP S.A.A.',
       },
       sede: {
-        id: 'sede-e2e-01',
+        id: 'b1a2c3d4-0001-4000-8000-000000000001',
         nombre: 'PLANTA_CALLAO',
         direccion: 'Av. Argentina 4793',
       },
       servicio: servicioEjemplo,
       tecnicoNombre: 'Marco Ipusari',
-      tecnicoId: 'tec-marco-001',
+      tecnicoId: TECNICO_UUID,
     });
 
-    // Verificación de precarga (§8.2)
+    // Verificación de precarga (§8.2) y clasificación DRT (F4)
     expect(formulario.estado).toBe('BORRADOR');
+    expect(formulario.tipoServicio).toBe('DRT');
     expect(formulario.clienteRazon).toBe('ALICORP S.A.A.');
     expect(formulario.proyectoNombre).toBe('PLANTA_CALLAO');
     expect(formulario.insumos).toHaveLength(1);
@@ -80,10 +86,21 @@ describe('Flujo de Inspección Móvil de Punta a Punta (DoD GAF-34)', () => {
     expect(formulario.equipos).toHaveLength(2);
     expect(formulario.personal).toEqual(['Marco Ipusari']);
 
-    // 2. Persistencia inicial en SQLite ("Durable before visible")
-    await repo.guardarCampo(formulario);
-    const borradorGuardado = await repo.obtenerPorServicioId(formulario.servicioId);
+    // 2. Persistencia inicial vía useBorradorStore -> SQLite ("Durable before visible")
+    const iniciado = await useBorradorStore.getState().iniciarBorrador(SERVICIO_UUID, {
+      usuarioId: TECNICO_UUID,
+      clienteRazonSocial: 'ALICORP S.A.A.',
+      sedeNombre: 'PLANTA_CALLAO',
+      servicioTipo: servicioEjemplo.tipo,
+    });
+    expect(iniciado).toBe(true);
+
+    const guardado = await useBorradorStore.getState().actualizarCampo(formulario);
+    expect(guardado).toBe(true);
+
+    const borradorGuardado = await repo.obtenerPorServicioId(formulario.servicioId, TECNICO_UUID);
     expect(borradorGuardado).not.toBeNull();
+    expect(borradorGuardado?.usuarioId).toBe(TECNICO_UUID);
     expect(borradorGuardado?.datosCampo?.clienteRazon).toBe('ALICORP S.A.A.');
 
     // 3. El técnico llena los bloques en campo (§4)
@@ -122,11 +139,17 @@ describe('Flujo de Inspección Móvil de Punta a Punta (DoD GAF-34)', () => {
     formulario.observacionesLibre = 'Monitoreo preventivo ejecutado según cronograma mensual.';
     formulario.recomendaciones = ['Mantener despejada la franja de 30 cm de los zócalos'];
 
-    // Bloque 7: Conformidad del cliente con firma
+    // Bloque 7: Conformidad del cliente con firma real SVG en Base64
     formulario.responsableNoDisponible = false;
     formulario.firmanteNombre = 'Carlos Paredes';
     formulario.firmanteCargo = 'Jefe de Seguridad y Calidad';
-    formulario.firma = 'data:image/svg+xml;base64,mockTrazoFirmaE2E...';
+    formulario.firma = generarSvgFirmaBase64([
+      [
+        { x: 15, y: 80 },
+        { x: 90, y: 40 },
+        { x: 180, y: 95 },
+      ],
+    ]);
 
     // Bloque 8: Certificado de saneamiento
     formulario.certificadoNumero = 'CERT-ALICORP-CALLAO-042-2026';
@@ -137,33 +160,38 @@ describe('Flujo de Inspección Móvil de Punta a Punta (DoD GAF-34)', () => {
     const erroresValidacion = validarCierre(formulario);
     expect(erroresValidacion).toEqual({});
 
-    // 5. El técnico cierra la inspección y encola para sincronización
-    const { operationId } = await repo.finalizarYEncolarCampo(formulario, 'tec-marco-001');
+    // 5. El técnico cierra la inspección a través del store y encola para sincronización
+    const { operationId } = await useBorradorStore
+      .getState()
+      .finalizarServicioCampo(formulario, TECNICO_UUID);
     expect(operationId).toBeDefined();
+    expect(useBorradorStore.getState().borrador).toBeNull();
+    expect(useBorradorStore.getState().colaEnvioPendiente).toBe(true);
 
     // 6. El borrador activo local se elimina de la tabla de trabajo
-    const borradorPostCierre = await repo.obtenerPorServicioId(formulario.servicioId);
+    const borradorPostCierre = await repo.obtenerPorServicioId(formulario.servicioId, TECNICO_UUID);
     expect(borradorPostCierre).toBeNull();
 
-    // 7. La operación se encuentra en la Outbox SQLite con prioridad HIGH
+    // 7. La operación se encuentra en la Outbox SQLite con prioridad HIGH y cumple OperacionSyncSchema
     const outbox = new OutboxQueue();
     await outbox.inicializar();
     const operacionesPendientes = outbox.obtenerPendientes();
     expect(operacionesPendientes).toHaveLength(1);
 
     const operacion = operacionesPendientes[0].operacion;
+    expect(OperacionSyncSchema.safeParse(operacion).success).toBe(true);
     expect(operacion.operationId).toBe(operationId);
     expect(operacion.tipo).toBe('REGISTRO_SERVICIO_CAMPO');
-    expect(operacion.agregadoId).toBe(formulario.servicioId);
-    expect(operacion.actorId).toBe('tec-marco-001');
+    expect(operacion.agregadoId).toBe(SERVICIO_UUID);
+    expect(operacion.actorId).toBe(TECNICO_UUID);
 
     // 8. El payload encolado contiene el formulario completo en estado ENVIADO_A_REVISION
-    const payload = operacion.payload as any;
+    const payload = operacion.payload as Record<string, any>;
     expect(payload.estado).toBe('ENVIADO_A_REVISION');
     expect(payload.clienteRazon).toBe('ALICORP S.A.A.');
     expect(payload.insumos[0].lote).toBe('L-ALICORP-2026-X');
     expect(payload.insumos[0].cantidad).toBe('12');
-    expect(payload.firma).toBeDefined();
+    expect(payload.firma).toMatch(/^data:image\/svg\+xml;base64,/);
     expect(payload.certificadoNumero).toBe('CERT-ALICORP-CALLAO-042-2026');
 
     // 9. Mapeo al contrato estándar CerrarInspeccion (@gafer/contracts)

@@ -1,15 +1,25 @@
 import {
+  ColorIcono,
+  EstadoEstacionPlanilla,
+  EstadoFisicoEstacion,
   ItemEstacionPlanilla,
   ItemEstacionPlanillaSchema,
-  PorcentajeConsumo,
-  EstadoFisicoEstacion,
   OperacionSync,
+  OperacionSyncSchema,
+  PayloadEstacionSync,
+  PayloadEstacionSyncSchema,
+  PorcentajeConsumo,
 } from '@gafer/contracts';
 
 /**
  * Porcentajes de consumo de cebo válidos en pasos de 25 (§5.1, GAF-35).
  */
 export const PORCENTAJES_CONSUMO: readonly PorcentajeConsumo[] = [0, 25, 50, 75, 100];
+
+/**
+ * Porcentajes válidos cuando se confirma que hubo consumo de cebo (> 0%).
+ */
+export const PORCENTAJES_CON_CONSUMO: readonly PorcentajeConsumo[] = [25, 50, 75, 100];
 
 /**
  * Estados físicos admitidos para la estación de control (§5.1).
@@ -42,6 +52,29 @@ function generarUuidOffline(): string {
 }
 
 /**
+ * Metadatos de autoría y marca temporal para resolución LWW (§8.2, GAF-37).
+ */
+export interface MetadataActualizacionEstacion {
+  actualizadoEn?: string;
+  actualizadoPor?: string;
+}
+
+function sellarActualizacionEstacion(
+  estacion: ItemEstacionPlanilla,
+  meta?: MetadataActualizacionEstacion,
+): ItemEstacionPlanilla {
+  return {
+    ...estacion,
+    actualizadoEn: meta?.actualizadoEn ?? new Date().toISOString(),
+    ...(meta?.actualizadoPor !== undefined
+      ? { actualizadoPor: meta.actualizadoPor }
+      : estacion.actualizadoPor !== undefined
+        ? { actualizadoPor: estacion.actualizadoPor }
+        : {}),
+  };
+}
+
+/**
  * Crea una estación inicial para la planilla DRT.
  */
 export function crearEstacionDrt(
@@ -63,6 +96,8 @@ export function crearEstacionDrt(
     estadoFisico: config?.estadoFisico ?? 'BUENAS_CONDICIONES',
     esInstalacion: config?.esInstalacion ?? false,
     observaciones: config?.observaciones ?? '',
+    ...(config?.actualizadoEn !== undefined ? { actualizadoEn: config.actualizadoEn } : {}),
+    ...(config?.actualizadoPor !== undefined ? { actualizadoPor: config.actualizadoPor } : {}),
   };
 }
 
@@ -70,80 +105,171 @@ export function crearEstacionDrt(
  * Configura la planilla según si la visita es la primera visita (Instalación de estaciones).
  * En la primera visita (§5.1):
  * - Se instalan las estaciones con cebo inicial, lote, vencimiento y estado físico.
+ * - Preserva los valores personalizados ya configurados en cada estación (ceboDefecto solo completa faltantes).
  * - NO se evalúa consumo (huboConsumo = false, porcentajeConsumo = 0, consumoGramos = 0).
  */
 export function aplicarPrimeraVisita(
   estaciones: ItemEstacionPlanilla[],
   esPrimera: boolean,
   ceboDefecto?: Partial<Pick<ItemEstacionPlanilla, 'tipoCebo' | 'cantidadGramos' | 'lote' | 'vencimiento'>>,
+  meta?: MetadataActualizacionEstacion,
 ): ItemEstacionPlanilla[] {
+  const ahora = meta?.actualizadoEn ?? new Date().toISOString();
+  const metaResuelta: MetadataActualizacionEstacion = {
+    actualizadoEn: ahora,
+    actualizadoPor: meta?.actualizadoPor,
+  };
   return estaciones.map((est) => {
     if (esPrimera) {
-      return {
-        ...est,
-        esInstalacion: true,
-        huboConsumo: false,
-        porcentajeConsumo: 0,
-        consumoGramos: 0,
-        repuestoGramos: 0,
-        cantidadReposicion: 0,
-        estado: 'SIN_ACTIVIDAD',
-        estadoFisico: est.estadoFisico || 'BUENAS_CONDICIONES',
-        tipoCebo: ceboDefecto?.tipoCebo ?? est.tipoCebo ?? 'BLOQUE_10G',
-        cantidadGramos: ceboDefecto?.cantidadGramos ?? est.cantidadGramos ?? 20,
-        lote: ceboDefecto?.lote ?? est.lote ?? 'LOTE-001',
-        vencimiento: ceboDefecto?.vencimiento ?? est.vencimiento ?? '2026-12-31',
-      };
+      return sellarActualizacionEstacion(
+        {
+          ...est,
+          esInstalacion: true,
+          huboConsumo: false,
+          porcentajeConsumo: 0,
+          consumoGramos: 0,
+          repuestoGramos: 0,
+          cantidadReposicion: 0,
+          estado: 'SIN_ACTIVIDAD',
+          estadoFisico: est.estadoFisico || 'BUENAS_CONDICIONES',
+          tipoCebo: est.tipoCebo?.trim() ? est.tipoCebo : (ceboDefecto?.tipoCebo ?? 'BLOQUE_10G'),
+          cantidadGramos:
+            est.cantidadGramos !== undefined && est.cantidadGramos > 0
+              ? est.cantidadGramos
+              : (ceboDefecto?.cantidadGramos ?? 20),
+          lote: est.lote?.trim() ? est.lote : (ceboDefecto?.lote ?? 'LOTE-001'),
+          vencimiento: est.vencimiento?.trim() ? est.vencimiento : (ceboDefecto?.vencimiento ?? '2026-12-31'),
+        },
+        metaResuelta,
+      );
     } else {
-      return {
-        ...est,
-        esInstalacion: false,
-      };
+      return sellarActualizacionEstacion(
+        {
+          ...est,
+          esInstalacion: false,
+        },
+        metaResuelta,
+      );
     }
   });
 }
 
 /**
  * Actualiza el registro de consumo de una estación (§5.1).
- * Si hubo consumo:
- * - Registra el porcentaje (0, 25, 50, 75 o 100).
+ * Si hubo consumo (> 0%):
+ * - Registra el porcentaje (25, 50, 75 o 100).
  * - Calcula automáticamente los gramos consumidos en base a la dosis instalada.
  * - Asigna la cantidad de reposición por defecto igual a los gramos consumidos para rellenar al 100%.
  * - Marca el estado de la estación como CON_CONSUMO.
- * Si no hubo consumo:
- * - Resetea porcentaje y consumo a 0.
- * - Marca el estado como SIN_ACTIVIDAD.
+ * Si no hubo consumo (o porcentaje === 0):
+ * - Resetea porcentaje, consumo y reposición a 0.
+ * - Si el estado era CON_CONSUMO, pasa a SIN_ACTIVIDAD.
  */
 export function actualizarConsumoEstacion(
   estacion: ItemEstacionPlanilla,
   huboConsumo: boolean,
   porcentaje: PorcentajeConsumo = 25,
+  meta?: MetadataActualizacionEstacion,
 ): ItemEstacionPlanilla {
-  if (!huboConsumo) {
-    return {
-      ...estacion,
-      huboConsumo: false,
-      porcentajeConsumo: 0,
-      consumoGramos: 0,
-      repuestoGramos: 0,
-      cantidadReposicion: 0,
-      estado: estacion.estado === 'CON_CONSUMO' ? 'SIN_ACTIVIDAD' : estacion.estado,
-    };
+  if (!huboConsumo || porcentaje === 0) {
+    return sellarActualizacionEstacion(
+      {
+        ...estacion,
+        huboConsumo: false,
+        porcentajeConsumo: 0,
+        consumoGramos: 0,
+        repuestoGramos: 0,
+        cantidadReposicion: 0,
+        estado: estacion.estado === 'CON_CONSUMO' ? 'SIN_ACTIVIDAD' : estacion.estado,
+      },
+      meta,
+    );
   }
 
   const p = porcentaje;
   const gramosBase = estacion.cantidadGramos ?? 20;
   const cGramos = calcularConsumoGramos(gramosBase, p);
 
-  return {
-    ...estacion,
-    huboConsumo: true,
-    porcentajeConsumo: p,
-    consumoGramos: cGramos,
-    repuestoGramos: cGramos,
-    cantidadReposicion: cGramos,
-    estado: 'CON_CONSUMO',
-  };
+  return sellarActualizacionEstacion(
+    {
+      ...estacion,
+      huboConsumo: true,
+      porcentajeConsumo: p,
+      consumoGramos: cGramos,
+      repuestoGramos: cGramos,
+      cantidadReposicion: cGramos,
+      estado: 'CON_CONSUMO',
+    },
+    meta,
+  );
+}
+
+/**
+ * Cambia el estado del punto de control manteniendo consistencia con huboConsumo y métricas de consumo.
+ */
+export function actualizarEstadoEstacion(
+  estacion: ItemEstacionPlanilla,
+  nuevoEstado: EstadoEstacionPlanilla,
+  meta?: MetadataActualizacionEstacion,
+): ItemEstacionPlanilla {
+  if (nuevoEstado === 'CON_CONSUMO') {
+    if (estacion.huboConsumo && estacion.porcentajeConsumo && estacion.porcentajeConsumo > 0) {
+      return sellarActualizacionEstacion(
+        {
+          ...estacion,
+          estado: 'CON_CONSUMO',
+          huboConsumo: true,
+        },
+        meta,
+      );
+    }
+    const porcentajeInicial: PorcentajeConsumo =
+      estacion.porcentajeConsumo && estacion.porcentajeConsumo > 0
+        ? estacion.porcentajeConsumo
+        : 25;
+    return actualizarConsumoEstacion(estacion, true, porcentajeInicial, meta);
+  }
+
+  return sellarActualizacionEstacion(
+    {
+      ...estacion,
+      estado: nuevoEstado,
+      huboConsumo: false,
+      porcentajeConsumo: 0,
+      consumoGramos: 0,
+      repuestoGramos: 0,
+      cantidadReposicion: 0,
+    },
+    meta,
+  );
+}
+
+/**
+ * Actualiza los gramos base instalados y recalcula consumo y reposición de forma coherente.
+ */
+export function actualizarCantidadGramosEstacion(
+  estacion: ItemEstacionPlanilla,
+  cantidadGramos: number,
+  meta?: MetadataActualizacionEstacion,
+): ItemEstacionPlanilla {
+  const gramosSeguros = Number.isFinite(cantidadGramos) && cantidadGramos >= 0 ? cantidadGramos : 0;
+  const tieneConsumo = Boolean(
+    estacion.huboConsumo && estacion.porcentajeConsumo && estacion.porcentajeConsumo > 0,
+  );
+  const recalculado = tieneConsumo
+    ? calcularConsumoGramos(gramosSeguros, estacion.porcentajeConsumo!)
+    : 0;
+
+  return sellarActualizacionEstacion(
+    {
+      ...estacion,
+      cantidadGramos: gramosSeguros,
+      consumoGramos: recalculado,
+      repuestoGramos: recalculado,
+      cantidadReposicion: recalculado,
+    },
+    meta,
+  );
 }
 
 /**
@@ -153,12 +279,16 @@ export function actualizarEstadoFisicoEstacion(
   estacion: ItemEstacionPlanilla,
   estadoFisico: EstadoFisicoEstacion,
   observaciones?: string,
+  meta?: MetadataActualizacionEstacion,
 ): ItemEstacionPlanilla {
-  return {
-    ...estacion,
-    estadoFisico,
-    ...(observaciones !== undefined ? { observaciones } : {}),
-  };
+  return sellarActualizacionEstacion(
+    {
+      ...estacion,
+      estadoFisico,
+      ...(observaciones !== undefined ? { observaciones } : {}),
+    },
+    meta,
+  );
 }
 
 /**
@@ -172,22 +302,33 @@ export function copiarCeboALote(
     lote: string;
     vencimiento: string;
   },
+  meta?: MetadataActualizacionEstacion,
 ): ItemEstacionPlanilla[] {
-  return estaciones.map((est) => ({
-    ...est,
-    tipoCebo: cebo.tipoCebo,
-    cantidadGramos: cebo.cantidadGramos,
-    lote: cebo.lote,
-    vencimiento: cebo.vencimiento,
-    // Si la estación ya tenía consumo, recalcular gramos en base al nuevo peso base
-    ...(est.huboConsumo && est.porcentajeConsumo
-      ? {
-          consumoGramos: calcularConsumoGramos(cebo.cantidadGramos, est.porcentajeConsumo),
-          repuestoGramos: calcularConsumoGramos(cebo.cantidadGramos, est.porcentajeConsumo),
-          cantidadReposicion: calcularConsumoGramos(cebo.cantidadGramos, est.porcentajeConsumo),
-        }
-      : {}),
-  }));
+  const ahora = meta?.actualizadoEn ?? new Date().toISOString();
+  const metaResuelta: MetadataActualizacionEstacion = {
+    actualizadoEn: ahora,
+    actualizadoPor: meta?.actualizadoPor,
+  };
+  return estaciones.map((est) =>
+    sellarActualizacionEstacion(
+      {
+        ...est,
+        tipoCebo: cebo.tipoCebo,
+        cantidadGramos: cebo.cantidadGramos,
+        lote: cebo.lote,
+        vencimiento: cebo.vencimiento,
+        // Si la estación ya tenía consumo, recalcular gramos en base al nuevo peso base
+        ...(est.huboConsumo && est.porcentajeConsumo
+          ? {
+              consumoGramos: calcularConsumoGramos(cebo.cantidadGramos, est.porcentajeConsumo),
+              repuestoGramos: calcularConsumoGramos(cebo.cantidadGramos, est.porcentajeConsumo),
+              cantidadReposicion: calcularConsumoGramos(cebo.cantidadGramos, est.porcentajeConsumo),
+            }
+          : {}),
+      },
+      metaResuelta,
+    ),
+  );
 }
 
 /**
@@ -240,9 +381,35 @@ export function validarEstacionesPlanilla(
       errores.push(`Estación #${est.numero}: Debe indicar el motivo en observaciones (${est.estado}).`);
     }
 
-    if (!esPrimeraVisita && est.huboConsumo) {
-      if (est.porcentajeConsumo === undefined || !PORCENTAJES_CONSUMO.includes(est.porcentajeConsumo)) {
-        errores.push(`Estación #${est.numero}: Al haber consumo, debe seleccionar un porcentaje válido (0, 25, 50, 75, 100%).`);
+    if (!esPrimeraVisita) {
+      const estadoSinConsumo =
+        est.estado === 'SIN_ACTIVIDAD' || est.estado === 'SIN_ACCESO' || est.estado === 'EXTRAVIADA';
+      const tieneDatosConsumo =
+        est.huboConsumo === true ||
+        (est.porcentajeConsumo ?? 0) > 0 ||
+        (est.consumoGramos ?? 0) > 0;
+
+      if (estadoSinConsumo && tieneDatosConsumo) {
+        errores.push(
+          `Estación #${est.numero}: El estado ${est.estado} es incompatible con registro de consumo.`,
+        );
+      }
+
+      if (est.estado === 'CON_CONSUMO' && est.huboConsumo === false) {
+        errores.push(
+          `Estación #${est.numero}: El estado CON_CONSUMO requiere confirmar consumo de cebo.`,
+        );
+      }
+
+      if (est.huboConsumo) {
+        if (
+          est.porcentajeConsumo === undefined ||
+          !PORCENTAJES_CON_CONSUMO.includes(est.porcentajeConsumo)
+        ) {
+          errores.push(
+            `Estación #${est.numero}: Al haber consumo, debe seleccionar un porcentaje mayor a 0% (25, 50, 75 o 100%).`,
+          );
+        }
       }
     }
   }
@@ -254,6 +421,42 @@ export function validarEstacionesPlanilla(
 }
 
 /**
+ * Construye y valida el payload canónico `REGISTRO_ESTACION` (§5.1 / Mapa Murino).
+ *
+ * - `huboConsumo` y `colorIcono` se derivan de una única fuente de verdad (en instalación siempre sin consumo / VERDE).
+ * - `colorAura` representa la tendencia acumulada de consumo entre visitas (NO el estado físico):
+ *   inicia en `SIN_COLOR` en primera visita (instalación) y se omite en visitas regulares para que el dominio
+ *   del servidor calcule la transición a partir del historial de la estación.
+ */
+export function construirPayloadEstacionSync(
+  est: ItemEstacionPlanilla,
+  esPrimeraVisita = false,
+): PayloadEstacionSync {
+  const esInstalacion = est.esInstalacion ?? esPrimeraVisita;
+  const huboConsumo = esInstalacion
+    ? false
+    : (est.huboConsumo ?? (est.estado === 'CON_CONSUMO'));
+  const colorIcono: ColorIcono = huboConsumo ? 'ROJO' : 'VERDE';
+
+  return PayloadEstacionSyncSchema.parse({
+    numeroEstacion: est.numero,
+    huboConsumo,
+    porcentajeConsumo: huboConsumo ? (est.porcentajeConsumo ?? 0) : 0,
+    cantidadGramos: est.cantidadGramos ?? 20,
+    consumoGramos: huboConsumo ? (est.consumoGramos ?? 0) : 0,
+    cantidadReposicion: est.cantidadReposicion ?? est.repuestoGramos ?? 0,
+    tipoCebo: est.tipoCebo ?? 'BLOQUE_10G',
+    lote: est.lote ?? 'LOTE-DEFAULT',
+    vencimiento: est.vencimiento ?? '2026-12-31',
+    estadoFisico: est.estadoFisico ?? 'BUENAS_CONDICIONES',
+    esInstalacion,
+    colorIcono,
+    ...(esInstalacion ? { colorAura: 'SIN_COLOR' as const } : {}),
+    observaciones: est.observaciones ?? '',
+  });
+}
+
+/**
  * Convierte el registro de estaciones a operaciones de sincronización sync.v1 (REGISTRO_ESTACION).
  */
 export function generarOperacionesSyncEstaciones(
@@ -261,30 +464,19 @@ export function generarOperacionesSyncEstaciones(
   tecnicoId: string,
   estaciones: ItemEstacionPlanilla[],
   clienteTimestamp?: string,
+  esPrimeraVisita = false,
 ): OperacionSync[] {
   const timestamp = clienteTimestamp || new Date().toISOString();
 
-  return estaciones.map((est) => ({
-    operationId: generarUuidOffline(),
-    tipo: 'REGISTRO_ESTACION',
-    agregadoId: servicioId,
-    actorId: tecnicoId,
-    clienteTimestamp: timestamp,
-    payload: {
-      numeroEstacion: est.numero,
-      huboConsumo: est.huboConsumo ?? (est.estado === 'CON_CONSUMO'),
-      porcentajeConsumo: est.porcentajeConsumo ?? 0,
-      cantidadGramos: est.cantidadGramos ?? 20,
-      consumoGramos: est.consumoGramos ?? 0,
-      cantidadReposicion: est.cantidadReposicion ?? est.repuestoGramos ?? 0,
-      tipoCebo: est.tipoCebo ?? 'BLOQUE_10G',
-      lote: est.lote ?? 'LOTE-DEFAULT',
-      vencimiento: est.vencimiento ?? '2026-12-31',
-      estadoFisico: est.estadoFisico ?? 'BUENAS_CONDICIONES',
-      esInstalacion: est.esInstalacion ?? false,
-      colorIcono: est.huboConsumo ? 'ROJO' : 'VERDE',
-      colorAura: est.estadoFisico === 'MALAS_CONDICIONES' ? 'ROJO' : 'VERDE',
-      observaciones: est.observaciones ?? '',
-    },
-  }));
+  return estaciones.map((est) => {
+    const payload = construirPayloadEstacionSync(est, esPrimeraVisita);
+    return OperacionSyncSchema.parse({
+      operationId: generarUuidOffline(),
+      tipo: 'REGISTRO_ESTACION',
+      agregadoId: servicioId,
+      actorId: tecnicoId,
+      clienteTimestamp: timestamp,
+      payload: payload as unknown as Record<string, unknown>,
+    });
+  });
 }

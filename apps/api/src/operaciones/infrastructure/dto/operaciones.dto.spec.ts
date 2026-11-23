@@ -107,6 +107,7 @@ describe('Swagger de los DTO de operaciones', () => {
       'REGISTRO_OBSERVACIONES',
       'REGISTRO_SERVICIO_DRT',
       'REGISTRO_SERVICIO_CAMPO',
+      'REGISTRO_ARCHIVO',
     ]);
   });
 });

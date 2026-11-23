@@ -154,6 +154,49 @@ export function fusionarFotosEvidencia(
   return fotosUnificadas;
 }
 
+const ESTADOS_INSPECCION_BLOQUEADOS = new Set([
+  'CERRADO',
+  'ENVIADO_A_REVISION',
+  'EN_REVISION',
+  'APROBADO',
+]);
+
+const SYNC_STATUS_BLOQUEADOS = new Set(['LOCKED', 'CLOSED']);
+
+function tieneFirmaManuscrita(firmas?: ActaServicioDrt['firmas']): boolean {
+  if (!firmas) return false;
+  const tieneBase64 = Boolean(
+    firmas.firmaDigitalBase64 && firmas.firmaDigitalBase64.trim().length > 0,
+  );
+  const tieneArchivo = Boolean(firmas.firmaArchivoId && firmas.firmaRutaLocalRelativa);
+  return tieneBase64 || tieneArchivo;
+}
+
+function fusionarTextoColaborativo(textoLocal?: string, textoRemoto?: string): string {
+  const segmentosUnicos = new Set<string>();
+  for (const texto of [textoLocal, textoRemoto]) {
+    if (!texto) continue;
+    for (const parte of texto.split(/\s*\|\s*/)) {
+      const limpia = parte.trim();
+      if (limpia.length > 0) {
+        segmentosUnicos.add(limpia);
+      }
+    }
+  }
+  return Array.from(segmentosUnicos).join(' | ');
+}
+
+function fusionarContador(
+  valorLocal: number,
+  valorRemoto: number | undefined,
+  diffActa: number,
+): number {
+  if (valorRemoto === undefined) return valorLocal;
+  if (diffActa > 0) return valorRemoto;
+  if (diffActa < 0) return valorLocal;
+  return Math.max(valorLocal, valorRemoto);
+}
+
 /**
  * Evalúa si una inspección está bloqueada para edición de campo (§8.2).
  */
@@ -164,7 +207,10 @@ export function verificarBloqueoInspeccion(
     estado?: string;
   },
 ): EstadoBloqueoInspeccion {
-  if (acta.cerradaEnRevision || acta.bloqueada || acta.estado === 'CERRADO' || acta.estado === 'EN_REVISION') {
+  const bloqueadaPorEstado = Boolean(acta.estado && ESTADOS_INSPECCION_BLOQUEADOS.has(acta.estado));
+  const bloqueadaPorSync = Boolean(acta.syncStatus && SYNC_STATUS_BLOQUEADOS.has(acta.syncStatus));
+
+  if (acta.cerradaEnRevision || acta.bloqueada || bloqueadaPorEstado || bloqueadaPorSync) {
     return {
       bloqueada: true,
       motivo: 'La inspección está cerrada y no acepta más sincronizaciones ni modificaciones de campo (Sección 8.2)',
@@ -182,7 +228,7 @@ export function verificarBloqueoInspeccion(
  * Fusiona dos actas de servicio colaborativas (ej. de dos técnicos trabajando el mismo proyecto).
  * - Aplica resolución LWW a las estaciones.
  * - Concatena fotos únicas sin pérdida de evidencias.
- * - Fusión no destructiva de firmas y observaciones.
+ * - Fusión no destructiva e idempotente de firmas, especies, contadores y observaciones.
  * - Bloquea el acta resultante si cualquiera de las dos fue cerrada (§8.2).
  */
 export function fusionarActasColaborativas(
@@ -193,6 +239,7 @@ export function fusionarActasColaborativas(
   const bloqueoLocal = verificarBloqueoInspeccion(actaLocal);
   const bloqueoRemoto = verificarBloqueoInspeccion(actaRemota);
   const cerrada = bloqueoLocal.bloqueada || bloqueoRemoto.bloqueada;
+  const diffActa = compararTimestampsIso(actaLocal.actualizadoEn, actaRemota.actualizadoEn);
 
   // 2. Fusionar estaciones con LWW
   const fusionEstaciones = fusionarEstacionesLww(
@@ -203,34 +250,51 @@ export function fusionarActasColaborativas(
   // 3. Fusionar fotos sin pérdida
   const fotosFusionadas = fusionarFotosEvidencia(actaLocal.fotos || [], actaRemota.fotos || []);
 
-  // 4. Firmas: priorizar la que contenga firma manuscrita o datos válidos
+  // 4. Firmas: una firma manuscrita válida (archivo local o Base64) nunca se destruye por ausencia remota
+  const localTieneFirma = tieneFirmaManuscrita(actaLocal.firmas);
+  const remotaTieneFirma = tieneFirmaManuscrita(actaRemota.firmas);
   let firmasFinales = actaLocal.firmas;
-  if (!firmasFinales.firmaDigitalBase64 && actaRemota.firmas?.firmaDigitalBase64) {
+  if (!localTieneFirma && remotaTieneFirma) {
     firmasFinales = actaRemota.firmas;
-  } else if (!firmasFinales.responsableNoDisponible && actaRemota.firmas?.responsableNoDisponible) {
+  } else if (localTieneFirma && remotaTieneFirma && diffActa > 0) {
+    firmasFinales = actaRemota.firmas;
+  } else if (
+    !localTieneFirma &&
+    !actaLocal.firmas?.responsableNoDisponible &&
+    actaRemota.firmas?.responsableNoDisponible
+  ) {
     firmasFinales = actaRemota.firmas;
   }
 
-  // 5. Diagnóstico y Observaciones colaborativas
-  const observacionesCombinadas = Array.from(
-    new Set(
-      [actaLocal.observacionesCliente, actaRemota.observacionesCliente].filter(Boolean),
-    ),
-  ).join(' | ');
+  // 5. Especies de roedores (unión sin duplicados) y contadores (LWW / no destructivo)
+  const roedoresFusionados = Array.from(
+    new Set([...(actaLocal.roedoresDetectados || []), ...(actaRemota.roedoresDetectados || [])]),
+  );
 
-  const recomendacionesCombinadas = Array.from(
-    new Set(
-      [actaLocal.resultadosRecomendaciones, actaRemota.resultadosRecomendaciones].filter(Boolean),
-    ),
-  ).join(' | ');
+  // 6. Diagnóstico y Observaciones colaborativas (idempotente)
+  const observacionesCombinadas = fusionarTextoColaborativo(
+    actaLocal.observacionesCliente,
+    actaRemota.observacionesCliente,
+  );
+
+  const recomendacionesCombinadas = fusionarTextoColaborativo(
+    actaLocal.resultadosRecomendaciones,
+    actaRemota.resultadosRecomendaciones,
+  );
 
   const actaResultado: ActaServicioDrt = {
     ...actaLocal,
+    cebosInstalados: fusionarContador(actaLocal.cebosInstalados, actaRemota.cebosInstalados, diffActa),
+    cebosConsumidos: fusionarContador(actaLocal.cebosConsumidos, actaRemota.cebosConsumidos, diffActa),
+    cebosRepuestos: fusionarContador(actaLocal.cebosRepuestos, actaRemota.cebosRepuestos, diffActa),
+    trampasInstaladas: fusionarContador(actaLocal.trampasInstaladas, actaRemota.trampasInstaladas, diffActa),
+    trampasActivadas: fusionarContador(actaLocal.trampasActivadas, actaRemota.trampasActivadas, diffActa),
+    roedoresDetectados: roedoresFusionados,
     planillaEstaciones: fusionEstaciones.estaciones,
     fotos: fotosFusionadas,
     firmas: firmasFinales,
-    observacionesCliente: observacionesCombinadas || actaLocal.observacionesCliente,
-    resultadosRecomendaciones: recomendacionesCombinadas || actaLocal.resultadosRecomendaciones,
+    observacionesCliente: observacionesCombinadas,
+    resultadosRecomendaciones: recomendacionesCombinadas,
     cerradaEnRevision: cerrada,
     cerradoPor: actaRemota.cerradoPor || actaLocal.cerradoPor,
     actualizadoEn: new Date().toISOString(),
@@ -244,7 +308,7 @@ export function fusionarActasColaborativas(
 }
 
 /**
- * Formatea la información del técnico y momento de guardado para la vista móvil.
+ * Formatea la información del técnico y momento de guardado para la vista móvil (fecha y hora en zona local).
  */
 export function formatearDetalleBorrador(
   actualizadoEn?: string,
@@ -254,8 +318,16 @@ export function formatearDetalleBorrador(
 
   try {
     const fecha = new Date(actualizadoEn);
-    const fechaStr = fecha.toISOString().slice(0, 10);
-    const horaStr = fecha.toTimeString().slice(0, 5);
+    if (Number.isNaN(fecha.getTime())) {
+      return `Guardado en ${actualizadoEn}`;
+    }
+    const year = fecha.getFullYear();
+    const month = String(fecha.getMonth() + 1).padStart(2, '0');
+    const day = String(fecha.getDate()).padStart(2, '0');
+    const hours = String(fecha.getHours()).padStart(2, '0');
+    const minutes = String(fecha.getMinutes()).padStart(2, '0');
+    const fechaStr = `${year}-${month}-${day}`;
+    const horaStr = `${hours}:${minutes}`;
     const autor = tecnicoNombre ? ` por ${tecnicoNombre}` : '';
     return `Guardado el ${fechaStr} a las ${horaStr}${autor}`;
   } catch {

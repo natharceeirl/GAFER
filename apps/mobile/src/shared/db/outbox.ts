@@ -43,6 +43,7 @@ export interface OutboxRecord {
   operacion: OperacionSync;
   intentos: number;
   sincronizado: boolean;
+  rechazado?: boolean;
   ultimoError?: string;
   aggregateSeq?: number;
   priority?: string;
@@ -125,6 +126,7 @@ export class OutboxQueue {
           },
           intentos: fila.attempt_count,
           sincronizado: fila.status === 'SYNCED',
+          rechazado: fila.status === 'REJECTED',
           ultimoError: fila.last_error_message_sanitized ?? undefined,
           aggregateSeq: fila.aggregate_seq,
           priority: fila.priority,
@@ -294,6 +296,7 @@ export class OutboxQueue {
           ...record,
           aggregateSeq: existente.aggregate_seq,
           sincronizado: existente.status === 'SYNCED',
+          rechazado: existente.status === 'REJECTED',
         };
       }
     } else {
@@ -306,18 +309,17 @@ export class OutboxQueue {
   }
 
   obtenerPendientes(): OutboxRecord[] {
-    return this.cola.filter((op) => !op.sincronizado);
+    return this.cola.filter((op) => !op.sincronizado && !op.rechazado);
+  }
+
+  obtenerRechazadas(): OutboxRecord[] {
+    return this.cola.filter((op) => Boolean(op.rechazado));
   }
 
   async marcarSincronizadas(ids: string[]): Promise<void> {
-    const idSet = new Set(ids);
-    for (const record of this.cola) {
-      if (idSet.has(record.operacion.operationId)) {
-        record.sincronizado = true;
-      }
-    }
+    if (ids.length === 0) return;
 
-    if (this.db && ids.length > 0) {
+    if (this.db) {
       await this.db.withExclusiveTransactionAsync(async (tx) => {
         for (const id of ids) {
           await tx.runAsync(
@@ -328,25 +330,39 @@ export class OutboxQueue {
       });
     }
 
-    await this.persistir();
+    const idSet = new Set(ids);
+    const siguienteCola = this.cola.map((record) =>
+      idSet.has(record.operacion.operationId) ? { ...record, sincronizado: true } : record,
+    );
+
+    if (this.storage) {
+      await this.storage.setItem(this.storageKey, JSON.stringify(siguienteCola));
+    }
+
+    this.cola = siguienteCola;
   }
 
   async limpiarSincronizados(): Promise<void> {
-    this.cola = this.cola.filter((op) => !op.sincronizado);
-
     if (this.db) {
       await this.db.withExclusiveTransactionAsync(async (tx) => {
         await tx.runAsync(`DELETE FROM sync_outbox WHERE status = 'SYNCED';`);
       });
     }
 
-    await this.persistir();
+    const siguienteCola = this.cola.filter((op) => !op.sincronizado);
+
+    if (this.storage) {
+      await this.storage.setItem(this.storageKey, JSON.stringify(siguienteCola));
+    }
+
+    this.cola = siguienteCola;
   }
 
   async enviarLote(
     apiUrl: string,
     inspeccionId: string,
     fetchFn: typeof fetch = fetch,
+    onInspeccionCerrada?: (inspeccionId: string) => void | Promise<void>,
   ): Promise<LoteSyncResponse | null> {
     // Dentro de una inspección el orden lo da la secuencia, no la prioridad.
     const pendientes = this.obtenerPendientes()
@@ -381,16 +397,10 @@ export class OutboxQueue {
         }
 
         const errorMsg = `HTTP ${response.status}: ${detalleError}`;
-        const esInspeccionCerrada = response.status === 409 || detalleError.toLowerCase().includes('cerrada');
+        // Solo HTTP 409 Conflict indica cierre definitivo en servidor (§8.2);
+        // errores transitorios 500/503 nunca deben rechazar operaciones ni bloquear borradores.
+        const esInspeccionCerrada = response.status === 409;
         const ahora = new Date().toISOString();
-
-        for (const item of pendientes) {
-          item.intentos += 1;
-          item.ultimoError = errorMsg;
-          if (esInspeccionCerrada) {
-            item.sincronizado = false;
-          }
-        }
 
         if (this.db) {
           await this.db.withExclusiveTransactionAsync(async (tx) => {
@@ -413,7 +423,7 @@ export class OutboxQueue {
               );
             }
 
-            // Bloquear borrador local si la inspección fue cerrada por otro técnico en el servidor (§8.2)
+            // Bloquear borradores locales si la inspección fue cerrada en el servidor (§8.2)
             if (esInspeccionCerrada) {
               await tx.runAsync(
                 `UPDATE borradores_inspeccion 
@@ -426,7 +436,19 @@ export class OutboxQueue {
           });
         }
 
+        for (const item of pendientes) {
+          item.intentos += 1;
+          item.ultimoError = errorMsg;
+          if (esInspeccionCerrada) {
+            item.sincronizado = false;
+            item.rechazado = true;
+          }
+        }
+
         await this.persistir();
+        if (esInspeccionCerrada && onInspeccionCerrada) {
+          await onInspeccionCerrada(inspeccionId);
+        }
         return null;
       }
 

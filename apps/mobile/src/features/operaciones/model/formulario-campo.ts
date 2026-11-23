@@ -3,7 +3,8 @@
  * Reutiliza las reglas contractuales probadas en el prototipo web.
  */
 
-import type { CerrarInspeccion, ConsumoInsumo, TipoDocumento, TipoServicio } from '@gafer/contracts';
+import { FechaSchema, type CerrarInspeccion, type ConsumoInsumo, type TipoDocumento, type TipoServicio } from '@gafer/contracts';
+import { esFirmaDataUriValida } from './firma-svg';
 
 export type EstadoFormulario = 'BORRADOR' | 'ENVIADO_A_REVISION' | 'CERRADO';
 
@@ -49,6 +50,8 @@ export interface FormularioCampo {
   horaFin: string;
   personal: string[];
   equipos: string[]; // IDs de equipos utilizados
+  /** Catálogo de equipos autorizados del servicio (permite mostrar equipos fuera de la semilla). */
+  equiposCatalogo?: EquipoCatalogoItem[];
   insumos: InsumoAplicado[]; // Insumos autorizados con dosis y datos aplicados
   metodos: string[]; // Métodos de aplicación seleccionados
   temperatura: string;
@@ -258,17 +261,20 @@ export interface InsumoServicioConfig {
   dosisReferencial?: string;
 }
 
+export interface ConfigServicioBorrador {
+  tipoServicio?: TipoServicio;
+  requiereCertificado?: boolean;
+  insumosAutorizados?: Array<string | InsumoServicioConfig>;
+  dosisReferencial?: Record<string, string>;
+  equiposAutorizados?: Array<string | EquipoCatalogoItem>;
+}
+
 export interface CrearFormularioCampoArgs {
   cliente: { id?: string; codigo?: string; razonSocial: string };
   sede: { id?: string; nombre: string; direccion?: string };
-  servicio: {
+  servicio: ConfigServicioBorrador & {
     id: string;
     tipo: string;
-    tipoServicio?: TipoServicio;
-    requiereCertificado?: boolean;
-    insumosAutorizados?: string[] | InsumoServicioConfig[];
-    dosisReferencial?: Record<string, string>;
-    equiposAutorizados?: string[] | EquipoCatalogoItem[];
   };
   fecha?: string;
   horaInicio?: string;
@@ -279,6 +285,62 @@ export interface CrearFormularioCampoArgs {
 
 function vacio(v: string | null | undefined): boolean {
   return !v || v.trim() === '';
+}
+
+function esFechaIsoValida(v: string | null | undefined): boolean {
+  if (vacio(v)) return false;
+  return FechaSchema.safeParse(v!.trim()).success;
+}
+
+function normalizarTexto(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+}
+
+/**
+ * Clasifica el tipo de servicio de forma determinista.
+ * Si se pasa `tipoServicio` explícito se respeta directamente.
+ * En servicios combinados (p. ej. "DESINSECTACION Y DESRATIZACION"), DRT tiene prioridad
+ * para habilitar la planilla de estaciones/cebaderos y generar Reporte de Inspección (§2).
+ */
+export function clasificarTipoServicio(
+  tipo?: string,
+  tipoServicioExplicito?: TipoServicio,
+): TipoServicio {
+  if (tipoServicioExplicito) {
+    return tipoServicioExplicito;
+  }
+
+  const tipoUpper = normalizarTexto(tipo || '');
+  if (
+    tipoUpper.includes('DRT') ||
+    tipoUpper.includes('DESRATIZACION') ||
+    tipoUpper.includes('ROEDOR') ||
+    tipoUpper.includes('MURINO')
+  ) {
+    return 'DRT';
+  }
+  if (tipoUpper.includes('DSF') || tipoUpper.includes('DESINFECCION')) {
+    return 'DSF';
+  }
+  if (tipoUpper.includes('DSS') || tipoUpper.includes('DESINSECTACION')) {
+    return 'DSS';
+  }
+  if (tipoUpper.includes('LRA')) {
+    return 'LRA';
+  }
+  if (tipoUpper.includes('LTG')) {
+    return 'LTG';
+  }
+  if (tipoUpper.includes('LTS')) {
+    return 'LTS';
+  }
+  if (tipoUpper.includes('LAM')) {
+    return 'LAM';
+  }
+  return 'DRT';
 }
 
 function numeroEntre(v: string, min: number, max: number): boolean {
@@ -323,24 +385,8 @@ export function crearFormularioCampo({
   const horaInicioEfectiva = horaInicio || ahoraHoraIso();
   const horaFinEfectiva = horaFin || '';
 
-  // Determinar TipoServicio a partir del tipo proporcionado
-  let tipoServicio: TipoServicio = 'DRT';
-  const tipoUpper = (servicio.tipoServicio || servicio.tipo || '').toUpperCase();
-  if (tipoUpper.includes('DSF') || tipoUpper.includes('DESINFECCION')) {
-    tipoServicio = 'DSF';
-  } else if (tipoUpper.includes('DSS') || tipoUpper.includes('DESINSECTACION')) {
-    tipoServicio = 'DSS';
-  } else if (tipoUpper.includes('DRT') || tipoUpper.includes('DESRATIZACION') || tipoUpper.includes('ROEDOR')) {
-    tipoServicio = 'DRT';
-  } else if (tipoUpper.includes('LRA')) {
-    tipoServicio = 'LRA';
-  } else if (tipoUpper.includes('LTG')) {
-    tipoServicio = 'LTG';
-  } else if (tipoUpper.includes('LTS')) {
-    tipoServicio = 'LTS';
-  } else if (tipoUpper.includes('LAM')) {
-    tipoServicio = 'LAM';
-  }
+  // Determinar TipoServicio respetando tipoServicio explícito o infiriendo con prioridad DRT
+  const tipoServicio: TipoServicio = clasificarTipoServicio(servicio.tipo, servicio.tipoServicio);
 
   // Resolver insumos autorizados precargados con dosis referencial
   const insumosConfig = servicio.insumosAutorizados || [];
@@ -401,12 +447,29 @@ export function crearFormularioCampo({
     }
   }
 
-  // Resolver equipos autorizados
+  // Resolver equipos autorizados (conservando metadatos de equipos fuera de la semilla)
   const equiposConfig = servicio.equiposAutorizados || [];
   const equiposIds: string[] = [];
+  const equiposCatalogo: EquipoCatalogoItem[] = [];
   if (equiposConfig.length > 0) {
     for (const eq of equiposConfig) {
-      equiposIds.push(typeof eq === 'string' ? eq : eq.id);
+      if (typeof eq === 'string') {
+        equiposIds.push(eq);
+        const enSemilla = EQUIPOS_CATALOGO_SEMILLA.find((s) => s.id === eq);
+        if (enSemilla) {
+          equiposCatalogo.push(enSemilla);
+        } else {
+          equiposCatalogo.push({
+            id: eq,
+            codigoInterno: eq.slice(0, 8).toUpperCase(),
+            nombre: `Equipo autorizado (${eq.slice(0, 8)})`,
+            tipo: 'AUTORIZADO',
+          });
+        }
+      } else {
+        equiposIds.push(eq.id);
+        equiposCatalogo.push(eq);
+      }
     }
   } else {
     // Equipos sugeridos
@@ -434,6 +497,7 @@ export function crearFormularioCampo({
     horaFin: horaFinEfectiva,
     personal: personalInicial,
     equipos: equiposIds,
+    equiposCatalogo: equiposCatalogo.length > 0 ? equiposCatalogo : undefined,
     insumos: insumosAplicados,
     metodos: [tipoServicio === 'DRT' ? 'Cebado' : 'Aspersión'],
     temperatura: '',
@@ -491,7 +555,10 @@ export function validarCierre(f: FormularioCampo): Partial<Record<BloqueCierre, 
     );
     if (tieneCamposIncompletos) {
       errores.insumos =
-        'Complete lote, fecha de vencimiento, cantidad (> 0) y zonas tratadas de cada insumo aplicado.';
+        'Complete lote, fecha de vencimiento (AAAA-MM-DD), cantidad (> 0) y zonas tratadas de cada insumo aplicado.';
+    } else if (aplicados.some((i) => !esFechaIsoValida(i.vencimiento))) {
+      errores.insumos =
+        'La fecha de vencimiento de cada insumo aplicado debe ser una fecha válida en formato AAAA-MM-DD.';
     }
   }
 
@@ -520,9 +587,9 @@ export function validarCierre(f: FormularioCampo): Partial<Record<BloqueCierre, 
     if (vacio(f.firmanteNombre) || vacio(f.firmanteCargo)) {
       errores.conformidad =
         'Ingrese nombre y cargo del contacto responsable del cliente, o marque "Responsable no disponible".';
-    } else if (!f.firma) {
+    } else if (!esFirmaDataUriValida(f.firma)) {
       errores.conformidad =
-        'Debe registrar la firma de conformidad o marcar que el responsable no estuvo disponible.';
+        'Debe registrar una firma de conformidad válida o marcar que el responsable no estuvo disponible.';
     }
   }
 
@@ -536,9 +603,13 @@ export function validarCierre(f: FormularioCampo): Partial<Record<BloqueCierre, 
       errores.certificado =
         'Complete número de certificado, fecha de emisión y fecha de vencimiento.';
     } else if (
-      f.certificadoVencimiento &&
-      f.certificadoEmision &&
-      f.certificadoVencimiento <= f.certificadoEmision
+      !esFechaIsoValida(f.certificadoEmision) ||
+      !esFechaIsoValida(f.certificadoVencimiento)
+    ) {
+      errores.certificado =
+        'Las fechas de emisión y vencimiento del certificado deben ser fechas válidas en formato AAAA-MM-DD.';
+    } else if (
+      f.certificadoVencimiento!.trim() <= f.certificadoEmision!.trim()
     ) {
       errores.certificado =
         'La fecha de vencimiento del certificado debe ser posterior a la de emisión.';

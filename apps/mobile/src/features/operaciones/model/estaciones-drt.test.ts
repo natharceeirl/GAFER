@@ -4,11 +4,15 @@ import {
   crearEstacionDrt,
   aplicarPrimeraVisita,
   actualizarConsumoEstacion,
+  actualizarEstadoEstacion,
+  actualizarCantidadGramosEstacion,
   actualizarEstadoFisicoEstacion,
   copiarCeboALote,
   validarEstacionesPlanilla,
+  construirPayloadEstacionSync,
   generarOperacionesSyncEstaciones,
   PORCENTAJES_CONSUMO,
+  PORCENTAJES_CON_CONSUMO,
 } from './estaciones-drt';
 import {
   OperacionSyncSchema,
@@ -73,10 +77,10 @@ describe('Estaciones DRT (§5.1, GAF-35)', () => {
   });
 
   describe('aplicarPrimeraVisita', () => {
-    it('en primera visita (instalación), marca esInstalacion y no evalúa consumo', () => {
+    it('en primera visita (instalación), marca esInstalacion, no evalúa consumo y usa ceboDefecto solo para campos faltantes', () => {
       const estaciones = [
-        crearEstacionDrt(1, { huboConsumo: true, porcentajeConsumo: 50, consumoGramos: 10 }),
-        crearEstacionDrt(2, { huboConsumo: true, porcentajeConsumo: 25, consumoGramos: 5 }),
+        { numero: 1, estado: 'CON_CONSUMO' as const, huboConsumo: true, porcentajeConsumo: 50 as const, consumoGramos: 10 },
+        { numero: 2, estado: 'CON_CONSUMO' as const, huboConsumo: true, porcentajeConsumo: 25 as const, consumoGramos: 5 },
       ];
 
       const resultado = aplicarPrimeraVisita(estaciones, true, {
@@ -93,10 +97,53 @@ describe('Estaciones DRT (§5.1, GAF-35)', () => {
         expect(est.porcentajeConsumo).toBe(0);
         expect(est.consumoGramos).toBe(0);
         expect(est.repuestoGramos).toBe(0);
+        expect(est.cantidadReposicion).toBe(0);
         expect(est.estado).toBe('SIN_ACTIVIDAD');
+        expect(est.tipoCebo).toBe('BLOQUE_10G');
+        expect(est.cantidadGramos).toBe(20);
         expect(est.lote).toBe('LOTE-INSTALACION');
         expect(est.estadoFisico).toBe('BUENAS_CONDICIONES');
       }
+    });
+
+    it('preserva tipoCebo, cantidadGramos, lote y vencimiento personalizados de cada estación al activar primera visita (F4)', () => {
+      const estaciones = [
+        crearEstacionDrt(1, {
+          tipoCebo: 'PASTA',
+          cantidadGramos: 40,
+          lote: 'L-PASTA-99',
+          vencimiento: '2027-08-15',
+          huboConsumo: true,
+          porcentajeConsumo: 50,
+          consumoGramos: 20,
+        }),
+        crearEstacionDrt(2, {
+          tipoCebo: 'PELLETS',
+          cantidadGramos: 30,
+          lote: 'L-PELLET-02',
+          vencimiento: '2027-09-01',
+        }),
+      ];
+
+      const resultado = aplicarPrimeraVisita(estaciones, true, {
+        tipoCebo: 'BLOQUE_10G',
+        cantidadGramos: 20,
+        lote: 'LOTE-DEFECTO',
+        vencimiento: '2026-12-31',
+      });
+
+      expect(resultado[0].esInstalacion).toBe(true);
+      expect(resultado[0].huboConsumo).toBe(false);
+      expect(resultado[0].consumoGramos).toBe(0);
+      expect(resultado[0].tipoCebo).toBe('PASTA');
+      expect(resultado[0].cantidadGramos).toBe(40);
+      expect(resultado[0].lote).toBe('L-PASTA-99');
+      expect(resultado[0].vencimiento).toBe('2027-08-15');
+
+      expect(resultado[1].tipoCebo).toBe('PELLETS');
+      expect(resultado[1].cantidadGramos).toBe(30);
+      expect(resultado[1].lote).toBe('L-PELLET-02');
+      expect(resultado[1].vencimiento).toBe('2027-09-01');
     });
 
     it('en visitas regulares (esPrimera = false), marca esInstalacion = false', () => {
@@ -125,6 +172,18 @@ describe('Estaciones DRT (§5.1, GAF-35)', () => {
       expect(actualizada.estado).toBe('SIN_ACTIVIDAD');
     });
 
+    it('cuando porcentaje es 0 aunque huboConsumo sea true, normaliza a sin consumo (F2)', () => {
+      const estPrevia = actualizarConsumoEstacion(crearEstacionDrt(1, { cantidadGramos: 20 }), true, 50);
+      const actualizada = actualizarConsumoEstacion(estPrevia, true, 0);
+
+      expect(actualizada.huboConsumo).toBe(false);
+      expect(actualizada.porcentajeConsumo).toBe(0);
+      expect(actualizada.consumoGramos).toBe(0);
+      expect(actualizada.repuestoGramos).toBe(0);
+      expect(actualizada.cantidadReposicion).toBe(0);
+      expect(actualizada.estado).toBe('SIN_ACTIVIDAD');
+    });
+
     it('cuando huboConsumo es true, calcula gramos consumidos y reposición al porcentaje indicado', () => {
       const estPrevia = crearEstacionDrt(1, { cantidadGramos: 40 });
       const actualizada = actualizarConsumoEstacion(estPrevia, true, 75);
@@ -135,6 +194,49 @@ describe('Estaciones DRT (§5.1, GAF-35)', () => {
       expect(actualizada.repuestoGramos).toBe(30);
       expect(actualizada.cantidadReposicion).toBe(30);
       expect(actualizada.estado).toBe('CON_CONSUMO');
+    });
+  });
+
+  describe('actualizarEstadoEstacion (F2)', () => {
+    it('al cambiar una estación con consumo a SIN_ACCESO, EXTRAVIADA o SIN_ACTIVIDAD limpia huboConsumo y gramos', () => {
+      const conConsumo = actualizarConsumoEstacion(crearEstacionDrt(1, { cantidadGramos: 20 }), true, 50);
+      expect(conConsumo.consumoGramos).toBe(10);
+
+      for (const estadoDestino of ['SIN_ACCESO', 'EXTRAVIADA', 'SIN_ACTIVIDAD'] as const) {
+        const res = actualizarEstadoEstacion(conConsumo, estadoDestino);
+        expect(res.estado).toBe(estadoDestino);
+        expect(res.huboConsumo).toBe(false);
+        expect(res.porcentajeConsumo).toBe(0);
+        expect(res.consumoGramos).toBe(0);
+        expect(res.repuestoGramos).toBe(0);
+        expect(res.cantidadReposicion).toBe(0);
+      }
+    });
+
+    it('al seleccionar CON_CONSUMO desde SIN_ACTIVIDAD habilita huboConsumo y asigna porcentaje inicial 25%', () => {
+      const inicial = crearEstacionDrt(1, { cantidadGramos: 20 });
+      const res = actualizarEstadoEstacion(inicial, 'CON_CONSUMO');
+
+      expect(res.estado).toBe('CON_CONSUMO');
+      expect(res.huboConsumo).toBe(true);
+      expect(res.porcentajeConsumo).toBe(25);
+      expect(res.consumoGramos).toBe(5);
+      expect(res.repuestoGramos).toBe(5);
+      expect(res.cantidadReposicion).toBe(5);
+    });
+  });
+
+  describe('actualizarCantidadGramosEstacion (F1)', () => {
+    it('recalcula consumoGramos, repuestoGramos y cantidadReposicion al cambiar gramos base', () => {
+      const est = actualizarConsumoEstacion(crearEstacionDrt(1, { cantidadGramos: 20 }), true, 50);
+      expect(est.consumoGramos).toBe(10);
+      expect(est.cantidadReposicion).toBe(10);
+
+      const actualizada = actualizarCantidadGramosEstacion(est, 40);
+      expect(actualizada.cantidadGramos).toBe(40);
+      expect(actualizada.consumoGramos).toBe(20);
+      expect(actualizada.repuestoGramos).toBe(20);
+      expect(actualizada.cantidadReposicion).toBe(20);
     });
   });
 
@@ -254,9 +356,44 @@ describe('Estaciones DRT (§5.1, GAF-35)', () => {
       expect(res.valido).toBe(false);
       expect(res.errores.some((e) => e.includes('motivo en observaciones'))).toBe(true);
     });
+
+    it('rechaza contradicciones entre estado de estación y consumo o porcentaje 0% (F2)', () => {
+      expect(PORCENTAJES_CONSUMO).toContain(0);
+      expect(PORCENTAJES_CON_CONSUMO).not.toContain(0);
+
+      const sinAccesoConConsumo = crearEstacionDrt(1, {
+        estado: 'SIN_ACCESO',
+        huboConsumo: true,
+        porcentajeConsumo: 50,
+        consumoGramos: 10,
+        observaciones: 'Candado cerrado',
+      });
+      const res1 = validarEstacionesPlanilla([sinAccesoConConsumo], false);
+      expect(res1.valido).toBe(false);
+      expect(res1.errores.some((e) => e.includes('incompatible con registro de consumo'))).toBe(true);
+
+      const conConsumoSinFlag = crearEstacionDrt(2, {
+        estado: 'CON_CONSUMO',
+        huboConsumo: false,
+        porcentajeConsumo: 0,
+      });
+      const res2 = validarEstacionesPlanilla([conConsumoSinFlag], false);
+      expect(res2.valido).toBe(false);
+      expect(res2.errores.some((e) => e.includes('CON_CONSUMO requiere confirmar consumo'))).toBe(true);
+
+      const consumoCeroPorciento = crearEstacionDrt(3, {
+        estado: 'CON_CONSUMO',
+        huboConsumo: true,
+        porcentajeConsumo: 0,
+        consumoGramos: 0,
+      });
+      const res3 = validarEstacionesPlanilla([consumoCeroPorciento], false);
+      expect(res3.valido).toBe(false);
+      expect(res3.errores.some((e) => e.includes('porcentaje mayor a 0%'))).toBe(true);
+    });
   });
 
-  describe('generarOperacionesSyncEstaciones', () => {
+  describe('construirPayloadEstacionSync y generarOperacionesSyncEstaciones (F3)', () => {
     it('genera operaciones sync válidas que satisfacen OperacionSyncSchema y PayloadEstacionSyncSchema', () => {
       const servicioId = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
       const tecnicoId = 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
@@ -301,6 +438,82 @@ describe('Estaciones DRT (§5.1, GAF-35)', () => {
       expect(payloadEst2.consumoGramos).toBe(10);
       expect(payloadEst2.cantidadReposicion).toBe(10);
       expect(payloadEst2.colorIcono).toBe('ROJO');
+      expect(payloadEst2.colorAura).toBeUndefined();
+    });
+
+    it('no deriva colorAura de estadoFisico y alinea colorIcono cuando huboConsumo viene undefined con estado CON_CONSUMO (F3)', () => {
+      const primeraVisitaMalaCond = construirPayloadEstacionSync(
+        crearEstacionDrt(1, {
+          esInstalacion: true,
+          estadoFisico: 'MALAS_CONDICIONES',
+          observaciones: 'Carcasa rajada',
+        }),
+        true,
+      );
+      expect(primeraVisitaMalaCond.huboConsumo).toBe(false);
+      expect(primeraVisitaMalaCond.colorIcono).toBe('VERDE');
+      expect(primeraVisitaMalaCond.colorAura).toBe('SIN_COLOR');
+
+      const regularMalaCond = construirPayloadEstacionSync(
+        crearEstacionDrt(2, {
+          esInstalacion: false,
+          huboConsumo: false,
+          estadoFisico: 'MALAS_CONDICIONES',
+          observaciones: 'Tapa suelta',
+        }),
+        false,
+      );
+      expect(regularMalaCond.colorIcono).toBe('VERDE');
+      expect(regularMalaCond.colorAura).toBeUndefined();
+
+      // Si huboConsumo viene undefined pero estado es CON_CONSUMO, ambos huboConsumo y colorIcono deben coincidir
+      const conConsumoFallback = construirPayloadEstacionSync(
+        {
+          numero: 3,
+          estado: 'CON_CONSUMO',
+          consumoGramos: 10,
+          repuestoGramos: 10,
+        },
+        false,
+      );
+      expect(conConsumoFallback.huboConsumo).toBe(true);
+      expect(conConsumoFallback.colorIcono).toBe('ROJO');
+      expect(conConsumoFallback.colorAura).toBeUndefined();
+    });
+  });
+
+  describe('metadatos LWW en mutadores de estaciones (PR37-F5)', () => {
+    it('asigna actualizadoEn y actualizadoPor al mutar estado, consumo, gramos, estado físico o replicar cebo', () => {
+      const base = crearEstacionDrt(1, { cantidadGramos: 20 });
+      expect(base.actualizadoEn).toBeUndefined();
+
+      const meta = { actualizadoEn: '2026-11-03T10:15:00.000Z', actualizadoPor: 'Juan Perez' };
+      const conConsumo = actualizarConsumoEstacion(base, true, 50, meta);
+      expect(conConsumo.actualizadoEn).toBe(meta.actualizadoEn);
+      expect(conConsumo.actualizadoPor).toBe('Juan Perez');
+
+      const conEstado = actualizarEstadoEstacion(conConsumo, 'SIN_ACCESO', {
+        actualizadoEn: '2026-11-03T10:20:00.000Z',
+        actualizadoPor: 'Pedro Gomez',
+      });
+      expect(conEstado.actualizadoEn).toBe('2026-11-03T10:20:00.000Z');
+      expect(conEstado.actualizadoPor).toBe('Pedro Gomez');
+
+      const conGramos = actualizarCantidadGramosEstacion(base, 40, meta);
+      expect(conGramos.actualizadoEn).toBe(meta.actualizadoEn);
+      expect(conGramos.actualizadoPor).toBe('Juan Perez');
+
+      const conFisico = actualizarEstadoFisicoEstacion(base, 'MALAS_CONDICIONES', 'Rota', meta);
+      expect(conFisico.actualizadoEn).toBe(meta.actualizadoEn);
+      expect(conFisico.actualizadoPor).toBe('Juan Perez');
+
+      const replicadas = copiarCeboALote(
+        [base],
+        { tipoCebo: 'PASTA', cantidadGramos: 30, lote: 'L-1', vencimiento: '2027-01-01' },
+        meta,
+      );
+      expect(replicadas[0].actualizadoEn).toBe(meta.actualizadoEn);
+      expect(replicadas[0].actualizadoPor).toBe('Juan Perez');
     });
   });
 });

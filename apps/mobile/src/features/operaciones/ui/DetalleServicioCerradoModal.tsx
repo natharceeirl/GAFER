@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -14,12 +14,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ResumenServicioTecnico } from '@gafer/contracts';
 import { MobileApiClient } from '../../../shared/api/api-client';
 import { Button, AlertBanner } from '../../../shared/ui';
-import { TOKENS } from '../../../shared/theme/tokens';
+import {
+  etiquetaEstadoInspeccion,
+  etiquetaTipoServicio,
+  extraerResumenSnapshot,
+  formatearHorarioServicio,
+} from '../model/formato-servicio';
+
+const MAX_MOTIVO_CORRECCION = 500;
+const MIN_MOTIVO_CORRECCION = 5;
 
 export interface DetalleServicioCerradoModalProps {
   visible: boolean;
   servicio: ResumenServicioTecnico | null;
   token?: string;
+  abrirConCorreccion?: boolean;
   onCerrar: () => void;
   onCorreccionEnviada?: (inspeccionId: string) => void;
 }
@@ -28,6 +37,7 @@ export const DetalleServicioCerradoModal: React.FC<DetalleServicioCerradoModalPr
   visible,
   servicio,
   token,
+  abrirConCorreccion = false,
   onCerrar,
   onCorreccionEnviada,
 }) => {
@@ -36,16 +46,40 @@ export const DetalleServicioCerradoModal: React.FC<DetalleServicioCerradoModalPr
   const [enviando, setEnviando] = useState(false);
   const [mensajeExito, setMensajeExito] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (visible) {
+      setMostrarFormularioCorreccion(
+        Boolean(abrirConCorreccion && servicio?.puedeSolicitarCorreccion),
+      );
+      setMotivo('');
+      setMensajeExito(null);
+    }
+  }, [visible, abrirConCorreccion, servicio?.id, servicio?.puedeSolicitarCorreccion]);
+
   if (!servicio) return null;
 
   const apiClient = new MobileApiClient();
+  const snapshotVista = extraerResumenSnapshot(servicio.snapshotCatalogos);
+  const tieneContenidoSnapshot =
+    snapshotVista.insumos.length > 0 ||
+    snapshotVista.equipos.length > 0 ||
+    snapshotVista.estaciones.length > 0;
+  const etiquetaEstado = etiquetaEstadoInspeccion(servicio.estado);
 
   const handleSolicitarCorreccion = async () => {
     const motivoLimpio = motivo.trim();
-    if (motivoLimpio.length < 5) {
+    if (motivoLimpio.length < MIN_MOTIVO_CORRECCION) {
       Alert.alert(
         'Motivo insuficiente',
-        'Por favor describa con detalle qué dato requiere ser corregido (mínimo 5 caracteres).',
+        `Por favor describa con detalle qué dato requiere ser corregido (mínimo ${MIN_MOTIVO_CORRECCION} caracteres).`,
+      );
+      return;
+    }
+
+    if (motivoLimpio.length > MAX_MOTIVO_CORRECCION) {
+      Alert.alert(
+        'Motivo demasiado largo',
+        `El motivo de la corrección no puede exceder los ${MAX_MOTIVO_CORRECCION} caracteres.`,
       );
       return;
     }
@@ -89,7 +123,11 @@ export const DetalleServicioCerradoModal: React.FC<DetalleServicioCerradoModalPr
             <Text style={styles.titulo}>Reporte de Servicio</Text>
             <Text style={styles.subtitulo}>{servicio.codigoInspeccion}</Text>
           </View>
-          <TouchableOpacity onPress={handleCerrar} style={styles.botonCerrarModal}>
+          <TouchableOpacity
+            testID="boton-cerrar-modal-detalle"
+            onPress={handleCerrar}
+            style={styles.botonCerrarModal}
+          >
             <Text style={styles.textoBotonCerrarModal}>✕ Cerrar</Text>
           </TouchableOpacity>
         </View>
@@ -98,11 +136,12 @@ export const DetalleServicioCerradoModal: React.FC<DetalleServicioCerradoModalPr
           {/* Badge de solo lectura */}
           <View style={styles.badgeSoloLecturaContenedor}>
             <View style={styles.badgeSoloLectura}>
-              <Text style={styles.badgeTexto}>🔒 SERVICIO CERRADO — SOLO LECTURA</Text>
+              <Text style={styles.badgeTexto}>🔒 SERVICIO {etiquetaEstado} — SOLO LECTURA</Text>
             </View>
             <Text style={styles.explicacionInmutable}>
-              Este documento fue firmado y cerrado en campo. Cumpliendo la normativa sanitaria y el
-              acuerdo de GAFER, no se permite su modificación directa.
+              {servicio.estado === 'CERRADO'
+                ? 'Este documento fue firmado y cerrado en campo. Cumpliendo la normativa sanitaria y el acuerdo de GAFER, no se permite su modificación directa.'
+                : 'Este registro se encuentra en modo consulta de solo lectura.'}
             </Text>
           </View>
 
@@ -123,11 +162,11 @@ export const DetalleServicioCerradoModal: React.FC<DetalleServicioCerradoModalPr
             </View>
             <View style={styles.filaDato}>
               <Text style={styles.etiqueta}>Sede / Dirección:</Text>
-              <Text style={styles.valor}>{servicio.sedeNombre || 'Planta o sede principal'}</Text>
+              <Text style={styles.valor}>{servicio.sedeNombre || 'No especificado'}</Text>
             </View>
             <View style={styles.filaDato}>
               <Text style={styles.etiqueta}>Tipo de Servicio:</Text>
-              <Text style={styles.valor}>{servicio.servicioTipo || 'Desratización (DRT)'}</Text>
+              <Text style={styles.valor}>{etiquetaTipoServicio(servicio.servicioTipo)}</Text>
             </View>
             <View style={styles.filaDato}>
               <Text style={styles.etiqueta}>Fecha de Ejecución:</Text>
@@ -136,7 +175,7 @@ export const DetalleServicioCerradoModal: React.FC<DetalleServicioCerradoModalPr
             <View style={styles.filaDato}>
               <Text style={styles.etiqueta}>Horario:</Text>
               <Text style={styles.valor}>
-                {servicio.horaInicio || '08:00'} - {servicio.horaFin || 'Concluido'}
+                {formatearHorarioServicio(servicio.horaInicio, servicio.horaFin)}
               </Text>
             </View>
           </View>
@@ -156,60 +195,161 @@ export const DetalleServicioCerradoModal: React.FC<DetalleServicioCerradoModalPr
             )}
           </View>
 
-          {/* Tarjeta de Solicitud de Corrección */}
-          <View style={styles.tarjetaAccion}>
-            <Text style={styles.seccionTitulo}>¿Detectó algún error en este reporte?</Text>
-            <Text style={styles.descripcionCorreccion}>
-              Para corregir errores de digitación en estaciones, insumos o firmas, solicite la
-              aprobación a supervisión o administración.
-            </Text>
+          {/* Tarjeta de Snapshot Inmutable (Insumos, Equipos, Estaciones) */}
+          <View style={styles.tarjeta} testID="seccion-snapshot-servicio">
+            <Text style={styles.seccionTitulo}>3. Detalle Registrado (Snapshot Inmutable)</Text>
 
-            {!mostrarFormularioCorreccion ? (
-              <Button
-                titulo="📝 Solicitar Corrección a Supervisión"
-                onPress={() => setMostrarFormularioCorreccion(true)}
-                variante="secundario"
-                style={{ marginTop: 8 }}
-              />
-            ) : (
-              <View style={styles.formularioCorreccion}>
-                <Text style={styles.etiquetaInput}>Motivo detallado de la corrección:</Text>
-                <TextInput
-                  style={styles.inputArea}
-                  multiline
-                  numberOfLines={4}
-                  value={motivo}
-                  onChangeText={setMotivo}
-                  placeholder="Ej: Se ingresó erróneamente la estación 12 en vez de la 14 con consumo de 10g..."
-                  placeholderTextColor="#94a3b8"
-                />
-                <View style={styles.filaBotonesCorreccion}>
-                  <TouchableOpacity
-                    style={[styles.botonCancelarCorreccion]}
-                    onPress={() => {
-                      setMostrarFormularioCorreccion(false);
-                      setMotivo('');
-                    }}
-                    disabled={enviando}
-                  >
-                    <Text style={styles.textoBotonCancelar}>Cancelar</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.botonEnviarCorreccion, enviando && styles.botonDeshabilitado]}
-                    onPress={handleSolicitarCorreccion}
-                    disabled={enviando}
-                  >
-                    {enviando ? (
-                      <ActivityIndicator color="#ffffff" size="small" />
-                    ) : (
-                      <Text style={styles.textoBotonEnviar}>Enviar Pedido</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
+            {snapshotVista.insumos.length > 0 ? (
+              <View style={styles.subseccionSnapshot}>
+                <Text style={styles.subseccionTitulo}>Insumos aplicados ({snapshotVista.insumos.length})</Text>
+                {snapshotVista.insumos.map((insumo, idx) => (
+                  <View key={`insumo-${idx}`} style={styles.itemSnapshot}>
+                    <Text style={styles.itemSnapshotTitulo}>{insumo.nombre}</Text>
+                    <Text style={styles.itemSnapshotDetalle}>
+                      {[
+                        insumo.dosis ? `Dosis: ${insumo.dosis}` : null,
+                        insumo.lote ? `Lote: ${insumo.lote}` : null,
+                        insumo.cantidad ? `Cantidad: ${insumo.cantidad}` : null,
+                        insumo.registroDigesa ? `DIGESA: ${insumo.registroDigesa}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ') || 'Sin detalle adicional'}
+                    </Text>
+                  </View>
+                ))}
               </View>
-            )}
+            ) : null}
+
+            {snapshotVista.equipos.length > 0 ? (
+              <View style={styles.subseccionSnapshot}>
+                <Text style={styles.subseccionTitulo}>Equipos utilizados ({snapshotVista.equipos.length})</Text>
+                {snapshotVista.equipos.map((equipo, idx) => (
+                  <View key={`equipo-${idx}`} style={styles.itemSnapshot}>
+                    <Text style={styles.itemSnapshotTitulo}>{equipo.nombre}</Text>
+                    <Text style={styles.itemSnapshotDetalle}>
+                      {[
+                        equipo.codigoInterno ? `Código: ${equipo.codigoInterno}` : null,
+                        equipo.tipo ? `Tipo: ${equipo.tipo}` : null,
+                        equipo.marcaModelo ? `Modelo: ${equipo.marcaModelo}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ') || 'Sin detalle adicional'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            {snapshotVista.estaciones.length > 0 ? (
+              <View style={styles.subseccionSnapshot}>
+                <Text style={styles.subseccionTitulo}>
+                  Estaciones inspeccionadas ({snapshotVista.estaciones.length})
+                </Text>
+                {snapshotVista.estaciones.map((est, idx) => (
+                  <View key={`estacion-${idx}`} style={styles.itemSnapshot}>
+                    <Text style={styles.itemSnapshotTitulo}>
+                      {est.etiqueta}
+                      {est.estado ? ` — ${est.estado}` : ''}
+                    </Text>
+                    <Text style={styles.itemSnapshotDetalle}>
+                      {[
+                        est.consumoGramos !== undefined ? `Consumo: ${est.consumoGramos} g` : null,
+                        est.repuestoGramos !== undefined ? `Repuesto: ${est.repuestoGramos} g` : null,
+                        est.observaciones ? `Obs: ${est.observaciones}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ') || 'Sin observaciones'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            {!tieneContenidoSnapshot ? (
+              <Text style={styles.textoVacio}>
+                No se registraron insumos, equipos ni estaciones en el snapshot de cierre.
+              </Text>
+            ) : null}
+
+            {snapshotVista.fechaCierre ? (
+              <Text style={styles.fechaCierreTexto}>
+                Cierre registrado: {snapshotVista.fechaCierre}
+              </Text>
+            ) : null}
           </View>
+
+          {/* Tarjeta de Solicitud de Corrección */}
+          {servicio.puedeSolicitarCorreccion ? (
+            <View style={styles.tarjetaAccion} testID="tarjeta-solicitar-correccion">
+              <Text style={styles.seccionTitulo}>¿Detectó algún error en este reporte?</Text>
+              <Text style={styles.descripcionCorreccion}>
+                Para corregir errores de digitación en estaciones, insumos o firmas, solicite la
+                aprobación a supervisión o administración.
+              </Text>
+
+              {!mostrarFormularioCorreccion ? (
+                <Button
+                  testID="boton-abrir-formulario-correccion"
+                  titulo="📝 Solicitar Corrección a Supervisión"
+                  onPress={() => setMostrarFormularioCorreccion(true)}
+                  variante="secundario"
+                  style={{ marginTop: 8 }}
+                />
+              ) : (
+                <View style={styles.formularioCorreccion} testID="formulario-correccion">
+                  <View style={styles.cabeceraInputCorreccion}>
+                    <Text style={styles.etiquetaInput}>Motivo detallado de la corrección:</Text>
+                    <Text style={styles.contadorCaracteres}>
+                      {motivo.trim().length}/{MAX_MOTIVO_CORRECCION}
+                    </Text>
+                  </View>
+                  <TextInput
+                    testID="input-motivo-correccion"
+                    style={styles.inputArea}
+                    multiline
+                    numberOfLines={4}
+                    maxLength={MAX_MOTIVO_CORRECCION}
+                    value={motivo}
+                    onChangeText={setMotivo}
+                    placeholder="Ej: Se ingresó erróneamente la estación 12 en vez de la 14 con consumo de 10g..."
+                    placeholderTextColor="#94a3b8"
+                  />
+                  <View style={styles.filaBotonesCorreccion}>
+                    <TouchableOpacity
+                      testID="boton-cancelar-correccion"
+                      style={[styles.botonCancelarCorreccion]}
+                      onPress={() => {
+                        setMostrarFormularioCorreccion(false);
+                        setMotivo('');
+                      }}
+                      disabled={enviando}
+                    >
+                      <Text style={styles.textoBotonCancelar}>Cancelar</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      testID="boton-enviar-correccion"
+                      style={[styles.botonEnviarCorreccion, enviando && styles.botonDeshabilitado]}
+                      onPress={handleSolicitarCorreccion}
+                      disabled={enviando}
+                    >
+                      {enviando ? (
+                        <ActivityIndicator color="#ffffff" size="small" />
+                      ) : (
+                        <Text style={styles.textoBotonEnviar}>Enviar Pedido</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={styles.tarjetaAccion} testID="aviso-sin-correccion">
+              <Text style={styles.descripcionCorreccion}>
+                Las solicitudes de corrección solo están habilitadas para servicios en estado CERRADO.
+              </Text>
+            </View>
+          )}
         </ScrollView>
       </SafeAreaView>
     </Modal>
@@ -360,11 +500,53 @@ const styles = StyleSheet.create({
   formularioCorreccion: {
     marginTop: 10,
   },
+  cabeceraInputCorreccion: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  contadorCaracteres: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  subseccionSnapshot: {
+    marginBottom: 10,
+  },
+  subseccionTitulo: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 6,
+  },
+  itemSnapshot: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 6,
+    padding: 8,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  itemSnapshotTitulo: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  itemSnapshotDetalle: {
+    fontSize: 11,
+    color: '#475569',
+    marginTop: 2,
+  },
+  fechaCierreTexto: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 4,
+  },
   etiquetaInput: {
     fontSize: 12,
     fontWeight: '600',
     color: '#334155',
-    marginBottom: 4,
   },
   inputArea: {
     backgroundColor: '#ffffff',

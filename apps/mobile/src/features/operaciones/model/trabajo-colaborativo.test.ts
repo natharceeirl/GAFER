@@ -181,11 +181,15 @@ describe('Trabajo Colaborativo Multi-Técnico y Resolución de Conflictos LWW (�
   });
 
   describe('4. Bloqueo de Inspección Cerrada (§8.2)', () => {
-    it('detecta estado abierto y estado bloqueado', () => {
-      expect(verificarBloqueoInspeccion({ cerradaEnRevision: false }).bloqueada).toBe(false);
+    it('detecta estado abierto y estado bloqueado incluyendo syncStatus y ENVIADO_A_REVISION (F7)', () => {
+      expect(verificarBloqueoInspeccion({ cerradaEnRevision: false, syncStatus: 'PENDING_SYNC', estado: 'BORRADOR' }).bloqueada).toBe(false);
       expect(verificarBloqueoInspeccion({ cerradaEnRevision: true }).bloqueada).toBe(true);
       expect(verificarBloqueoInspeccion({ estado: 'CERRADO' }).bloqueada).toBe(true);
+      expect(verificarBloqueoInspeccion({ estado: 'ENVIADO_A_REVISION' }).bloqueada).toBe(true);
       expect(verificarBloqueoInspeccion({ estado: 'EN_REVISION' }).bloqueada).toBe(true);
+      expect(verificarBloqueoInspeccion({ estado: 'APROBADO' }).bloqueada).toBe(true);
+      expect(verificarBloqueoInspeccion({ syncStatus: 'LOCKED' }).bloqueada).toBe(true);
+      expect(verificarBloqueoInspeccion({ syncStatus: 'CLOSED' }).bloqueada).toBe(true);
       expect(verificarBloqueoInspeccion({ bloqueada: true }).bloqueada).toBe(true);
     });
   });
@@ -295,13 +299,149 @@ describe('Trabajo Colaborativo Multi-Técnico y Resolución de Conflictos LWW (�
       expect(resultado.acta.observacionesCliente).toContain('Recibido por guardia sur');
       expect(resultado.acta.observacionesCliente).toContain('oficina central');
     });
+
+    it('preserva una firma manuscrita local válida (Base64 o archivo local) si el acta remota marca responsableNoDisponible: true (F4)', () => {
+      const base: ActaServicioDrt = {
+        servicioId: 'a0000000-0000-0000-0000-000000000002',
+        clienteRazonSocial: 'ALICORP S.A.A.',
+        sedeDireccion: 'Planta Callao',
+        fecha: '2026-11-03',
+        horaInicio: '08:00',
+        horaTermino: '10:00',
+        actividad: 'MONITOREO',
+        tipoCebo: 'BLOQUE_10G',
+        cebosInstalados: 10,
+        cebosConsumidos: 0,
+        cebosRepuestos: 0,
+        tipoTrampa: 'MECANICA',
+        trampasInstaladas: 4,
+        trampasActivadas: 0,
+        roedoresDetectados: [],
+        resultadosRecomendaciones: '',
+        observacionesCliente: '',
+        firmas: {
+          personalResponsableNombre: 'Juan Perez',
+          personalResponsableCargo: 'Técnico',
+          clienteConformidadNombre: 'Luis Vega',
+          clienteConformidadCargo: 'Jefe de Planta',
+          fecha: '2026-11-03',
+          firmaDigitalBase64: 'data:image/svg+xml;base64,PHN2Zy8+',
+          responsableNoDisponible: false,
+        },
+        planillaEstaciones: [],
+        fotos: [],
+      };
+
+      const remotaAusente: ActaServicioDrt = {
+        ...base,
+        firmas: {
+          ...base.firmas,
+          firmaDigitalBase64: undefined,
+          firmaArchivoId: undefined,
+          firmaRutaLocalRelativa: undefined,
+          responsableNoDisponible: true,
+          motivoNoDisponible: 'No ubicó al responsable en su sector',
+        },
+      };
+
+      // Caso 1: firma local Base64
+      const resBase64 = fusionarActasColaborativas(base, remotaAusente);
+      expect(resBase64.acta.firmas.firmaDigitalBase64).toBe('data:image/svg+xml;base64,PHN2Zy8+');
+      expect(resBase64.acta.firmas.responsableNoDisponible).toBe(false);
+
+      // Caso 2: firma local respaldada por archivo (§13.2 / PR #36)
+      const localConArchivo: ActaServicioDrt = {
+        ...base,
+        firmas: {
+          ...base.firmas,
+          firmaDigitalBase64: undefined,
+          firmaArchivoId: '11111111-1111-4000-8000-000000000099',
+          firmaRutaLocalRelativa: 'inspections/INS_1/signatures/SIG_1.svg',
+          responsableNoDisponible: false,
+        },
+      };
+      const resArchivo = fusionarActasColaborativas(localConArchivo, remotaAusente);
+      expect(resArchivo.acta.firmas.firmaArchivoId).toBe('11111111-1111-4000-8000-000000000099');
+      expect(resArchivo.acta.firmas.firmaRutaLocalRelativa).toBe('inspections/INS_1/signatures/SIG_1.svg');
+      expect(resArchivo.acta.firmas.responsableNoDisponible).toBe(false);
+    });
+
+    it('es idempotente al fusionar observaciones/recomendaciones y no descarta roedoresDetectados ni contadores remotos (F7)', () => {
+      const local: ActaServicioDrt = {
+        servicioId: 'a0000000-0000-0000-0000-000000000003',
+        clienteRazonSocial: 'GLORIA S.A.',
+        sedeDireccion: 'Huachipa',
+        fecha: '2026-11-03',
+        horaInicio: '08:00',
+        horaTermino: '11:00',
+        actividad: 'MONITOREO',
+        tipoCebo: 'BLOQUE_10G',
+        cebosInstalados: 20,
+        cebosConsumidos: 2,
+        cebosRepuestos: 2,
+        tipoTrampa: 'MECANICA',
+        trampasInstaladas: 5,
+        trampasActivadas: 1,
+        roedoresDetectados: ['R_NORVEGICUS'],
+        resultadosRecomendaciones: 'Sector A revisado',
+        observacionesCliente: 'Obs A',
+        firmas: {
+          personalResponsableNombre: 'Juan',
+          personalResponsableCargo: 'Técnico',
+          clienteConformidadNombre: '',
+          clienteConformidadCargo: '',
+          fecha: '2026-11-03',
+          responsableNoDisponible: false,
+        },
+        planillaEstaciones: [],
+        fotos: [],
+        actualizadoEn: '2026-11-03T09:00:00Z',
+      };
+
+      const remota: ActaServicioDrt = {
+        ...local,
+        cebosInstalados: 30,
+        cebosConsumidos: 6,
+        cebosRepuestos: 6,
+        trampasInstaladas: 8,
+        trampasActivadas: 3,
+        roedoresDetectados: ['R_NORVEGICUS', 'MUS_MUSCULUS'],
+        resultadosRecomendaciones: 'Sector B revisado',
+        observacionesCliente: 'Obs B',
+        actualizadoEn: '2026-11-03T09:30:00Z',
+      };
+
+      const primera = fusionarActasColaborativas(local, remota);
+      expect(primera.acta.observacionesCliente).toBe('Obs A | Obs B');
+      expect(primera.acta.resultadosRecomendaciones).toBe('Sector A revisado | Sector B revisado');
+      expect(primera.acta.roedoresDetectados).toEqual(['R_NORVEGICUS', 'MUS_MUSCULUS']);
+      expect(primera.acta.cebosInstalados).toBe(30);
+      expect(primera.acta.cebosConsumidos).toBe(6);
+      expect(primera.acta.cebosRepuestos).toBe(6);
+      expect(primera.acta.trampasInstaladas).toBe(8);
+      expect(primera.acta.trampasActivadas).toBe(3);
+
+      // Re-sincronizar con el mismo payload remoto debe ser idempotente (sin duplicar "| Obs B")
+      const segunda = fusionarActasColaborativas(primera.acta, remota);
+      expect(segunda.acta.observacionesCliente).toBe('Obs A | Obs B');
+      expect(segunda.acta.resultadosRecomendaciones).toBe('Sector A revisado | Sector B revisado');
+      expect(segunda.acta.roedoresDetectados).toEqual(['R_NORVEGICUS', 'MUS_MUSCULUS']);
+    });
   });
 
   describe('6. Formato de Detalle de Guardado', () => {
-    it('formatea texto legible de guardado con técnico, fecha y hora', () => {
+    it('formatea texto legible de guardado con técnico, fecha y hora en zona local consistente (F6)', () => {
       const texto = formatearDetalleBorrador('2026-11-03T14:30:00Z', 'Carlos Prado');
       expect(texto).toContain('2026-11-03');
       expect(texto).toContain('Carlos Prado');
+
+      // Guardado nocturno local (ej. 21:45 local -> siguiente día en UTC en zonas con offset negativo como Perú UTC-5):
+      // la fecha formateada debe coincidir con el día local, nunca adelantarse 1 día por mezclar UTC y local.
+      const fechaNocturnaLocal = new Date(2026, 10, 3, 21, 45, 0);
+      const formateado = formatearDetalleBorrador(fechaNocturnaLocal.toISOString(), 'Mario Silva');
+      expect(formateado).toBe('Guardado el 2026-11-03 a las 21:45 por Mario Silva');
+
+      expect(formatearDetalleBorrador(undefined, 'Mario Silva')).toBe('Borrador sin guardar');
     });
   });
 });

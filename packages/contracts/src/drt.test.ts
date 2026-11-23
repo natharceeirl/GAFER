@@ -6,6 +6,7 @@ import {
   TipoTrampaDrtSchema,
   EspecieRoedorDrtSchema,
   EstadoEstacionPlanillaSchema,
+  ItemEstacionPlanillaSchema,
 } from './drt';
 
 describe('Contrato ActaServicioDrt (GAF-103)', () => {
@@ -66,6 +67,7 @@ describe('Contrato ActaServicioDrt (GAF-103)', () => {
         clienteConformidadNombre: 'Cliente',
         clienteConformidadCargo: 'Supervisor',
         fecha: '2026-11-03',
+        firmaDigitalBase64: 'data:image/svg+xml;base64,PHN2Zz48cGF0aCBkPSJNIDAgMCBMIDEwIDEwIi8+PC9zdmc+',
       },
     };
 
@@ -77,16 +79,131 @@ describe('Contrato ActaServicioDrt (GAF-103)', () => {
       expect(resultado.data.roedoresDetectados).toEqual([]);
       expect(resultado.data.resultadosRecomendaciones).toBe('');
       expect(resultado.data.planillaEstaciones).toEqual([]);
+      expect(resultado.data.firmas.responsableNoDisponible).toBe(false);
     }
   });
 
-  it('rechaza estados de estación no soportados o números no enteros', () => {
-    const dataInvalida = {
-      numero: -5,
-      estado: 'DESCONOCIDO',
+  it('exige nombre, cargo y firma del cliente cuando responsableNoDisponible es false (F6)', () => {
+    const baseActa = {
+      servicioId: 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d',
+      clienteRazonSocial: 'CLIENTE PRUEBA',
+      sedeDireccion: 'Calle 123',
+      fecha: '2026-11-03',
+      horaInicio: '09:00',
+      horaTermino: '10:00',
+      actividad: 'MONITOREO' as const,
+      tipoCebo: 'BLOQUE_10G' as const,
+      tipoTrampa: 'MECANICA' as const,
     };
-    const res = EstadoEstacionPlanillaSchema.safeParse(dataInvalida.estado);
-    expect(res.success).toBe(false);
+
+    const sinConformidad = ActaServicioDrtSchema.safeParse({
+      ...baseActa,
+      firmas: {
+        personalResponsableNombre: 'Tecnico',
+        personalResponsableCargo: 'Operador',
+        fecha: '2026-11-03',
+        responsableNoDisponible: false,
+      },
+    });
+    expect(sinConformidad.success).toBe(false);
+    if (!sinConformidad.success) {
+      const rutas = sinConformidad.error.issues.map((i) => i.path.join('.'));
+      expect(rutas).toContain('firmas.clienteConformidadNombre');
+      expect(rutas).toContain('firmas.clienteConformidadCargo');
+      expect(rutas).toContain('firmas.firmaDigitalBase64');
+    }
+
+    const conArchivoFirma = ActaServicioDrtSchema.safeParse({
+      ...baseActa,
+      firmas: {
+        personalResponsableNombre: 'Tecnico',
+        personalResponsableCargo: 'Operador',
+        clienteConformidadNombre: 'Carlos Gomez',
+        clienteConformidadCargo: 'Jefe de Planta',
+        fecha: '2026-11-03',
+        responsableNoDisponible: false,
+        firmaArchivoId: '11111111-2222-4333-8444-555555555555',
+        firmaRutaLocalRelativa: 'inspections/INS_1/signatures/SIG_1.svg',
+      },
+    });
+    expect(conArchivoFirma.success).toBe(true);
+
+    const responsableAusente = ActaServicioDrtSchema.safeParse({
+      ...baseActa,
+      firmas: {
+        personalResponsableNombre: 'Tecnico',
+        personalResponsableCargo: 'Operador',
+        fecha: '2026-11-03',
+        responsableNoDisponible: true,
+        motivoNoDisponible: 'Sede sin supervisor en turno nocturno',
+      },
+    });
+    expect(responsableAusente.success).toBe(true);
+  });
+
+  it('rechaza estados de estación no soportados o números no enteros/positivos en ItemEstacionPlanillaSchema', () => {
+    expect(
+      ItemEstacionPlanillaSchema.safeParse({ numero: 1, estado: 'DESCONOCIDO' }).success,
+    ).toBe(false);
+    expect(
+      ItemEstacionPlanillaSchema.safeParse({ numero: -5, estado: 'SIN_ACTIVIDAD' }).success,
+    ).toBe(false);
+    expect(
+      ItemEstacionPlanillaSchema.safeParse({ numero: 0, estado: 'SIN_ACTIVIDAD' }).success,
+    ).toBe(false);
+    expect(
+      ItemEstacionPlanillaSchema.safeParse({ numero: 1.5, estado: 'SIN_ACTIVIDAD' }).success,
+    ).toBe(false);
+    expect(
+      ItemEstacionPlanillaSchema.safeParse({
+        numero: 1,
+        estado: 'CON_CONSUMO',
+        consumoGramos: -10,
+        repuestoGramos: 5,
+      }).success,
+    ).toBe(false);
+    expect(
+      ItemEstacionPlanillaSchema.safeParse({
+        numero: 1,
+        estado: 'CON_CONSUMO',
+        consumoGramos: 10,
+        repuestoGramos: -5,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rechaza servicioId que no cumpla formato UUID', () => {
+    const baseValida = {
+      clienteRazonSocial: 'CLIENTE PRUEBA',
+      sedeDireccion: 'Calle 123',
+      fecha: '2026-11-03',
+      horaInicio: '09:00',
+      horaTermino: '10:00',
+      actividad: 'EVALUACION' as const,
+      tipoCebo: 'NINGUNO' as const,
+      tipoTrampa: 'NINGUNA' as const,
+      firmas: {
+        personalResponsableNombre: 'Tecnico',
+        personalResponsableCargo: 'Operador',
+        clienteConformidadNombre: 'Cliente',
+        clienteConformidadCargo: 'Supervisor',
+        fecha: '2026-11-03',
+        firmaDigitalBase64: 'data:image/svg+xml;base64,PHN2Zz48cGF0aCBkPSJNIDAgMCBMIDEwIDEwIi8+PC9zdmc+',
+      },
+    };
+
+    expect(
+      ActaServicioDrtSchema.safeParse({
+        ...baseValida,
+        servicioId: 's1111111-1111-4000-8000-000000000001',
+      }).success,
+    ).toBe(false);
+    expect(
+      ActaServicioDrtSchema.safeParse({
+        ...baseValida,
+        servicioId: 'contingencia-b1a2c3d4',
+      }).success,
+    ).toBe(false);
   });
 
   it('valida los enums oficiales de actividad, cebos, trampas y especies', () => {

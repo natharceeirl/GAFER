@@ -276,4 +276,112 @@ describe('OutboxQueue (Móvil Offline-First con sync.v1 - GAP-05)', () => {
       expect(filas).toHaveLength(1);
     });
   });
+
+  describe('consistencia memoria vs SQLite ante errores de escritura (F5)', () => {
+    it('marcarSincronizadas no muta la cola en memoria si falla la transacción SQLite', async () => {
+      const { MemorySqliteAdapter, ejecutarMigraciones } = await import('./sqlite');
+      const db = new MemorySqliteAdapter();
+      await ejecutarMigraciones(db);
+
+      const queue = new OutboxQueue(db);
+      await queue.encolar(dummyOperacion);
+
+      const spyTx = vi
+        .spyOn(db, 'withExclusiveTransactionAsync')
+        .mockRejectedValueOnce(new Error('SQLITE_FULL'));
+
+      await expect(queue.marcarSincronizadas([dummyOperacion.operationId])).rejects.toThrow(
+        'SQLITE_FULL',
+      );
+      spyTx.mockRestore();
+
+      // La operación sigue pendiente tanto en memoria como en SQLite.
+      expect(queue.obtenerPendientes()).toHaveLength(1);
+      expect(queue.obtenerPendientes()[0].sincronizado).toBe(false);
+      const fila = await db.getFirstAsync<{ status: string }>(
+        'SELECT status FROM sync_outbox WHERE operation_id = ?;',
+        [dummyOperacion.operationId],
+      );
+      expect(fila?.status).toBe('PENDING');
+    });
+
+    it('limpiarSincronizados no descarta la cola en memoria si falla el DELETE en SQLite', async () => {
+      const { MemorySqliteAdapter, ejecutarMigraciones } = await import('./sqlite');
+      const db = new MemorySqliteAdapter();
+      await ejecutarMigraciones(db);
+
+      const queue = new OutboxQueue(db);
+      await queue.encolar(dummyOperacion);
+      await queue.marcarSincronizadas([dummyOperacion.operationId]);
+
+      const spyTx = vi
+        .spyOn(db, 'withExclusiveTransactionAsync')
+        .mockRejectedValueOnce(new Error('SQLITE_IOERR'));
+
+      await expect(queue.limpiarSincronizados()).rejects.toThrow('SQLITE_IOERR');
+      spyTx.mockRestore();
+
+      // La fila sigue en SQLite y en la cola en memoria (encolar devuelve el registro en memoria sin tocar SQLite).
+      const spyEncolarTx = vi.spyOn(db, 'withExclusiveTransactionAsync');
+      const enMemoria = await queue.encolar(dummyOperacion);
+      expect(spyEncolarTx).not.toHaveBeenCalled();
+      expect(enMemoria.sincronizado).toBe(true);
+      spyEncolarTx.mockRestore();
+
+      const fila = await db.getFirstAsync<{ status: string }>(
+        'SELECT status FROM sync_outbox WHERE operation_id = ?;',
+        [dummyOperacion.operationId],
+      );
+      expect(fila?.status).toBe('SYNCED');
+    });
+  });
+
+  describe('manejo de rechazo 409 y errores transitorios (PR37-F2)', () => {
+    it('en modo OutboxStorage marca rechazado ante HTTP 409, no reenvía en la misma sesión ni tras reiniciar', async () => {
+      const storage = new MemoryOutboxStorage();
+      const queue = new OutboxQueue(storage);
+      await queue.encolar(dummyOperacion);
+
+      const mockFetch409 = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        statusText: 'Conflict',
+        json: async () => ({ message: 'La inspección está cerrada (Sección 8.2)' }),
+      });
+
+      const res1 = await queue.enviarLote('http://localhost:3000', dummyOperacion.agregadoId, mockFetch409 as any);
+      expect(res1).toBeNull();
+      expect(queue.obtenerPendientes()).toHaveLength(0);
+      expect(queue.obtenerRechazadas()).toHaveLength(1);
+
+      // Segundo envío en la misma sesión: no debe volver a llamar a fetch
+      await queue.enviarLote('http://localhost:3000', dummyOperacion.agregadoId, mockFetch409 as any);
+      expect(mockFetch409).toHaveBeenCalledTimes(1);
+
+      // Tras reinicio desde OutboxStorage: sigue sin aparecer en pendientes ni reenviarse
+      const queueReiniciada = new OutboxQueue(storage);
+      await queueReiniciada.inicializar();
+      expect(queueReiniciada.obtenerPendientes()).toHaveLength(0);
+      expect(queueReiniciada.obtenerRechazadas()).toHaveLength(1);
+      await queueReiniciada.enviarLote('http://localhost:3000', dummyOperacion.agregadoId, mockFetch409 as any);
+      expect(mockFetch409).toHaveBeenCalledTimes(1);
+    });
+
+    it('un HTTP 500 cuyo mensaje contiene "cerrada" se mantiene pendiente para reintento y no se rechaza', async () => {
+      const storage = new MemoryOutboxStorage();
+      const queue = new OutboxQueue(storage);
+      await queue.encolar(dummyOperacion);
+
+      const mockFetch500 = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        json: async () => ({ message: 'Error transitorio: conexión cerrada por el upstream' }),
+      });
+
+      await queue.enviarLote('http://localhost:3000', dummyOperacion.agregadoId, mockFetch500 as any);
+      expect(queue.obtenerPendientes()).toHaveLength(1);
+      expect(queue.obtenerRechazadas()).toHaveLength(0);
+    });
+  });
 });

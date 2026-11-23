@@ -2,10 +2,10 @@
  * GAFER Mobile — E2E Test: Captura de Fotos con Compresión (C15) y Firma del Responsable en Pantalla (GAF-36)
  *
  * Verifica los criterios de aceptación de GAF-36:
- * 1. Fotos comprimidas a un máximo de 1 MB (Decisión C15 / §13.1, Guía Offline-First Rev 2).
- * 2. Firma del responsable capturada en pantalla (inmutable y persistida localmente).
+ * 1. Fotos comprimidas a un máximo de 1 MB mediante recompresión real (Decisión C15 / §13.1).
+ * 2. Firma del responsable capturada en pantalla (SVG Base64 inmutable y persistida en files_local + outbox).
  * 3. Opción explícita "responsable no estuvo disponible" sin bloquear la finalización del servicio.
- * 4. Almacenamiento durable en filesystem relativo y SQLite files_local (§5.2, §5.3).
+ * 4. Almacenamiento durable en filesystem relativo, SQLite files_local y sync_outbox (§5.2, §5.3, §13.1.1).
  * 5. Cierre y encolado en Outbox sin conexión a red ("Durable before visible").
  */
 
@@ -14,6 +14,8 @@ import {
   ActaServicioDrt,
   ActaServicioDrtSchema,
   FotoEvidenciaDrtSchema,
+  OperacionSyncSchema,
+  PayloadArchivoSyncSchema,
 } from '@gafer/contracts';
 import {
   inicializarBaseDeDatos,
@@ -26,10 +28,29 @@ import { ArchivosLocalRepository } from './archivos-local.repository';
 import { BorradorRepository } from './borrador-repository';
 import {
   comprimirFoto,
+  configurarCompresorImagen,
+  CompresorImagenPort,
   MAX_TAMANO_FOTO_BYTES,
   generarRutaFoto,
   generarRutaFirma,
 } from './fotos-compresion';
+import { generarSvgFirmaBase64 } from './firma-svg';
+
+function crearCompresorE2e(): CompresorImagenPort {
+  return {
+    async recomprimir(sol) {
+      const tamano = Math.max(64 * 1024, Math.floor(800 * 1024 * sol.calidad));
+      const salida = new Uint8Array(tamano);
+      salida[0] = 0xff;
+      salida[1] = 0xd8;
+      salida[2] = 0xff;
+      salida[3] = 0xe0;
+      salida[salida.length - 2] = 0xff;
+      salida[salida.length - 1] = 0xd9;
+      return { bytes: salida, mimeType: 'image/jpeg' };
+    },
+  };
+}
 
 describe('E2E: Fotos con Compresión C15 y Firma en Pantalla (GAF-36)', () => {
   let db: SqliteDatabasePort;
@@ -38,6 +59,7 @@ describe('E2E: Fotos con Compresión C15 y Firma en Pantalla (GAF-36)', () => {
   let borradorRepo: BorradorRepository;
 
   const servicioId = 'b8214fa3-54cd-4e8c-8c76-90b9f143a219';
+  const tecnicoId = '33333333-3333-4000-8000-000000000001';
 
   beforeEach(async () => {
     await cerrarBaseDeDatos();
@@ -45,27 +67,29 @@ describe('E2E: Fotos con Compresión C15 y Firma en Pantalla (GAF-36)', () => {
     fs = new MemoryFilesystemAdapter();
     archivosRepo = new ArchivosLocalRepository(db, fs);
     borradorRepo = new BorradorRepository(db);
+    configurarCompresorImagen(crearCompresorE2e());
   });
 
   afterEach(async () => {
+    configurarCompresorImagen(null);
     await cerrarBaseDeDatos();
   });
 
   describe('1. Compresión y Validación Estricta de Fotos (Decisión C15: máx 1 MB)', () => {
-    it('comprime automáticamente fotos mayores a 1 MB garantizando <= 1,048,576 bytes', async () => {
-      // Simular buffer de foto pesada de 3.2 MB
-      const bufferPesado = Buffer.alloc(3.2 * 1024 * 1024, 0xab);
-      const entradaBytes = Uint8Array.from(bufferPesado);
+    it('comprime automáticamente fotos mayores a 1 MB garantizando <= 1,048,576 bytes con JPEG válido', async () => {
+      const entradaBytes = new Uint8Array(3.2 * 1024 * 1024).fill(0xab);
 
       const resultado = await comprimirFoto(entradaBytes, {
         calidadInicial: 0.85,
         maxBytes: MAX_TAMANO_FOTO_BYTES,
       });
 
+      expect(resultado.fueComprimida).toBe(true);
       expect(resultado.tamanoBytes).toBeLessThanOrEqual(MAX_TAMANO_FOTO_BYTES);
       expect(resultado.buffer.byteLength).toBe(resultado.tamanoBytes);
-      expect(resultado.sha256).toBeDefined();
-      expect(resultado.sha256.length).toBe(64); // SHA-256 hex
+      expect(Array.from(resultado.buffer.slice(0, 2))).toEqual([0xff, 0xd8]);
+      expect(Array.from(resultado.buffer.slice(-2))).toEqual([0xff, 0xd9]);
+      expect(resultado.sha256).toMatch(/^[0-9a-f]{64}$/);
     });
 
     it('FotoEvidenciaDrtSchema aprueba fotos de <= 1 MB y rechaza fotos > 1 MB con mensaje C15', () => {
@@ -73,49 +97,48 @@ describe('E2E: Fotos con Compresión C15 y Firma en Pantalla (GAF-36)', () => {
         id: '11111111-2222-3333-4444-555555555555',
         nombre: 'cebadero-01-evidencia.jpg',
         rutaLocalRelativa: 'inspections/INS_123/photos/PH_01.jpg',
-        tamanoBytes: 850 * 1024, // 850 KB (< 1 MB)
+        tamanoBytes: 850 * 1024,
         sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
         mimeType: 'image/jpeg',
         capturadaEn: '2026-11-03T10:15:00Z',
       };
 
-      const parseValido = FotoEvidenciaDrtSchema.safeParse(fotoValida);
-      expect(parseValido.success).toBe(true);
+      expect(FotoEvidenciaDrtSchema.safeParse(fotoValida).success).toBe(true);
 
-      const fotoExcedida = {
+      const parseInvalido = FotoEvidenciaDrtSchema.safeParse({
         ...fotoValida,
-        tamanoBytes: 1.5 * 1024 * 1024, // 1.5 MB (> 1 MB)
-      };
-
-      const parseInvalido = FotoEvidenciaDrtSchema.safeParse(fotoExcedida);
+        tamanoBytes: 1.5 * 1024 * 1024,
+      });
       expect(parseInvalido.success).toBe(false);
       if (!parseInvalido.success) {
-        const errorC15 = parseInvalido.error.errors.find((e) =>
-          e.message.includes('C15'),
-        );
-        expect(errorC15).toBeDefined();
+        const errorC15 = parseInvalido.error.errors.find((e) => e.message.includes('C15'));
         expect(errorC15?.message).toContain('La foto no debe superar 1 MB (Decisión C15)');
       }
     });
 
     it('genera rutas canónicas de archivos según especificación §5.3', () => {
-      const rutaFoto = generarRutaFoto('srv-100', 'foto-999');
-      expect(rutaFoto).toBe('inspections/INS_srv-100/photos/PH_foto-999.jpg');
-
-      const rutaFirma = generarRutaFirma('srv-100', 'sig-888');
-      expect(rutaFirma).toBe('inspections/INS_srv-100/signatures/SIG_sig-888.png');
+      expect(generarRutaFoto('srv-100', 'foto-999')).toBe(
+        'inspections/INS_srv-100/photos/PH_foto-999.jpg',
+      );
+      expect(generarRutaFirma('srv-100', 'sig-888')).toBe(
+        'inspections/INS_srv-100/signatures/SIG_sig-888.svg',
+      );
+      expect(generarRutaFirma('srv-100', 'sig-888', 'image/png')).toBe(
+        'inspections/INS_srv-100/signatures/SIG_sig-888.png',
+      );
     });
   });
 
   describe('2. Almacenamiento Offline en Filesystem y SQLite files_local (§5.2, §5.3)', () => {
-    it('guarda fotos en filesystem con ruta relativa e indexa en SQLite con estado PENDING', async () => {
-      const buffer = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46]); // Magic bytes JPEG
+    it('guarda fotos en filesystem con ruta relativa e indexa en SQLite y sync_outbox con estado PENDING', async () => {
+      const buffer = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0xff, 0xd9]);
 
       const archivoGuardado = await archivosRepo.guardarFoto({
         inspectionId: servicioId,
         buffer,
         nombre: 'estacion-03-consumo.jpg',
         descripcion: 'Cebo consumido al 50%',
+        actorId: tecnicoId,
       });
 
       expect(archivoGuardado.file_id).toBeDefined();
@@ -124,41 +147,39 @@ describe('E2E: Fotos con Compresión C15 y Firma en Pantalla (GAF-36)', () => {
       expect(archivoGuardado.upload_status).toBe('PENDING');
       expect(archivoGuardado.size_bytes).toBeLessThanOrEqual(MAX_TAMANO_FOTO_BYTES);
 
-      // 1. Verificar en filesystem simulado (aislamiento de paths absolutos)
-      const existeEnFs = await fs.existe(archivoGuardado.local_path_relative);
-      expect(existeEnFs).toBe(true);
-
+      expect(await fs.existe(archivoGuardado.local_path_relative)).toBe(true);
       const bytesFs = await fs.leerBytes(archivoGuardado.local_path_relative);
       expect(bytesFs.byteLength).toBe(archivoGuardado.size_bytes);
 
-      // 2. Verificar en SQLite tabla files_local
       const filaDb = await archivosRepo.obtenerPorId(archivoGuardado.file_id);
       expect(filaDb).not.toBeNull();
       expect(filaDb?.sha256).toBe(archivoGuardado.sha256);
       expect(filaDb?.upload_status).toBe('PENDING');
     });
 
-    it('guarda firma del cliente en pantalla con flag pinned = 1 y estado PENDING', async () => {
-      const firmaPngBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    it('guarda firma SVG del cliente en pantalla con flag pinned = 1, extensión .svg y estado PENDING', async () => {
+      const firmaSvgBase64 = generarSvgFirmaBase64([
+        [
+          { x: 15, y: 70 },
+          { x: 140, y: 50 },
+        ],
+      ]);
 
       const firmaGuardada = await archivosRepo.guardarFirma({
         inspectionId: servicioId,
-        firmaBase64: firmaPngBase64,
+        firmaBase64: firmaSvgBase64,
         firmanteNombre: 'Ing. Fernando Valdivia',
         firmanteCargo: 'Jefe de Planta',
+        actorId: tecnicoId,
       });
 
       expect(firmaGuardada.file_type).toBe('SIGNATURE');
       expect(firmaGuardada.pinned).toBe(1);
-      expect(firmaGuardada.mime_type).toBe('image/png');
+      expect(firmaGuardada.mime_type).toBe('image/svg+xml');
       expect(firmaGuardada.upload_status).toBe('PENDING');
+      expect(firmaGuardada.local_path_relative).toMatch(/\/signatures\/SIG_.*\.svg$/);
+      expect(await fs.existe(firmaGuardada.local_path_relative)).toBe(true);
 
-      // Debe estar en filesystem en subdirectorio signatures
-      expect(firmaGuardada.local_path_relative).toContain(`/signatures/SIG_`);
-      const existeEnFs = await fs.existe(firmaGuardada.local_path_relative);
-      expect(existeEnFs).toBe(true);
-
-      // Debe recuperarse en SQLite
       const filaDb = await archivosRepo.obtenerPorId(firmaGuardada.file_id);
       expect(filaDb?.file_type).toBe('SIGNATURE');
       expect(filaDb?.pinned).toBe(1);
@@ -212,22 +233,20 @@ describe('E2E: Fotos con Compresión C15 y Firma en Pantalla (GAF-36)', () => {
         fotos: [],
       };
 
-      // 1. Debe pasar validación de esquema sin firmaBase64
-      const parseResult = ActaServicioDrtSchema.safeParse(actaSinFirmaDisponible);
-      expect(parseResult.success).toBe(true);
+      expect(ActaServicioDrtSchema.safeParse(actaSinFirmaDisponible).success).toBe(true);
 
-      // 2. Persistir borrador antes de finalizar
-      await borradorRepo.guardarDrt(actaSinFirmaDisponible);
-      const borradorAntes = await borradorRepo.obtenerPorServicioId(servicioId);
+      await borradorRepo.guardarDrt(actaSinFirmaDisponible, { usuarioId: tecnicoId });
+      const borradorAntes = await borradorRepo.obtenerPorServicioId(servicioId, tecnicoId);
       expect(borradorAntes).not.toBeNull();
       expect(borradorAntes?.datosDrt?.firmas.responsableNoDisponible).toBe(true);
       expect(borradorAntes?.datosDrt?.firmas.motivoNoDisponible).toContain('Supervisor de turno');
 
-      // 3. Finalizar y encolar en Outbox de SQLite
-      const { operationId } = await borradorRepo.finalizarYEncolarDrt(actaSinFirmaDisponible, 'usr-tec-01');
+      const { operationId } = await borradorRepo.finalizarYEncolarDrt(
+        actaSinFirmaDisponible,
+        tecnicoId,
+      );
       expect(operationId).toBeDefined();
 
-      // 4. Verificar que se encoló la operación en Outbox lista para sincronizar
       const outbox = new OutboxQueue(db);
       await outbox.inicializar();
       const pendientes = outbox.obtenerPendientes();
@@ -239,35 +258,40 @@ describe('E2E: Fotos con Compresión C15 y Firma en Pantalla (GAF-36)', () => {
   });
 
   describe('4. Flujo Integral E2E: Fotos + Firma + Planilla + Outbox sin Conexión', () => {
-    it('ejecuta el ciclo de vida completo offline con fotos comprimidas, firma y encolado outbox', async () => {
-      // 1. Técnico captura 2 evidencias fotográficas en campo
-      const foto1Bytes = Buffer.alloc(1.8 * 1024 * 1024, 0x11); // 1.8 MB
-      const foto2Bytes = Buffer.alloc(0.6 * 1024 * 1024, 0x22); // 600 KB
+    it('ejecuta el ciclo de vida completo offline con fotos comprimidas, firma SVG en files_local y encolado outbox', async () => {
+      const foto1Bytes = new Uint8Array(1.8 * 1024 * 1024).fill(0x11);
+      const foto2Bytes = new Uint8Array(0.6 * 1024 * 1024).fill(0x22);
 
       const foto1Guardada = await archivosRepo.guardarFoto({
         inspectionId: servicioId,
-        buffer: Uint8Array.from(foto1Bytes),
+        buffer: foto1Bytes,
         nombre: 'evidencia_roedor_estacion_2.jpg',
         descripcion: 'Estación 2 con signos de roeduras',
+        actorId: tecnicoId,
       });
 
       const foto2Guardada = await archivosRepo.guardarFoto({
         inspectionId: servicioId,
-        buffer: Uint8Array.from(foto2Bytes),
+        buffer: foto2Bytes,
         nombre: 'panoramica_perimetro.jpg',
         descripcion: 'Vista perimétrica norte',
+        actorId: tecnicoId,
       });
 
-      // 2. Técnico captura firma manuscrita del responsable en pantalla
-      const firmaPngBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      const firmaSvgBase64 = generarSvgFirmaBase64([
+        [
+          { x: 25, y: 80 },
+          { x: 180, y: 40 },
+        ],
+      ]);
       const firmaGuardada = await archivosRepo.guardarFirma({
         inspectionId: servicioId,
-        firmaBase64: firmaPngBase64,
+        firmaBase64: firmaSvgBase64,
         firmanteNombre: 'Carlos Bustamante',
         firmanteCargo: 'Supervisor de Operaciones',
+        actorId: tecnicoId,
       });
 
-      // 3. Armar acta completa con referencias relativas y hashes SHA-256
       const actaCompleta: ActaServicioDrt = {
         servicioId,
         clienteRazonSocial: 'NESTLÉ PERÚ S.A.',
@@ -294,7 +318,8 @@ describe('E2E: Fotos con Compresión C15 y Firma en Pantalla (GAF-36)', () => {
           clienteConformidadCargo: 'Supervisor de Operaciones',
           fecha: '2026-11-03',
           responsableNoDisponible: false,
-          firmaDigitalBase64: firmaPngBase64,
+          firmaArchivoId: firmaGuardada.file_id,
+          firmaRutaLocalRelativa: firmaGuardada.local_path_relative,
         },
         planillaEstaciones: [
           {
@@ -347,19 +372,14 @@ describe('E2E: Fotos con Compresión C15 y Firma en Pantalla (GAF-36)', () => {
         ],
       };
 
-      // 4. Validación estricta del contrato
       expect(() => ActaServicioDrtSchema.parse(actaCompleta)).not.toThrow();
 
-      // 5. Persistencia durable en SQLite antes de visibilidad ("Durable before visible")
-      await borradorRepo.guardarDrt(actaCompleta);
-
-      // 6. Finalización y encolado en Outbox
-      const { operationId } = await borradorRepo.finalizarYEncolarDrt(actaCompleta, 'usr-tec-01');
+      await borradorRepo.guardarDrt(actaCompleta, { usuarioId: tecnicoId });
+      const { operationId } = await borradorRepo.finalizarYEncolarDrt(actaCompleta, tecnicoId);
       expect(operationId).toBeDefined();
 
-      // 7. Verificación de archivos locales pendientes de subida
       const archivos = await archivosRepo.listarPorInspeccion(servicioId);
-      expect(archivos).toHaveLength(3); // 2 fotos + 1 firma
+      expect(archivos).toHaveLength(3);
 
       const fotos = archivos.filter((a) => a.file_type === 'PHOTO');
       expect(fotos).toHaveLength(2);
@@ -368,13 +388,25 @@ describe('E2E: Fotos con Compresión C15 y Firma en Pantalla (GAF-36)', () => {
 
       const firmas = archivos.filter((a) => a.file_type === 'SIGNATURE');
       expect(firmas).toHaveLength(1);
-      expect(firmas[0].upload_status === 'PENDING');
+      expect(firmas[0].upload_status).toBe('PENDING');
       expect(firmas[0].pinned).toBe(1);
+      expect(firmas[0].mime_type).toBe('image/svg+xml');
 
-      // 8. Verificación de integridad en filesystem
       for (const archivo of archivos) {
-        const existe = await fs.existe(archivo.local_path_relative);
-        expect(existe).toBe(true);
+        expect(await fs.existe(archivo.local_path_relative)).toBe(true);
+      }
+
+      // Verificar outbox: 3 REGISTRO_ARCHIVO + 1 REGISTRO_SERVICIO_DRT, todos válidos
+      const outbox = new OutboxQueue(db);
+      await outbox.inicializar();
+      const pendientes = outbox.obtenerPendientes();
+      const opsArchivo = pendientes.filter((p) => p.operacion.tipo === 'REGISTRO_ARCHIVO');
+      expect(opsArchivo).toHaveLength(3);
+      for (const p of pendientes) {
+        expect(OperacionSyncSchema.safeParse(p.operacion).success).toBe(true);
+        if (p.operacion.tipo === 'REGISTRO_ARCHIVO') {
+          expect(PayloadArchivoSyncSchema.safeParse(p.operacion.payload).success).toBe(true);
+        }
       }
     });
   });
