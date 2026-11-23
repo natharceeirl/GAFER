@@ -203,9 +203,50 @@ describe('MobileApiClient', () => {
 
       await expect(
         client.solicitarCorreccion('11111111-1111-1111-1111-111111111111', 'abc', 'jwt-token-123'),
-      ).rejects.toThrow();
+      ).rejects.toThrow(ApiError);
 
       expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('rechaza motivo mayor a 500 caracteres con ApiError legible antes de hacer fetch (F6)', async () => {
+      const mockFetch = vi.fn();
+      const client = new MobileApiClient('http://test-server:3000', mockFetch as any);
+
+      await expect(
+        client.solicitarCorreccion(
+          '11111111-1111-1111-1111-111111111111',
+          'x'.repeat(501),
+          'jwt-token-123',
+        ),
+      ).rejects.toThrow('El motivo no puede exceder los 500 caracteres');
+
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('lanza ApiError (y NO ErrorDeConexion) cuando el servidor devuelve un formato inválido como hora HH:mm:ss (F2)', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [
+          {
+            id: '11111111-1111-1111-1111-111111111111',
+            servicioId: '22222222-2222-2222-2222-222222222222',
+            codigoInspeccion: 'GAFER-2026-001',
+            estado: 'CERRADO',
+            versionSync: 2,
+            fechaEjecucion: '2026-11-03',
+            horaInicio: '08:30:00',
+            tecnicosParticipantes: [],
+            puedeSolicitarCorreccion: true,
+          },
+        ],
+      });
+
+      const client = new MobileApiClient('http://test-server:3000', mockFetch as any);
+
+      const err = await client.obtenerMisServicios('jwt-token-123').catch((e) => e);
+      expect(err).toBeInstanceOf(ApiError);
+      expect(err).not.toBeInstanceOf(ErrorDeConexion);
     });
   });
 });

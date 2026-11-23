@@ -29,6 +29,7 @@ import {
   ItemEstacionPlanilla,
   PorcentajeConsumo,
   EstadoFisicoEstacion,
+  OperacionSyncSchema,
 } from '@gafer/contracts';
 import {
   crearEstacionDrt,
@@ -86,6 +87,7 @@ const LABELS_ESTADO_ESTACION: Record<EstadoEstacionPlanilla, { label: string; co
 };
 
 const MAPA_ETIQUETAS_VALIDACION: Record<string, string> = {
+  'servicioId': 'El identificador del servicio no es válido (UUID). Vuelva a iniciar la visita desde la agenda.',
   'firmas.clienteConformidadNombre': 'Falta el Nombre del contacto del cliente en la Sección 7 (Firmas y Conformidad).',
   'firmas.clienteConformidadCargo': 'Falta el Cargo del contacto del cliente en la Sección 7 (Firmas y Conformidad).',
   'clienteRazonSocial': 'La Razón Social del cliente no puede estar vacía (Sección 1).',
@@ -117,6 +119,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
   const finalizarServicioDrt = useBorradorStore((state) => state.finalizarServicioDrt);
 
   const [guardando, setGuardando] = useState(false);
+  const [finalizado, setFinalizado] = useState(false);
   const [mensajeGuardado, setMensajeGuardado] = useState<string | null>(null);
   const [errorValidacion, setErrorValidacion] = useState<string | null>(null);
 
@@ -173,25 +176,70 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
   // Referencia mutable siempre actualizada para auto-guardado seguro
   const ultimaActaRef = useRef(acta);
   ultimaActaRef.current = acta;
+  const montadoRef = useRef(true);
+  const finalizandoRef = useRef(false);
+  const finalizadoRef = useRef(false);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const guardadoEnCursoRef = useRef<Promise<boolean> | null>(null);
+
+  const cancelarAutoGuardado = useCallback(() => {
+    if (autoSaveTimerRef.current !== null) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    montadoRef.current = true;
+    return () => {
+      montadoRef.current = false;
+      cancelarAutoGuardado();
+    };
+  }, [cancelarAutoGuardado]);
 
   const usuarioId = usuario?.id;
 
   // Guarda el acta en SQLite. Devuelve false si no quedó en disco (el store expone el error).
   const guardarActa = useCallback(
-    (actaAGuardar: ActaServicioDrt) =>
-      actualizarDrt(actaAGuardar, {
+    async (actaAGuardar: ActaServicioDrt): Promise<boolean> => {
+      if (finalizandoRef.current || finalizadoRef.current) {
+        return false;
+      }
+      const promesa = actualizarDrt(actaAGuardar, {
         usuarioId,
         clienteRazonSocial: actaAGuardar.clienteRazonSocial,
         sedeNombre: actaAGuardar.sedeDireccion,
         servicioTipo: 'DESRATIZACION_DRT',
-      }),
+      });
+      guardadoEnCursoRef.current = promesa;
+      try {
+        return await promesa;
+      } finally {
+        if (guardadoEnCursoRef.current === promesa) {
+          guardadoEnCursoRef.current = null;
+        }
+      }
+    },
     [actualizarDrt, usuarioId],
   );
 
   // Auto-guardado en segundo plano en SQLite (debounced 2.5s) bajo la regla §2.4: Durable before visible
   useEffect(() => {
-    const timer = setTimeout(() => {
+    if (finalizado || finalizandoRef.current || finalizadoRef.current) {
+      cancelarAutoGuardado();
+      return;
+    }
+
+    cancelarAutoGuardado();
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      if (finalizandoRef.current || finalizadoRef.current) {
+        return;
+      }
       guardarActa(ultimaActaRef.current).then((ok) => {
+        if (!montadoRef.current || finalizandoRef.current || finalizadoRef.current) {
+          return;
+        }
         setMensajeGuardado(
           ok
             ? `Guardado localmente en SQLite a las ${horaActualIso()}`
@@ -200,11 +248,19 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
       });
     }, 2500);
 
-    return () => clearTimeout(timer);
-  }, [acta, guardarActa]);
+    return cancelarAutoGuardado;
+  }, [acta, finalizado, guardarActa, cancelarAutoGuardado]);
 
   // Manejador seguro para regresar: espera a que el acta quede en SQLite antes de desmontar
-  const handleVolver = async () => {
+  const handleVolver = useCallback(async () => {
+    cancelarAutoGuardado();
+    if (finalizadoRef.current) {
+      onVolver();
+      return;
+    }
+    if (finalizandoRef.current) {
+      return;
+    }
     const ok = await guardarActa(ultimaActaRef.current);
     if (!ok) {
       Alert.alert(
@@ -218,16 +274,16 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
       return;
     }
     onVolver();
-  };
+  }, [cancelarAutoGuardado, guardarActa, onVolver]);
 
   // Interceptar botón atrás de hardware en Android (y navegación por gestos)
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      handleVolver();
+      void handleVolver();
       return true;
     });
     return () => sub.remove();
-  }, [onVolver]);
+  }, [handleVolver]);
 
   // Resumen en vivo de estaciones de la planilla
   const metricasEstaciones = useMemo(() => {
@@ -269,7 +325,11 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
   };
 
   const handleGuardarBorradorManual = async () => {
+    if (finalizandoRef.current || finalizadoRef.current) {
+      return;
+    }
     try {
+      cancelarAutoGuardado();
       setGuardando(true);
       setErrorValidacion(null);
       const ok = await guardarActa(acta);
@@ -286,6 +346,10 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
   };
 
   const handleFinalizarServicio = async () => {
+    if (finalizandoRef.current || finalizadoRef.current) {
+      return;
+    }
+
     // 1. Validar esquema completo según acta
     const resultado = ActaServicioDrtSchema.safeParse(acta);
     if (!resultado.success) {
@@ -313,6 +377,17 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
       return;
     }
 
+    // 3. Verificar sesión válida con UUID de técnico antes de encolar en sync_outbox
+    const actorIdCheck = OperacionSyncSchema.shape.actorId.safeParse(usuario?.id);
+    if (!actorIdCheck.success) {
+      Alert.alert(
+        'Sesión de Técnico Requerida',
+        'No se pudo identificar al técnico autenticado para registrar la operación. Vuelva a iniciar sesión e intente nuevamente.',
+      );
+      return;
+    }
+    const userId = actorIdCheck.data;
+
     Alert.alert(
       'Finalizar y Encolar Servicio',
       '¿Confirma que desea cerrar el acta de servicio DRT? El servicio y sus estaciones se guardarán de forma durable y se encolarán para sincronización con el servidor.',
@@ -322,19 +397,33 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
           text: 'Concluir y Encolar',
           style: 'default',
           onPress: async () => {
+            if (finalizandoRef.current || finalizadoRef.current) {
+              return;
+            }
+            finalizandoRef.current = true;
+            cancelarAutoGuardado();
+            setGuardando(true);
             try {
-              setGuardando(true);
-              const userId = usuario?.id || 'tecnico-local-01';
-              const res = await finalizarServicioDrt(resultado.data, userId, { encolarEstacionesIndividuales: true });
+              if (guardadoEnCursoRef.current) {
+                await guardadoEnCursoRef.current;
+              }
+              const res = await finalizarServicioDrt(resultado.data, userId, {
+                encolarEstacionesIndividuales: true,
+              });
+              finalizadoRef.current = true;
+              setFinalizado(true);
+              setGuardando(false);
               Alert.alert(
                 'Servicio Registrado con Éxito',
                 `El acta DRT fue guardada en SQLite y encolada en Outbox (Op: ${res.operationId.substring(0, 8)}). Se sincronizará automáticamente al detectar conexión.`,
                 [{ text: 'OK', onPress: onVolver }],
               );
-            } catch (err: any) {
-              Alert.alert('Error al finalizar', err?.message || 'Ocurrió un error al persistir el servicio.');
-            } finally {
+            } catch (err: unknown) {
+              finalizandoRef.current = false;
               setGuardando(false);
+              const mensaje =
+                err instanceof Error ? err.message : 'Ocurrió un error al persistir el servicio.';
+              Alert.alert('Error al finalizar', mensaje);
             }
           },
         },
@@ -433,10 +522,21 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
   };
 
   const cambiarConsumoEstacion = (numero: number, gramos: number) => {
+    const valorSeguro = Number.isFinite(gramos) && gramos >= 0 ? gramos : 0;
     setActa((prev) => ({
       ...prev,
       planillaEstaciones: prev.planillaEstaciones.map((est) =>
-        est.numero === numero ? { ...est, consumoGramos: gramos, repuestoGramos: gramos } : est,
+        est.numero === numero ? { ...est, consumoGramos: valorSeguro } : est,
+      ),
+    }));
+  };
+
+  const cambiarRepuestoEstacion = (numero: number, gramos: number) => {
+    const valorSeguro = Number.isFinite(gramos) && gramos >= 0 ? gramos : 0;
+    setActa((prev) => ({
+      ...prev,
+      planillaEstaciones: prev.planillaEstaciones.map((est) =>
+        est.numero === numero ? { ...est, repuestoGramos: valorSeguro } : est,
       ),
     }));
   };
@@ -481,7 +581,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
 
       {/* Cabecera Técnica */}
       <View style={styles.cabeceraBar}>
-        <TouchableOpacity style={styles.botonVolver} onPress={handleVolver}>
+        <TouchableOpacity testID="boton-volver-drt" style={styles.botonVolver} onPress={handleVolver}>
           <Text style={styles.textoBotonVolver}>← VOLVER</Text>
         </TouchableOpacity>
         <View style={styles.cabeceraCentro}>
@@ -517,6 +617,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
             <Text style={styles.seccionTitulo}>1. DATOS GENERALES DEL SERVICIO</Text>
             <Text style={styles.campoEtiqueta}>Cliente / Razón Social:</Text>
             <TextInput
+              testID="input-cliente-razon-social"
               style={styles.inputTexto}
               value={acta.clienteRazonSocial}
               onChangeText={(t) => setActa((p) => ({ ...p, clienteRazonSocial: t }))}
@@ -525,6 +626,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
 
             <Text style={styles.campoEtiqueta}>Dirección / Sede:</Text>
             <TextInput
+              testID="input-sede-direccion"
               style={styles.inputTexto}
               value={acta.sedeDireccion}
               onChangeText={(t) => setActa((p) => ({ ...p, sedeDireccion: t }))}
@@ -774,6 +876,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
               <View style={styles.columnaInput}>
                 <Text style={styles.campoEtiqueta}>Nombre del Contacto:</Text>
                 <TextInput
+                  testID="input-cliente-conformidad-nombre"
                   style={styles.inputTexto}
                   value={acta.firmas.clienteConformidadNombre}
                   placeholder="Persona que recibe"
@@ -785,6 +888,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
               <View style={styles.columnaInput}>
                 <Text style={styles.campoEtiqueta}>Cargo del Contacto:</Text>
                 <TextInput
+                  testID="input-cliente-conformidad-cargo"
                   style={styles.inputTexto}
                   value={acta.firmas.clienteConformidadCargo}
                   placeholder="Cargo / Área"
@@ -1022,6 +1126,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
                           return (
                             <TouchableOpacity
                               key={`opcion-${est.numero}-${estOpcion}`}
+                              testID={`chip-estacion-${est.numero}-${estOpcion}`}
                               style={[
                                 styles.chipCompacto,
                                 estaActivo && {
@@ -1163,17 +1268,19 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
       {/* Barra de Acciones Fijas Inferiores */}
       <View style={styles.barraAccionesFija}>
         <Button
+          testID="boton-guardar-borrador"
           titulo="Guardar Borrador"
           onPress={handleGuardarBorradorManual}
           variante="secundario"
-          deshabilitado={guardando}
+          deshabilitado={guardando || finalizado}
           style={styles.botonBarra}
         />
         <Button
+          testID="boton-finalizar-drt"
           titulo="Finalizar y Encolar"
           onPress={handleFinalizarServicio}
           variante="primario"
-          deshabilitado={guardando}
+          deshabilitado={guardando || finalizado}
           cargando={guardando}
           style={styles.botonBarra}
         />
