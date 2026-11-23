@@ -14,6 +14,7 @@ import { SqliteDatabasePort, obtenerBaseDeDatos } from '../../../shared/db/sqlit
 import { OutboxQueue } from '../../../shared/db/outbox';
 import { generarUuid } from '../../../shared/utils/uuid';
 import { BorradorInspeccion, MetadataBorrador } from './use-borrador-store';
+import { construirPayloadEstacionSync } from './estaciones-drt';
 import {
   cerrarFormulario,
   ConfigServicioBorrador,
@@ -356,29 +357,15 @@ export class BorradorRepository {
     if (opciones?.encolarEstacionesIndividuales && parsed.planillaEstaciones.length > 0) {
       for (const est of parsed.planillaEstaciones) {
         const estOpId = generarUuid();
-        const opEstacion: OperacionSync = {
+        const payloadEstacion = construirPayloadEstacionSync(est, Boolean(parsed.primeraVisita));
+        const opEstacion: OperacionSync = OperacionSyncSchema.parse({
           operationId: estOpId,
           tipo: 'REGISTRO_ESTACION',
           agregadoId: parsed.servicioId,
           actorId: usuarioId,
           clienteTimestamp: ahora,
-          payload: {
-            numeroEstacion: est.numero,
-            huboConsumo: est.huboConsumo ?? (est.estado === 'CON_CONSUMO'),
-            porcentajeConsumo: est.porcentajeConsumo ?? 0,
-            cantidadGramos: est.cantidadGramos ?? 20,
-            consumoGramos: est.consumoGramos ?? 0,
-            cantidadReposicion: est.cantidadReposicion ?? est.repuestoGramos ?? 0,
-            tipoCebo: est.tipoCebo ?? 'BLOQUE_10G',
-            lote: est.lote ?? 'LOTE-DEFAULT',
-            vencimiento: est.vencimiento ?? '2026-12-31',
-            estadoFisico: est.estadoFisico ?? 'BUENAS_CONDICIONES',
-            esInstalacion: est.esInstalacion ?? parsed.primeraVisita ?? false,
-            colorIcono: est.huboConsumo ? 'ROJO' : 'VERDE',
-            colorAura: est.estadoFisico === 'MALAS_CONDICIONES' ? 'ROJO' : 'VERDE',
-            observaciones: est.observaciones ?? '',
-          },
-        };
+          payload: payloadEstacion as unknown as Record<string, unknown>,
+        });
         operacionesEstaciones.push(opEstacion);
       }
     }

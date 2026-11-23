@@ -35,10 +35,12 @@ import {
   crearEstacionDrt,
   aplicarPrimeraVisita,
   actualizarConsumoEstacion,
+  actualizarEstadoEstacion,
+  actualizarCantidadGramosEstacion,
   actualizarEstadoFisicoEstacion,
   copiarCeboALote,
   validarEstacionesPlanilla,
-  PORCENTAJES_CONSUMO,
+  PORCENTAJES_CON_CONSUMO,
   ESTADOS_FISICOS,
 } from '../model/estaciones-drt';
 import { useAuthStore } from '../../auth/model/use-auth-store';
@@ -299,7 +301,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
       else if (est.estado === 'CON_CONSUMO') {
         conConsumo++;
         totalConsumoGramos += est.consumoGramos || 0;
-        totalRepuestoGramos += est.repuestoGramos || 0;
+        totalRepuestoGramos += est.cantidadReposicion ?? est.repuestoGramos ?? 0;
       } else if (est.estado === 'SIN_ACCESO') sinAcceso++;
       else if (est.estado === 'EXTRAVIADA') extraviada++;
     }
@@ -485,7 +487,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
     setActa((prev) => ({
       ...prev,
       planillaEstaciones: prev.planillaEstaciones.map((est) =>
-        est.numero === numero ? { ...est, estado: nuevoEstado } : est,
+        est.numero === numero ? actualizarEstadoEstacion(est, nuevoEstado) : est,
       ),
     }));
   };
@@ -495,6 +497,15 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
       ...prev,
       planillaEstaciones: prev.planillaEstaciones.map((est) =>
         est.numero === numero ? actualizarConsumoEstacion(est, huboConsumo, porcentaje) : est,
+      ),
+    }));
+  };
+
+  const cambiarCantidadGramosEstacion = (numero: number, gramos: number) => {
+    setActa((prev) => ({
+      ...prev,
+      planillaEstaciones: prev.planillaEstaciones.map((est) =>
+        est.numero === numero ? actualizarCantidadGramosEstacion(est, gramos) : est,
       ),
     }));
   };
@@ -536,7 +547,9 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
     setActa((prev) => ({
       ...prev,
       planillaEstaciones: prev.planillaEstaciones.map((est) =>
-        est.numero === numero ? { ...est, repuestoGramos: valorSeguro } : est,
+        est.numero === numero
+          ? { ...est, repuestoGramos: valorSeguro, cantidadReposicion: valorSeguro }
+          : est,
       ),
     }));
   };
@@ -923,6 +936,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
                 <Text style={styles.etiquetaPrimeraVisita}>🌱 Tipo de Visita:</Text>
                 <View style={styles.chipsContenedorCompacto}>
                   <TouchableOpacity
+                    testID="chip-primera-visita-false"
                     style={[
                       styles.chipCompacto,
                       !acta.primeraVisita && styles.chipCompactoActivoVerde,
@@ -939,6 +953,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
+                    testID="chip-primera-visita-true"
                     style={[
                       styles.chipCompacto,
                       acta.primeraVisita && styles.chipCompactoActivoVerde,
@@ -1023,6 +1038,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
                     <View style={styles.columnaInput}>
                       <Text style={styles.campoEtiqueta}>Formulación Cebo:</Text>
                       <TextInput
+                        testID={`input-tipo-cebo-estacion-${est.numero}`}
                         style={styles.inputTexto}
                         value={est.tipoCebo || ''}
                         placeholder="Ej. BLOQUE_10G"
@@ -1032,32 +1048,12 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
                     <View style={[styles.columnaInput, { maxWidth: 100 }]}>
                       <Text style={styles.campoEtiqueta}>Gramos Base:</Text>
                       <TextInput
+                        testID={`input-gramos-base-estacion-${est.numero}`}
                         style={styles.inputTexto}
                         keyboardType="numeric"
                         value={est.cantidadGramos ? String(est.cantidadGramos) : ''}
                         placeholder="20"
-                        onChangeText={(t) => {
-                          const g = Number(t) || 0;
-                          setActa((prev) => ({
-                            ...prev,
-                            planillaEstaciones: prev.planillaEstaciones.map((e) =>
-                              e.numero === est.numero
-                                ? {
-                                    ...e,
-                                    cantidadGramos: g,
-                                    consumoGramos:
-                                      e.huboConsumo && e.porcentajeConsumo
-                                        ? Math.round((g * (e.porcentajeConsumo / 100)) * 100) / 100
-                                        : 0,
-                                    repuestoGramos:
-                                      e.huboConsumo && e.porcentajeConsumo
-                                        ? Math.round((g * (e.porcentajeConsumo / 100)) * 100) / 100
-                                        : 0,
-                                  }
-                                : e,
-                            ),
-                          }));
-                        }}
+                        onChangeText={(t) => cambiarCantidadGramosEstacion(est.numero, Number(t) || 0)}
                       />
                     </View>
                   </View>
@@ -1153,6 +1149,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
                       <Text style={styles.campoEtiqueta}>¿Hubo consumo de cebo?:</Text>
                       <View style={styles.chipsContenedorCompacto}>
                         <TouchableOpacity
+                          testID={`chip-consumo-no-estacion-${est.numero}`}
                           style={[
                             styles.chipCompacto,
                             !est.huboConsumo && styles.chipCompactoActivoVerde,
@@ -1169,11 +1166,18 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
                           </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
+                          testID={`chip-consumo-si-estacion-${est.numero}`}
                           style={[
                             styles.chipCompacto,
                             est.huboConsumo && styles.chipCompactoActivoNaranja,
                           ]}
-                          onPress={() => cambiarConsumoPorcentaje(est.numero, true, est.porcentajeConsumo || 25)}
+                          onPress={() =>
+                            cambiarConsumoPorcentaje(
+                              est.numero,
+                              true,
+                              est.porcentajeConsumo && est.porcentajeConsumo > 0 ? est.porcentajeConsumo : 25,
+                            )
+                          }
                         >
                           <Text
                             style={[
@@ -1186,16 +1190,17 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
                         </TouchableOpacity>
                       </View>
 
-                      {/* Porcentaje de Consumo en pasos de 25 */}
+                      {/* Porcentaje de Consumo en pasos de 25 (> 0%) + gramos independientes */}
                       {est.huboConsumo ? (
                         <View style={styles.seccionPorcentaje}>
                           <Text style={styles.campoEtiqueta}>Porcentaje de consumo (§5.1):</Text>
                           <View style={styles.chipsContenedorCompacto}>
-                            {PORCENTAJES_CONSUMO.map((p) => {
+                            {PORCENTAJES_CON_CONSUMO.map((p) => {
                               const activo = est.porcentajeConsumo === p;
                               return (
                                 <TouchableOpacity
                                   key={`porc-${est.numero}-${p}`}
+                                  testID={`chip-porcentaje-estacion-${est.numero}-${p}`}
                                   style={[
                                     styles.chipCompacto,
                                     activo && styles.chipCompactoActivoNaranja,
@@ -1215,11 +1220,40 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
                             })}
                           </View>
 
+                          <View style={styles.filaInputs}>
+                            <View style={styles.columnaInput}>
+                              <Text style={styles.campoEtiqueta}>Consumo (gramos):</Text>
+                              <TextInput
+                                testID={`input-consumo-estacion-${est.numero}`}
+                                style={styles.inputTexto}
+                                keyboardType="numeric"
+                                value={est.consumoGramos ? String(est.consumoGramos) : ''}
+                                placeholder="Ej. 10"
+                                onChangeText={(t) => cambiarConsumoEstacion(est.numero, Number(t) || 0)}
+                              />
+                            </View>
+                            <View style={styles.columnaInput}>
+                              <Text style={styles.campoEtiqueta}>Repuesto (gramos):</Text>
+                              <TextInput
+                                testID={`input-repuesto-estacion-${est.numero}`}
+                                style={styles.inputTexto}
+                                keyboardType="numeric"
+                                value={
+                                  (est.cantidadReposicion ?? est.repuestoGramos)
+                                    ? String(est.cantidadReposicion ?? est.repuestoGramos)
+                                    : ''
+                                }
+                                placeholder="Ej. 10"
+                                onChangeText={(t) => cambiarRepuestoEstacion(est.numero, Number(t) || 0)}
+                              />
+                            </View>
+                          </View>
+
                           <View style={styles.panelCalculoConsumo}>
                             <Text style={styles.textoCalculoConsumo}>
-                              🍽️ Consumo: <Text style={{ fontWeight: '800' }}>{est.consumoGramos} g</Text> ({est.porcentajeConsumo}%)
+                              🍽️ Consumo: <Text style={{ fontWeight: '800' }}>{est.consumoGramos ?? 0} g</Text> ({est.porcentajeConsumo ?? 0}%)
                               {'  '}|{'  '}
-                              🔄 Reposición: <Text style={{ fontWeight: '800' }}>{est.repuestoGramos} g</Text>
+                              🔄 Reposición: <Text style={{ fontWeight: '800' }}>{est.cantidadReposicion ?? est.repuestoGramos ?? 0} g</Text>
                             </Text>
                           </View>
                         </View>

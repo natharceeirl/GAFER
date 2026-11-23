@@ -263,13 +263,92 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
 
     await repo.guardarDrt(acta, { usuarioId: 'tecnico-local-01' });
 
-    await expect(repo.finalizarYEncolarDrt(acta, 'tecnico-local-01')).rejects.toThrow();
+    await expect(
+      repo.finalizarYEncolarDrt(acta, 'tecnico-local-01', undefined, {
+        encolarEstacionesIndividuales: true,
+      }),
+    ).rejects.toThrow();
 
     // El borrador no fue eliminado y sync_outbox no recibió una operación inválida
     expect(await repo.obtenerPorServicioId(acta.servicioId, 'tecnico-local-01')).not.toBeNull();
     const outbox = new OutboxQueue();
     await outbox.inicializar();
     expect(outbox.obtenerPendientes()).toHaveLength(0);
+  });
+
+  it('al encolar estaciones individuales alinea huboConsumo con colorIcono y no deriva colorAura de estadoFisico (PR35-F3)', async () => {
+    const usuarioUuid = '33333333-3333-4000-8000-000000000010';
+    const acta: ActaServicioDrt = {
+      servicioId: 'e1e2e3e4-a7b8-4c9d-8e1f-2a3b4c5d6e7f',
+      clienteRazonSocial: 'SAN FERNANDO S.A.',
+      sedeDireccion: 'Carretera Central Km 18',
+      fecha: '2026-11-03',
+      horaInicio: '09:00',
+      horaTermino: '12:00',
+      actividad: 'MONITOREO',
+      tipoCebo: 'BLOQUE_10G',
+      cebosInstalados: 40,
+      cebosConsumidos: 1,
+      cebosRepuestos: 1,
+      tipoTrampa: 'NINGUNA',
+      trampasInstaladas: 0,
+      trampasActivadas: 0,
+      roedoresDetectados: [],
+      resultadosRecomendaciones: 'Revisión regular.',
+      observacionesCliente: 'Conforme.',
+      firmas: {
+        personalResponsableNombre: 'Ana Torres',
+        personalResponsableCargo: 'Técnico Operador',
+        clienteConformidadNombre: 'Luis Mendoza',
+        clienteConformidadCargo: 'Encargado de Seguridad',
+        fecha: '2026-11-03',
+      },
+      planillaEstaciones: [
+        // huboConsumo undefined pero estado CON_CONSUMO -> huboConsumo: true y colorIcono: 'ROJO'
+        {
+          numero: 1,
+          estado: 'CON_CONSUMO',
+          consumoGramos: 10,
+          repuestoGramos: 10,
+          estadoFisico: 'MALAS_CONDICIONES',
+          observaciones: 'Estación golpeada',
+        },
+        // primera instalación en malas condiciones -> colorIcono: 'VERDE', colorAura: 'SIN_COLOR'
+        {
+          numero: 2,
+          estado: 'SIN_ACTIVIDAD',
+          esInstalacion: true,
+          estadoFisico: 'MALAS_CONDICIONES',
+          observaciones: 'Tapa fisurada',
+        },
+      ],
+    };
+
+    await repo.guardarDrt(acta, { usuarioId: usuarioUuid });
+    await repo.finalizarYEncolarDrt(acta, usuarioUuid, undefined, {
+      encolarEstacionesIndividuales: true,
+    });
+
+    const outbox = new OutboxQueue();
+    await outbox.inicializar();
+    const estacionesOps = outbox
+      .obtenerPendientes()
+      .filter((p) => p.operacion.tipo === 'REGISTRO_ESTACION');
+
+    expect(estacionesOps).toHaveLength(2);
+    for (const op of estacionesOps) {
+      expect(OperacionSyncSchema.safeParse(op.operacion).success).toBe(true);
+    }
+
+    const est1 = estacionesOps.find((p) => p.operacion.payload.numeroEstacion === 1)!.operacion.payload;
+    expect(est1.huboConsumo).toBe(true);
+    expect(est1.colorIcono).toBe('ROJO');
+    expect(est1.colorAura).toBeUndefined();
+
+    const est2 = estacionesOps.find((p) => p.operacion.payload.numeroEstacion === 2)!.operacion.payload;
+    expect(est2.huboConsumo).toBe(false);
+    expect(est2.colorIcono).toBe('VERDE');
+    expect(est2.colorAura).toBe('SIN_COLOR');
   });
 
   it('finaliza el servicio de campo por bloques y encola la operacion en sync_outbox (GAF-34)', async () => {
