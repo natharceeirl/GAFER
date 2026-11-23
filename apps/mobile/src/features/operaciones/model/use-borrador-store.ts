@@ -128,13 +128,17 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
   },
 
   actualizarDrt: async (acta, metadata) => {
+    const revisionPropia = ++revisionEstado;
     try {
       const repo = new BorradorRepository();
       // El acta pertenece al técnico dueño del borrador activo (clave compuesta servicio+usuario).
       const persistido = await repo.guardarDrt(acta, {
-        usuarioId: get().borrador?.usuarioId,
         ...metadata,
+        usuarioId: metadata?.usuarioId ?? get().borrador?.usuarioId,
       });
+      if (revisionEstado !== revisionPropia) {
+        return true;
+      }
       set({ borrador: persistido, errorPersistencia: null });
       return true;
     } catch (error) {
@@ -144,12 +148,15 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
   },
 
   finalizarServicioDrt: async (acta, usuarioId) => {
+    revisionEstado += 1;
     const repo = new BorradorRepository();
     const resultado = await repo.finalizarYEncolarDrt(acta, usuarioId);
 
+    revisionEstado += 1;
     set({
       borrador: null,
       colaEnvioPendiente: true,
+      errorPersistencia: null,
     });
 
     return resultado;

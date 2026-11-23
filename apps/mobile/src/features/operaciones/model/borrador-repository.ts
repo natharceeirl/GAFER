@@ -4,7 +4,12 @@
  * Cumple con la regla 2.4: "Durable before visible" (Guía Rev 2 §2.4, §5.1).
  */
 
-import { ActaServicioDrt, ActaServicioDrtSchema, OperacionSync } from '@gafer/contracts';
+import {
+  ActaServicioDrt,
+  ActaServicioDrtSchema,
+  OperacionSync,
+  OperacionSyncSchema,
+} from '@gafer/contracts';
 import { SqliteDatabasePort, obtenerBaseDeDatos } from '../../../shared/db/sqlite';
 import { OutboxQueue } from '../../../shared/db/outbox';
 import { generarUuid } from '../../../shared/utils/uuid';
@@ -194,14 +199,14 @@ export class BorradorRepository {
     const ahora = new Date().toISOString();
     const db = this.getDb();
 
-    const operacion: OperacionSync = {
+    const operacion: OperacionSync = OperacionSyncSchema.parse({
       operationId,
       tipo: 'REGISTRO_SERVICIO_DRT',
       agregadoId: parsed.servicioId,
       actorId: usuarioId,
       clienteTimestamp: ahora,
       payload: parsed as unknown as Record<string, unknown>,
-    };
+    });
 
     // Encolar y quitar el borrador en UNA transacción: si la app se cierra a mitad,
     // o quedan ambos cambios o ninguno (no hay envío duplicado ni borrador huérfano).

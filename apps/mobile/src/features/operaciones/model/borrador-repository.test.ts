@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ActaServicioDrt } from '@gafer/contracts';
+import { ActaServicioDrt, OperacionSyncSchema } from '@gafer/contracts';
 import {
   inicializarBaseDeDatos,
   cerrarBaseDeDatos,
@@ -161,25 +161,70 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33 & GAF-103)',
       ],
     };
 
+    const usuarioUuid = '33333333-3333-4000-8000-000000000001';
+
     // Primero existe como borrador en curso
-    await repo.guardarDrt(acta, { usuarioId: 'usuario-tecnico-01' });
-    expect(await repo.obtenerPorServicioId(acta.servicioId, 'usuario-tecnico-01')).not.toBeNull();
+    await repo.guardarDrt(acta, { usuarioId: usuarioUuid });
+    expect(await repo.obtenerPorServicioId(acta.servicioId, usuarioUuid)).not.toBeNull();
 
     // Finalizar servicio en campo
-    const { operationId } = await repo.finalizarYEncolarDrt(acta, 'usuario-tecnico-01');
+    const { operationId } = await repo.finalizarYEncolarDrt(acta, usuarioUuid);
     expect(operationId).toBeDefined();
 
     // El borrador activo se limpió
-    expect(await repo.obtenerPorServicioId(acta.servicioId, 'usuario-tecnico-01')).toBeNull();
+    expect(await repo.obtenerPorServicioId(acta.servicioId, usuarioUuid)).toBeNull();
 
-    // La operación se encuentra en la cola Outbox de SQLite
+    // La operación se encuentra en la cola Outbox de SQLite y cumple OperacionSyncSchema
     const outbox = new OutboxQueue();
     await outbox.inicializar();
     const pendientes = outbox.obtenerPendientes();
     expect(pendientes.length).toBe(1);
+    expect(OperacionSyncSchema.safeParse(pendientes[0].operacion).success).toBe(true);
     expect(pendientes[0].operacion.operationId).toBe(operationId);
     expect(pendientes[0].operacion.tipo).toBe('REGISTRO_SERVICIO_DRT');
     expect(pendientes[0].operacion.agregadoId).toBe(acta.servicioId);
+    expect(pendientes[0].operacion.actorId).toBe(usuarioUuid);
+  });
+
+  it('rechaza finalizarYEncolarDrt cuando usuarioId no es UUID y conserva el borrador sin contaminar sync_outbox (F5)', async () => {
+    const acta: ActaServicioDrt = {
+      servicioId: 'c3d4e5f6-a7b8-4c9d-8e1f-2a3b4c5d6e7f',
+      clienteRazonSocial: 'SAN FERNANDO S.A.',
+      sedeDireccion: 'Carretera Central Km 18',
+      fecha: '2026-11-03',
+      areaTratadaM2: 1500,
+      horaInicio: '09:00',
+      horaTermino: '12:00',
+      actividad: 'EVALUACION',
+      tipoCebo: 'PASTA',
+      cebosInstalados: 60,
+      cebosConsumidos: 0,
+      cebosRepuestos: 0,
+      tipoTrampa: 'NINGUNA',
+      trampasInstaladas: 0,
+      trampasActivadas: 0,
+      roedoresDetectados: [],
+      resultadosRecomendaciones: 'Instalación inicial.',
+      observacionesCliente: 'Conforme.',
+      firmas: {
+        personalResponsableNombre: 'Ana Torres',
+        personalResponsableCargo: 'Técnico Operador',
+        clienteConformidadNombre: 'Luis Mendoza',
+        clienteConformidadCargo: 'Encargado de Seguridad',
+        fecha: '2026-11-03',
+      },
+      planillaEstaciones: [{ numero: 1, estado: 'SIN_ACTIVIDAD' }],
+    };
+
+    await repo.guardarDrt(acta, { usuarioId: 'tecnico-local-01' });
+
+    await expect(repo.finalizarYEncolarDrt(acta, 'tecnico-local-01')).rejects.toThrow();
+
+    // El borrador no fue eliminado y sync_outbox no recibió una operación inválida
+    expect(await repo.obtenerPorServicioId(acta.servicioId, 'tecnico-local-01')).not.toBeNull();
+    const outbox = new OutboxQueue();
+    await outbox.inicializar();
+    expect(outbox.obtenerPendientes()).toHaveLength(0);
   });
 
   it('elimina el borrador de SQLite al limpiar o finalizar', async () => {
