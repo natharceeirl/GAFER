@@ -59,7 +59,11 @@ interface BorradorStore {
   actualizarDrt: (acta: ActaServicioDrt, metadata?: MetadataBorrador) => Promise<boolean>;
   /** Guarda el formulario de campo en disco y luego lo muestra. Devuelve false si no se pudo guardar. */
   actualizarCampo: (formulario: FormularioCampo, metadata?: MetadataBorrador) => Promise<boolean>;
-  finalizarServicioDrt: (acta: ActaServicioDrt, usuarioId: string) => Promise<{ operationId: string }>;
+  finalizarServicioDrt: (
+    acta: ActaServicioDrt,
+    usuarioId: string,
+    opciones?: { encolarEstacionesIndividuales?: boolean },
+  ) => Promise<{ operationId: string; estacionesOperacionesIds?: string[] }>;
   finalizarServicioCampo: (formulario: FormularioCampo, usuarioId: string) => Promise<{ operationId: string }>;
   marcarComoPendienteDeSincronizar: () => void;
   restaurarBorrador: (borrador: BorradorInspeccion | null) => void;
@@ -175,10 +179,10 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
     }
   },
 
-  finalizarServicioDrt: async (acta, usuarioId) => {
+  finalizarServicioDrt: async (acta, usuarioId, opciones) => {
     revisionEstado += 1;
     const repo = new BorradorRepository();
-    const resultado = await repo.finalizarYEncolarDrt(acta, usuarioId);
+    const resultado = await repo.finalizarYEncolarDrt(acta, usuarioId, undefined, opciones);
 
     revisionEstado += 1;
     set({

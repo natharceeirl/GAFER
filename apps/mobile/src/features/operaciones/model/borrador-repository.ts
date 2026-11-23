@@ -14,6 +14,7 @@ import { SqliteDatabasePort, obtenerBaseDeDatos } from '../../../shared/db/sqlit
 import { OutboxQueue } from '../../../shared/db/outbox';
 import { generarUuid } from '../../../shared/utils/uuid';
 import { BorradorInspeccion, MetadataBorrador } from './use-borrador-store';
+import { construirPayloadEstacionSync } from './estaciones-drt';
 import {
   cerrarFormulario,
   ConfigServicioBorrador,
@@ -311,16 +312,28 @@ export class BorradorRepository {
     });
   }
 
-  /** Encola la operación y quita el borrador en UNA transacción (todo o nada). */
+  /**
+   * Encola las operaciones (en orden) y quita el borrador del servicio en UNA transacción:
+   * si la app se cierra a mitad, o quedan todos los cambios o ninguno.
+   */
   private async encolarYQuitarBorrador(
-    operacion: OperacionSync,
-    opciones: { deviceId: string; aggregateType: string },
+    servicioId: string,
+    usuarioId: string,
+    deviceId: string,
+    operaciones: Array<{
+      operacion: OperacionSync;
+      aggregateType: string;
+      priority: 'CRITICAL' | 'HIGH' | 'NORMAL' | 'LOW';
+    }>,
   ): Promise<void> {
     await this.getDb().withExclusiveTransactionAsync(async (tx) => {
-      await new OutboxQueue(tx).encolar(operacion, { ...opciones, priority: 'HIGH' });
+      const outbox = new OutboxQueue(tx);
+      for (const { operacion, aggregateType, priority } of operaciones) {
+        await outbox.encolar(operacion, { deviceId, aggregateType, priority });
+      }
       await tx.runAsync(
         `DELETE FROM borradores_inspeccion WHERE servicio_id = ? AND usuario_id = ?;`,
-        [operacion.agregadoId, operacion.actorId],
+        [servicioId, usuarioId],
       );
     });
   }
@@ -328,15 +341,34 @@ export class BorradorRepository {
   /**
    * Finaliza el servicio DRT: valida el acta, la encola en la tabla sync_outbox
    * y remueve el borrador activo localmente para dejar el terminal listo para el siguiente servicio.
+   * Opcionalmente encola operaciones individuales REGISTRO_ESTACION (§5.1, GAF-35).
    */
   async finalizarYEncolarDrt(
     acta: ActaServicioDrt,
     usuarioId: string,
     deviceId = 'device-mobile-local',
-  ): Promise<{ operationId: string }> {
+    opciones?: { encolarEstacionesIndividuales?: boolean },
+  ): Promise<{ operationId: string; estacionesOperacionesIds?: string[] }> {
     const parsed = ActaServicioDrtSchema.parse(acta);
     const operationId = generarUuid();
     const ahora = new Date().toISOString();
+
+    const operacionesEstaciones: OperacionSync[] = [];
+    if (opciones?.encolarEstacionesIndividuales && parsed.planillaEstaciones.length > 0) {
+      for (const est of parsed.planillaEstaciones) {
+        const estOpId = generarUuid();
+        const payloadEstacion = construirPayloadEstacionSync(est, Boolean(parsed.primeraVisita));
+        const opEstacion: OperacionSync = OperacionSyncSchema.parse({
+          operationId: estOpId,
+          tipo: 'REGISTRO_ESTACION',
+          agregadoId: parsed.servicioId,
+          actorId: usuarioId,
+          clienteTimestamp: ahora,
+          payload: payloadEstacion as unknown as Record<string, unknown>,
+        });
+        operacionesEstaciones.push(opEstacion);
+      }
+    }
 
     const operacion: OperacionSync = OperacionSyncSchema.parse({
       operationId,
@@ -347,11 +379,24 @@ export class BorradorRepository {
       payload: parsed as unknown as Record<string, unknown>,
     });
 
-    // Si la app se cierra a mitad, o quedan ambos cambios o ninguno
-    // (no hay envío duplicado ni borrador huérfano).
-    await this.encolarYQuitarBorrador(operacion, { deviceId, aggregateType: 'SERVICIO_DRT' });
+    // Estaciones, acta y borrado del borrador en una sola transacción: sin envíos
+    // duplicados ni estaciones sueltas si la app se cierra a mitad.
+    await this.encolarYQuitarBorrador(parsed.servicioId, usuarioId, deviceId, [
+      ...operacionesEstaciones.map((op) => ({
+        operacion: op,
+        aggregateType: 'ESTACION_CONTROL',
+        priority: 'NORMAL' as const,
+      })),
+      { operacion, aggregateType: 'SERVICIO_DRT', priority: 'HIGH' },
+    ]);
 
-    return { operationId };
+    return {
+      operationId,
+      estacionesOperacionesIds:
+        operacionesEstaciones.length > 0
+          ? operacionesEstaciones.map((op) => op.operationId)
+          : undefined,
+    };
   }
 
   /**
@@ -377,10 +422,9 @@ export class BorradorRepository {
       payload: cerrado as unknown as Record<string, unknown>,
     });
 
-    await this.encolarYQuitarBorrador(operacion, {
-      deviceId,
-      aggregateType: 'INSPECCION_CAMPO',
-    });
+    await this.encolarYQuitarBorrador(cerrado.servicioId, usuarioId, deviceId, [
+      { operacion, aggregateType: 'INSPECCION_CAMPO', priority: 'HIGH' },
+    ]);
 
     return { operationId };
   }
