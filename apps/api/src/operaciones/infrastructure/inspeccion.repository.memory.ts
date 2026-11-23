@@ -26,6 +26,9 @@ export class InspeccionRepositoryMemory implements InspeccionRepository {
   async listarPorTecnico(tecnicoId: string): Promise<Inspeccion[]> {
     const res: Inspeccion[] = [];
     for (const inspeccion of this.store.values()) {
+      if (inspeccion.getEstado() !== 'CERRADO') {
+        continue;
+      }
       const participa = inspeccion.tecnicosParticipantes.some((t) => t.id === tecnicoId);
       if (participa) {
         res.push(inspeccion);
@@ -35,6 +38,6 @@ export class InspeccionRepositoryMemory implements InspeccionRepository {
   }
 
   async listarTodas(): Promise<Inspeccion[]> {
-    return Array.from(this.store.values());
+    return Array.from(this.store.values()).filter((i) => i.getEstado() === 'CERRADO');
   }
 }

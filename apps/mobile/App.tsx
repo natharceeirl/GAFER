@@ -4,7 +4,6 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from './src/features/auth/model/use-auth-store';
 import { useBorradorStore } from './src/features/operaciones/model/use-borrador-store';
-import { BorradorRepository } from './src/features/operaciones/model/borrador-repository';
 import { inicializarBaseDeDatos } from './src/shared/db/sqlite';
 import { LoginScreen } from './src/features/auth/ui';
 import { AgendaScreen } from './src/features/agenda/ui';
@@ -15,6 +14,7 @@ function AppContent() {
   const [iniciando, setIniciando] = useState(true);
   const [errorAlmacenamiento, setErrorAlmacenamiento] = useState<string | null>(null);
   const [intento, setIntento] = useState(0);
+  const [usuarioBorradorListo, setUsuarioBorradorListo] = useState<string | null>(null);
 
   // 1. Base de datos local y sesión. Sin SQLite no se deja trabajar: lo que el técnico
   //    registre no quedaría en disco (regla "durable antes que visible").
@@ -43,27 +43,29 @@ function AppContent() {
     };
   }, [restaurarSesion, intento]);
 
-  // 2. Borrador del técnico de la sesión: se restaura al abrir la app y tras cada inicio
-  //    de sesión; se quita de la pantalla al cerrarla. Nunca se muestra el de otro técnico.
+  // 2. Borrador del técnico de la sesión: se restaura antes de montar AgendaScreen para
+  //    evitar carreras con cargarAgenda y sobrescrituras tardías; se quita al cerrar sesión.
   const usuarioId = estado === 'AUTENTICADO' ? usuario?.id ?? null : null;
   useEffect(() => {
     if (iniciando || errorAlmacenamiento) return;
 
     if (!usuarioId) {
       useBorradorStore.getState().descargarDeMemoria();
+      setUsuarioBorradorListo(null);
       return;
     }
 
     let vigente = true;
-    new BorradorRepository()
-      .obtenerActivo(usuarioId)
-      .then((borradorActivo) => {
-        if (vigente) {
-          useBorradorStore.getState().restaurarBorrador(borradorActivo);
-        }
-      })
+    useBorradorStore
+      .getState()
+      .restaurarActivoDeUsuario(usuarioId)
       .catch((error) => {
         console.error('No se pudo restaurar el borrador local:', error);
+      })
+      .finally(() => {
+        if (vigente) {
+          setUsuarioBorradorListo(usuarioId);
+        }
       });
 
     return () => {
@@ -92,7 +94,9 @@ function AppContent() {
     );
   }
 
-  if (iniciando) {
+  const restaurandoBorrador = usuarioId !== null && usuarioBorradorListo !== usuarioId;
+
+  if (iniciando || restaurandoBorrador) {
     return (
       <View style={styles.splashContenedor}>
         <StatusBar style="light" />

@@ -64,10 +64,28 @@ export class OperacionesController {
     };
   }
 
+  private verificarPermisoTecnico(
+    inspeccion: { tecnicosParticipantes: Array<{ id: string; nombre: string }> },
+    user: TokenPayload | undefined,
+    mensaje: string,
+  ): void {
+    if (user && user.cargo === 'TECNICO_OPERADOR') {
+      const esParticipante = inspeccion.tecnicosParticipantes.some(
+        (t) => t.id === user.id,
+      );
+      if (!esParticipante) {
+        throw new ForbiddenException(mensaje);
+      }
+    }
+  }
+
   @Get()
   @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiConsultarInspeccionDoc()
-  async consultar(@Query('servicioId') servicioId?: string) {
+  async consultar(
+    @Query('servicioId') servicioId?: string,
+    @UsuarioActual() user?: TokenPayload,
+  ) {
     if (!servicioId) {
       return null;
     }
@@ -75,6 +93,14 @@ export class OperacionesController {
     if (!inspeccion) {
       return null;
     }
+
+    // GAF-104: El técnico operador solo puede consultar inspecciones donde participó
+    this.verificarPermisoTecnico(
+      inspeccion,
+      user,
+      'No tiene permisos para consultar servicios de otros técnicos',
+    );
+
     return {
       id: inspeccion.id,
       servicioId: inspeccion.servicioId,
@@ -93,26 +119,42 @@ export class OperacionesController {
   @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiListarMisServiciosDoc()
   async listarMisServicios(@UsuarioActual() user?: TokenPayload) {
-    let inspecciones = [];
-    if (user?.cargo === 'TECNICO_OPERADOR') {
-      inspecciones = await this.obtenerInspeccion.ejecutarPorTecnico(user.id);
-    } else {
-      inspecciones = await this.obtenerInspeccion.ejecutarTodas();
-    }
+    const inspecciones =
+      user?.cargo === 'TECNICO_OPERADOR'
+        ? await this.obtenerInspeccion.ejecutarPorTecnico(user.id)
+        : await this.obtenerInspeccion.ejecutarTodas();
 
-    return inspecciones.map((insp) => ({
-      id: insp.id,
-      servicioId: insp.servicioId,
-      codigoInspeccion: insp.codigoInspeccion,
-      estado: insp.getEstado(),
-      versionSync: insp.getVersionSync(),
-      fechaEjecucion: insp.fechaEjecucion,
-      horaInicio: insp.horaInicio,
-      horaFin: insp.horaFin,
-      tecnicosParticipantes: insp.tecnicosParticipantes,
-      snapshotCatalogos: insp.getSnapshot(),
-      puedeSolicitarCorreccion: insp.getEstado() === 'CERRADO',
-    }));
+    return inspecciones
+      .filter((insp) => insp.getEstado() === 'CERRADO')
+      .map((insp) => {
+        const snapshot = insp.getSnapshot();
+        const clienteRazonSocial =
+          (typeof snapshot.clienteRazonSocial === 'string' && snapshot.clienteRazonSocial) ||
+          insp.clienteRazonSocial;
+        const sedeNombre =
+          (typeof snapshot.sedeNombre === 'string' && snapshot.sedeNombre) ||
+          insp.sedeNombre;
+        const servicioTipo =
+          (typeof snapshot.servicioTipo === 'string' && snapshot.servicioTipo) ||
+          insp.servicioTipo;
+
+        return {
+          id: insp.id,
+          servicioId: insp.servicioId,
+          codigoInspeccion: insp.codigoInspeccion,
+          estado: insp.getEstado(),
+          versionSync: insp.getVersionSync(),
+          fechaEjecucion: insp.fechaEjecucion,
+          horaInicio: insp.horaInicio,
+          horaFin: insp.horaFin,
+          tecnicosParticipantes: insp.tecnicosParticipantes,
+          snapshotCatalogos: snapshot,
+          puedeSolicitarCorreccion: insp.getEstado() === 'CERRADO',
+          ...(clienteRazonSocial ? { clienteRazonSocial } : {}),
+          ...(sedeNombre ? { sedeNombre } : {}),
+          ...(servicioTipo ? { servicioTipo } : {}),
+        };
+      });
   }
 
   @Get(':id')
@@ -125,16 +167,11 @@ export class OperacionesController {
     const inspeccion = await this.obtenerInspeccion.ejecutarPorId(id);
 
     // GAF-104: El técnico operador solo puede ver inspecciones donde participó
-    if (user && user.cargo === 'TECNICO_OPERADOR') {
-      const esParticipante = inspeccion.tecnicosParticipantes.some(
-        (t) => t.id === user.id,
-      );
-      if (!esParticipante) {
-        throw new ForbiddenException(
-          'No tiene permisos para consultar servicios de otros técnicos',
-        );
-      }
-    }
+    this.verificarPermisoTecnico(
+      inspeccion,
+      user,
+      'No tiene permisos para consultar servicios de otros técnicos',
+    );
 
     return {
       id: inspeccion.id,
@@ -188,35 +225,37 @@ export class OperacionesController {
       );
     }
 
-    if (user && user.cargo === 'TECNICO_OPERADOR') {
-      const esParticipante = inspeccion.tecnicosParticipantes.some(
-        (t) => t.id === user.id,
-      );
-      if (!esParticipante) {
-        throw new ForbiddenException(
-          'No tiene autorización para solicitar corrección de este servicio',
-        );
-      }
-    }
+    this.verificarPermisoTecnico(
+      inspeccion,
+      user,
+      'No tiene autorización para solicitar corrección de este servicio',
+    );
 
     const solicitadaEn = new Date().toISOString();
 
     if (this.auditoriaService) {
-      await this.auditoriaService.persistirInspeccionAuditoria({
-        inspeccionId: id,
-        actorId: user?.id || 'sistema',
-        accion: 'SOLICITUD_CORRECCION',
-        payloadAnterior: { estado: inspeccion.getEstado() },
-        payloadNuevo: {
-          motivo: dto.motivo,
-          solicitadoPor: user?.nombreCompleto || 'Técnico',
-          solicitanteId: user?.id,
-          fechaSolicitud: solicitadaEn,
-        },
-      });
+      const actorId =
+        typeof this.auditoriaService.resolverActorId === 'function'
+          ? await this.auditoriaService.resolverActorId(user?.id)
+          : (user?.id ?? null);
+
+      if (actorId) {
+        await this.auditoriaService.persistirInspeccionAuditoria({
+          inspeccionId: id,
+          actorId,
+          accion: 'SOLICITUD_CORRECCION',
+          payloadAnterior: { estado: inspeccion.getEstado() },
+          payloadNuevo: {
+            motivo: dto.motivo,
+            solicitadoPor: user?.nombreCompleto || 'Técnico',
+            solicitanteId: user?.id,
+            fechaSolicitud: solicitadaEn,
+          },
+        });
+      }
 
       await this.auditoriaService.registrarEvento({
-        actorId: user?.id,
+        actorId: actorId ?? undefined,
         actorUsuario: user?.usuario || 'TECNICO',
         actorRol: user?.cargo || 'TECNICO_OPERADOR',
         modulo: 'operaciones',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,28 +7,30 @@ import {
   TouchableOpacity,
   Alert,
   TextInput,
+  BackHandler,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { OperacionSyncSchema } from '@gafer/contracts';
 import { useAuthStore } from '../../auth/model/use-auth-store';
-import { useBorradorStore } from '../model/use-borrador-store';
+import { BorradorInspeccion, useBorradorStore } from '../model/use-borrador-store';
 import {
   FormularioCampo,
   InsumoAplicado,
+  EquipoCatalogoItem,
   BloqueCierre,
-  NOMBRE_BLOQUE,
   METODOS_APLICACION,
   ESTADOS_GENERALES,
   NIVELES_INFESTACION,
   UNIDADES,
   CATALOGOS_CAMPO_DEFECTO,
   EQUIPOS_CATALOGO_SEMILLA,
-  INSUMOS_CATALOGO_SEMILLA,
   crearFormularioCampo,
   validarCierre,
 } from '../model/formulario-campo';
+import { FirmaPadModal } from './FirmaPadModal';
 import { Button, AlertBanner } from '../../../shared/ui';
 import { TOKENS } from '../../../shared/theme/tokens';
 
@@ -36,6 +38,64 @@ export interface FormularioCampoScreenProps {
   onVolver: () => void;
   onAbrirPlanillaDrt?: () => void;
   formularioInicial?: FormularioCampo;
+}
+
+interface UsuarioBasico {
+  id: string;
+  nombres: string;
+  apellidos: string;
+}
+
+function construirFormularioInicial(
+  borrador: BorradorInspeccion | null,
+  usuario: UsuarioBasico | null,
+  formularioInicial?: FormularioCampo,
+): FormularioCampo {
+  if (borrador?.datosCampo) {
+    return borrador.datosCampo;
+  }
+  if (formularioInicial) {
+    return formularioInicial;
+  }
+
+  const tecnicoNombre = usuario
+    ? `${usuario.nombres} ${usuario.apellidos}`
+    : 'Técnico Operador';
+
+  if (!borrador) {
+    return crearFormularioCampo({
+      cliente: { razonSocial: 'Sin servicio activo' },
+      sede: { nombre: 'Sin sede seleccionada' },
+      servicio: {
+        id: '',
+        tipo: 'Inspección de Saneamiento',
+        requiereCertificado: false,
+      },
+      tecnicoNombre,
+      tecnicoId: usuario?.id,
+    });
+  }
+
+  const cfg = borrador.configServicio;
+  return crearFormularioCampo({
+    cliente: {
+      razonSocial: borrador.clienteRazonSocial || 'Cliente no especificado',
+    },
+    sede: {
+      nombre: borrador.sedeNombre || 'Sede no especificada',
+    },
+    servicio: {
+      id: borrador.servicioId,
+      tipo: borrador.servicioTipo || 'Inspección de Saneamiento',
+      tipoServicio: cfg?.tipoServicio,
+      requiereCertificado: cfg?.requiereCertificado ?? false,
+      insumosAutorizados: cfg?.insumosAutorizados,
+      dosisReferencial: cfg?.dosisReferencial,
+      equiposAutorizados: cfg?.equiposAutorizados,
+    },
+    tecnicoNombre,
+    tecnicoId: usuario?.id,
+  });
 }
 
 export const FormularioCampoScreen: React.FC<FormularioCampoScreenProps> = ({
@@ -49,56 +109,149 @@ export const FormularioCampoScreen: React.FC<FormularioCampoScreenProps> = ({
   const finalizarServicioCampo = useBorradorStore((state) => state.finalizarServicioCampo);
 
   const [guardando, setGuardando] = useState(false);
+  const [finalizado, setFinalizado] = useState(false);
   const [mensajeGuardado, setMensajeGuardado] = useState<string | null>(null);
   const [errorValidacion, setErrorValidacion] = useState<string | null>(null);
   const [erroresBloque, setErroresBloque] = useState<Partial<Record<BloqueCierre, string>>>({});
   const [nuevoColega, setNuevoColega] = useState('');
+  const [modalFirmaVisible, setModalFirmaVisible] = useState(false);
 
-  // Inicializar estado del formulario con borrador activo o inicial
-  const [formulario, setFormulario] = useState<FormularioCampo>(() => {
-    if (borrador?.datosCampo) {
-      return borrador.datosCampo;
-    }
-    if (formularioInicial) {
-      return formularioInicial;
-    }
-
-    return crearFormularioCampo({
-      cliente: {
-        razonSocial: borrador?.clienteRazonSocial || 'ALICORP S.A.A.',
-      },
-      sede: {
-        nombre: borrador?.sedeNombre || 'PLANTA_CALLAO',
-      },
-      servicio: {
-        id: borrador?.servicioId || '00000000-0000-4000-8000-000000000001',
-        tipo: borrador?.servicioTipo || 'DESINSECTACION Y DESRATIZACION (DRT)',
-        requiereCertificado: true,
-      },
-      tecnicoNombre: usuario
-        ? `${usuario.nombres} ${usuario.apellidos}`
-        : 'Marco Ipusari',
-      tecnicoId: usuario?.id,
-    });
-  });
+  // Inicializar estado del formulario con borrador activo o inicial (sin datos ficticios)
+  const [formulario, setFormulario] = useState<FormularioCampo>(() =>
+    construirFormularioInicial(borrador, usuario, formularioInicial),
+  );
 
   const scrollRef = useRef<ScrollView>(null);
+  const ultimoFormularioRef = useRef(formulario);
+  ultimoFormularioRef.current = formulario;
+  const servicioIdCargadoRef = useRef<string>(formulario.servicioId);
+  const montadoRef = useRef(true);
+  const finalizandoRef = useRef(false);
+  const finalizadoRef = useRef(false);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mensajeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const guardadoEnCursoRef = useRef<Promise<boolean> | null>(null);
 
-  const usuarioId = usuario?.id;
+  const usuarioId = usuario?.id ?? borrador?.usuarioId;
+
+  const cancelarAutoGuardado = useCallback(() => {
+    if (autoSaveTimerRef.current !== null) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    montadoRef.current = true;
+    return () => {
+      montadoRef.current = false;
+      cancelarAutoGuardado();
+      if (mensajeTimerRef.current !== null) {
+        clearTimeout(mensajeTimerRef.current);
+        mensajeTimerRef.current = null;
+      }
+    };
+  }, [cancelarAutoGuardado]);
+
+  // Sincronizar si el borrador activo llega después del montaje o cambia de servicio
+  useEffect(() => {
+    if (formularioInicial || finalizandoRef.current || finalizadoRef.current) {
+      return;
+    }
+    if (!borrador) {
+      return;
+    }
+    if (borrador.servicioId !== servicioIdCargadoRef.current) {
+      servicioIdCargadoRef.current = borrador.servicioId;
+      setFormulario(construirFormularioInicial(borrador, usuario));
+    }
+  }, [borrador, formularioInicial, usuario]);
+
+  // Guarda el formulario en SQLite. Nunca escribe si no hay servicioId válido o si está cerrando/cerrado.
+  const guardarFormulario = useCallback(
+    async (formularioAGuardar: FormularioCampo): Promise<boolean> => {
+      if (
+        finalizandoRef.current ||
+        finalizadoRef.current ||
+        !formularioAGuardar.servicioId.trim()
+      ) {
+        return false;
+      }
+      const promesa = actualizarCampo(formularioAGuardar, {
+        usuarioId,
+        clienteRazonSocial: formularioAGuardar.clienteRazon,
+        sedeNombre: formularioAGuardar.proyectoNombre,
+        servicioTipo: formularioAGuardar.servicioEtiqueta,
+      });
+      guardadoEnCursoRef.current = promesa;
+      try {
+        return await promesa;
+      } finally {
+        if (guardadoEnCursoRef.current === promesa) {
+          guardadoEnCursoRef.current = null;
+        }
+      }
+    },
+    [actualizarCampo, usuarioId],
+  );
 
   // Guardado periódico automático en SQLite durable ("Durable before visible").
-  // Si falla, el store expone errorPersistencia y aquí se avisa al técnico.
+  // Se detiene al iniciar cierre/finalización para no resucitar un borrador cerrado.
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      actualizarCampo(formulario, { usuarioId }).then((ok) => {
+    if (
+      finalizado ||
+      finalizandoRef.current ||
+      finalizadoRef.current ||
+      !formulario.servicioId.trim()
+    ) {
+      cancelarAutoGuardado();
+      return;
+    }
+
+    cancelarAutoGuardado();
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      if (finalizandoRef.current || finalizadoRef.current) {
+        return;
+      }
+      guardarFormulario(ultimoFormularioRef.current).then((ok) => {
+        if (!montadoRef.current || finalizandoRef.current || finalizadoRef.current) {
+          return;
+        }
         if (!ok) {
-          setErrorValidacion('No se pudo guardar en el teléfono. No cierre la app y avise a soporte.');
+          setErrorValidacion(
+            'No se pudo guardar en el teléfono. No cierre la app y avise a soporte.',
+          );
         }
       });
     }, 1500);
 
-    return () => clearTimeout(timeout);
-  }, [formulario, actualizarCampo, usuarioId]);
+    return cancelarAutoGuardado;
+  }, [formulario, finalizado, guardarFormulario, cancelarAutoGuardado]);
+
+  // Equipos a renderizar en Bloque 2: combina catálogo autorizado del servicio + catálogo semilla + IDs seleccionados
+  const equiposDisponibles = useMemo<EquipoCatalogoItem[]>(() => {
+    const mapa = new Map<string, EquipoCatalogoItem>();
+    for (const eq of formulario.equiposCatalogo ?? []) {
+      mapa.set(eq.id, eq);
+    }
+    for (const eq of EQUIPOS_CATALOGO_SEMILLA) {
+      if (!mapa.has(eq.id)) {
+        mapa.set(eq.id, eq);
+      }
+    }
+    for (const eqId of formulario.equipos) {
+      if (!mapa.has(eqId)) {
+        mapa.set(eqId, {
+          id: eqId,
+          codigoInterno: eqId.slice(0, 8).toUpperCase(),
+          nombre: `Equipo autorizado (${eqId.slice(0, 8)})`,
+          tipo: 'AUTORIZADO',
+        });
+      }
+    }
+    return Array.from(mapa.values());
+  }, [formulario.equiposCatalogo, formulario.equipos]);
 
   // Manejo de cambios en el formulario
   const cambiar = <K extends keyof FormularioCampo>(campo: K, valor: FormularioCampo[K]) => {
@@ -172,15 +325,27 @@ export const FormularioCampoScreen: React.FC<FormularioCampoScreenProps> = ({
   };
 
   const handleGuardarBorrador = async () => {
+    if (finalizandoRef.current || finalizadoRef.current) {
+      return;
+    }
+    cancelarAutoGuardado();
     setGuardando(true);
     try {
-      const ok = await actualizarCampo(formulario, { usuarioId });
+      const ok = await guardarFormulario(ultimoFormularioRef.current);
       if (!ok) {
         throw new Error('No se pudo guardar el formulario en SQLite');
       }
       const ahora = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       setMensajeGuardado(`Borrador guardado en SQLite local a las ${ahora} hrs.`);
-      setTimeout(() => setMensajeGuardado(null), 4000);
+      if (mensajeTimerRef.current !== null) {
+        clearTimeout(mensajeTimerRef.current);
+      }
+      mensajeTimerRef.current = setTimeout(() => {
+        mensajeTimerRef.current = null;
+        if (montadoRef.current) {
+          setMensajeGuardado(null);
+        }
+      }, 4000);
     } catch {
       setErrorValidacion('Error al guardar el borrador en la base de datos local.');
     } finally {
@@ -189,7 +354,12 @@ export const FormularioCampoScreen: React.FC<FormularioCampoScreenProps> = ({
   };
 
   const handleCerrarInspeccion = () => {
-    const errores = validarCierre(formulario);
+    if (finalizandoRef.current || finalizadoRef.current) {
+      return;
+    }
+
+    const formActual = ultimoFormularioRef.current;
+    const errores = validarCierre(formActual);
     setErroresBloque(errores);
 
     if (Object.keys(errores).length > 0) {
@@ -202,6 +372,26 @@ export const FormularioCampoScreen: React.FC<FormularioCampoScreenProps> = ({
       return;
     }
 
+    // Validar UUID del servicio y sesión del técnico antes de encolar en sync_outbox (F6)
+    const agregadoIdCheck = OperacionSyncSchema.shape.agregadoId.safeParse(formActual.servicioId);
+    if (!agregadoIdCheck.success) {
+      Alert.alert(
+        'Servicio No Válido',
+        'El identificador del servicio no es un UUID válido. Vuelva a iniciar la visita desde la agenda.',
+      );
+      return;
+    }
+
+    const actorIdCheck = OperacionSyncSchema.shape.actorId.safeParse(usuario?.id);
+    if (!actorIdCheck.success) {
+      Alert.alert(
+        'Sesión de Técnico Requerida',
+        'No se pudo identificar al técnico autenticado para registrar la operación. Vuelva a iniciar sesión e intente nuevamente.',
+      );
+      return;
+    }
+    const actorId = actorIdCheck.data;
+
     Alert.alert(
       'Cierre de Inspección en Campo',
       '¿Está seguro de cerrar y firmar la inspección? Al cerrarse se generará el documento, se bloqueará la edición y quedará encolada para sincronización.',
@@ -211,22 +401,37 @@ export const FormularioCampoScreen: React.FC<FormularioCampoScreenProps> = ({
           text: 'Cerrar e Iniciar Sincronización',
           style: 'default',
           onPress: async () => {
+            if (finalizandoRef.current || finalizadoRef.current) {
+              return;
+            }
+            finalizandoRef.current = true;
+            cancelarAutoGuardado();
             setGuardando(true);
             try {
-              const usuarioId = usuario?.id || 'tecnico-operador-local';
-              const { operationId } = await finalizarServicioCampo(formulario, usuarioId);
+              if (guardadoEnCursoRef.current) {
+                await guardadoEnCursoRef.current;
+              }
+              const { operationId } = await finalizarServicioCampo(
+                ultimoFormularioRef.current,
+                actorId,
+              );
+              finalizadoRef.current = true;
+              setFinalizado(true);
 
               Alert.alert(
                 'Inspección Cerrada Exitosamente',
                 `El servicio ha concluido. Operación #${operationId.slice(0, 8)} encolada en Outbox de SQLite y lista para revisión del supervisor.`,
                 [{ text: 'Aceptar', onPress: onVolver }],
               );
-            } catch (err: any) {
-              setErrorValidacion(
-                err?.message || 'No se pudo cerrar la inspección.',
-              );
+            } catch (err: unknown) {
+              finalizandoRef.current = false;
+              const mensaje =
+                err instanceof Error ? err.message : 'No se pudo cerrar la inspección.';
+              setErrorValidacion(mensaje);
             } finally {
-              setGuardando(false);
+              if (montadoRef.current) {
+                setGuardando(false);
+              }
             }
           },
         },
@@ -234,16 +439,63 @@ export const FormularioCampoScreen: React.FC<FormularioCampoScreenProps> = ({
     );
   };
 
-  const handleVolver = () => {
-    Alert.alert(
-      'Salir de la Inspección',
-      '¿Desea salir de la inspección? Los cambios se encuentran guardados en el borrador durable de SQLite.',
-      [
-        { text: 'Permanecer aquí', style: 'cancel' },
-        { text: 'Volver a Agenda', onPress: onVolver },
-      ],
-    );
-  };
+  // Guarda cambios pendientes en SQLite antes de desmontar la pantalla (F3)
+  const handleVolver = useCallback(async () => {
+    cancelarAutoGuardado();
+    if (finalizadoRef.current) {
+      onVolver();
+      return;
+    }
+    if (finalizandoRef.current) {
+      return;
+    }
+    if (!ultimoFormularioRef.current.servicioId.trim()) {
+      onVolver();
+      return;
+    }
+
+    const ok = await guardarFormulario(ultimoFormularioRef.current);
+    if (!ok) {
+      Alert.alert(
+        'No se pudo guardar',
+        'El formulario no quedó guardado en el teléfono. Si sale ahora puede perder los últimos cambios.',
+        [
+          { text: 'Permanecer', style: 'cancel' },
+          { text: 'Salir de todos modos', style: 'destructive', onPress: onVolver },
+        ],
+      );
+      return;
+    }
+    onVolver();
+  }, [cancelarAutoGuardado, guardarFormulario, onVolver]);
+
+  // Interceptar botón atrás de hardware en Android (y gestos de retorno)
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      void handleVolver();
+      return true;
+    });
+    return () => sub.remove();
+  }, [handleVolver]);
+
+  // Guarda cambios del formulario de campo antes de navegar a la Planilla DRT (F1, F3)
+  const handleAbrirPlanillaDrt = useCallback(async () => {
+    if (!onAbrirPlanillaDrt || finalizandoRef.current || finalizadoRef.current) {
+      return;
+    }
+    cancelarAutoGuardado();
+    if (ultimoFormularioRef.current.servicioId.trim()) {
+      const ok = await guardarFormulario(ultimoFormularioRef.current);
+      if (!ok) {
+        Alert.alert(
+          'No se pudo guardar',
+          'No se pudieron guardar los últimos cambios antes de abrir la Planilla DRT.',
+        );
+        return;
+      }
+    }
+    onAbrirPlanillaDrt();
+  }, [cancelarAutoGuardado, guardarFormulario, onAbrirPlanillaDrt]);
 
   const firmarConformidad = () => {
     if (!formulario.firmanteNombre.trim() || !formulario.firmanteCargo.trim()) {
@@ -254,9 +506,7 @@ export const FormularioCampoScreen: React.FC<FormularioCampoScreenProps> = ({
       return;
     }
 
-    const firmaSvgData = `data:image/svg+xml;base64,mockFirmaTrace-${Date.now()}`;
-    cambiar('firma', firmaSvgData);
-    Alert.alert('Firma Registrada', 'Firma de conformidad capturada con éxito.');
+    setModalFirmaVisible(true);
   };
 
   return (
@@ -414,7 +664,7 @@ export const FormularioCampoScreen: React.FC<FormularioCampoScreenProps> = ({
             </Text>
 
             <View style={styles.listaEquipos}>
-              {EQUIPOS_CATALOGO_SEMILLA.map((eq) => {
+              {equiposDisponibles.map((eq) => {
                 const seleccionado = formulario.equipos.includes(eq.id);
                 return (
                   <TouchableOpacity
@@ -441,7 +691,8 @@ export const FormularioCampoScreen: React.FC<FormularioCampoScreenProps> = ({
                         {eq.nombre}
                       </Text>
                       <Text style={styles.codigoEquipo}>
-                        Código: {eq.codigoInterno} · Tipo: {eq.tipo}
+                        Código: {eq.codigoInterno}
+                        {eq.tipo ? ` · Tipo: ${eq.tipo}` : ''}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -563,29 +814,31 @@ export const FormularioCampoScreen: React.FC<FormularioCampoScreenProps> = ({
                         <View style={styles.campoMitad}>
                           <Text style={styles.labelInput}>Unidad de Medida</Text>
                           <View style={styles.selectorUnidad}>
-                            {['l', 'ml', 'kg', 'g', 'bloque', 'sobre'].map((unid) => (
-                              <TouchableOpacity
-                                key={unid}
-                                onPress={() =>
-                                  cambiarInsumo(ins.insumoId, { unidad: unid })
-                                }
-                                style={[
-                                  styles.chipUnidad,
-                                  ins.unidad?.toLowerCase() === unid &&
-                                    styles.chipUnidadActivo,
-                                ]}
-                              >
-                                <Text
+                            {UNIDADES.map((unid) => {
+                              const unidLower = unid.toLowerCase();
+                              const activa = ins.unidad?.toLowerCase() === unidLower;
+                              return (
+                                <TouchableOpacity
+                                  key={unid}
+                                  onPress={() =>
+                                    cambiarInsumo(ins.insumoId, { unidad: unidLower })
+                                  }
                                   style={[
-                                    styles.textoChipUnidad,
-                                    ins.unidad?.toLowerCase() === unid &&
-                                      styles.textoChipUnidadActivo,
+                                    styles.chipUnidad,
+                                    activa && styles.chipUnidadActivo,
                                   ]}
                                 >
-                                  {unid}
-                                </Text>
-                              </TouchableOpacity>
-                            ))}
+                                  <Text
+                                    style={[
+                                      styles.textoChipUnidad,
+                                      activa && styles.textoChipUnidadActivo,
+                                    ]}
+                                  >
+                                    {unidLower}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
                           </View>
                         </View>
                       </View>
@@ -969,7 +1222,7 @@ export const FormularioCampoScreen: React.FC<FormularioCampoScreenProps> = ({
               <Button
                 testID="boton-abrir-planilla-drt"
                 titulo="📋 Abrir Planilla de Estaciones DRT / Cebaderos"
-                onPress={onAbrirPlanillaDrt}
+                onPress={handleAbrirPlanillaDrt}
                 variante="secundario"
               />
             </View>
@@ -996,6 +1249,18 @@ export const FormularioCampoScreen: React.FC<FormularioCampoScreenProps> = ({
             />
           </View>
         </ScrollView>
+
+        <FirmaPadModal
+          visible={modalFirmaVisible}
+          firmanteNombre={formulario.firmanteNombre}
+          firmanteCargo={formulario.firmanteCargo}
+          onCancelar={() => setModalFirmaVisible(false)}
+          onConfirmar={(firmaDataUri) => {
+            cambiar('firma', firmaDataUri);
+            setModalFirmaVisible(false);
+            Alert.alert('Firma Registrada', 'Firma de conformidad capturada con éxito.');
+          }}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
