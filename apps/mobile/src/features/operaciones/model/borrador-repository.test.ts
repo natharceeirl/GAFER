@@ -273,11 +273,14 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
   });
 
   it('finaliza el servicio de campo por bloques y encola la operacion en sync_outbox (GAF-34)', async () => {
+    const servicioUuid = 'd2222222-2222-4000-8000-000000000002';
+    const usuarioUuid = '33333333-3333-4000-8000-000000000002';
+
     const f: FormularioCampo = crearFormularioCampo({
       cliente: { id: 'c2', razonSocial: 'GLORIA S.A.' },
       sede: { id: 'p2', nombre: 'PLANTA_HUACHIPA' },
       servicio: {
-        id: 'srv-gloria-01',
+        id: servicioUuid,
         tipo: 'DESINFECCION AMBIENTAL',
         tipoServicio: 'DSF',
         requiereCertificado: false,
@@ -291,6 +294,7 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
         equiposAutorizados: [EQUIPOS_CATALOGO_SEMILLA[1].id],
       },
       tecnicoNombre: 'Marco Ipusari',
+      tecnicoId: usuarioUuid,
     });
 
     f.metodos = ['Nebulización'];
@@ -308,23 +312,133 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
     f.responsableNoDisponible = true; // No requiere firma física
     f.observacionesLibre = 'Servicio culminado conforme.';
 
-    await repo.guardarCampo(f);
-    expect(await repo.obtenerPorServicioId(f.servicioId)).not.toBeNull();
+    await repo.guardarCampo(f, { usuarioId: usuarioUuid });
+    expect(await repo.obtenerPorServicioId(f.servicioId, usuarioUuid)).not.toBeNull();
 
-    const { operationId } = await repo.finalizarYEncolarCampo(f, 'tecnico-marco-id');
+    const { operationId } = await repo.finalizarYEncolarCampo(f, usuarioUuid);
     expect(operationId).toBeDefined();
 
-    // El borrador activo se limpió
-    expect(await repo.obtenerPorServicioId(f.servicioId)).toBeNull();
+    // El borrador activo se limpió para la clave compuesta (servicio_id, usuario_id)
+    expect(await repo.obtenerPorServicioId(f.servicioId, usuarioUuid)).toBeNull();
 
-    // La operación se encuentra en la cola Outbox
+    // La operación se encuentra en la cola Outbox y cumple OperacionSyncSchema
     const outbox = new OutboxQueue();
     await outbox.inicializar();
     const pendientes = outbox.obtenerPendientes();
     expect(pendientes.length).toBe(1);
+    expect(OperacionSyncSchema.safeParse(pendientes[0].operacion).success).toBe(true);
     expect(pendientes[0].operacion.operationId).toBe(operationId);
     expect(pendientes[0].operacion.tipo).toBe('REGISTRO_SERVICIO_CAMPO');
     expect(pendientes[0].operacion.agregadoId).toBe(f.servicioId);
+    expect(pendientes[0].operacion.actorId).toBe(usuarioUuid);
+  });
+
+  it('rechaza finalizarYEncolarCampo con usuarioId o servicioId no-UUID y conserva el borrador sin contaminar sync_outbox (F6)', async () => {
+    const f: FormularioCampo = crearFormularioCampo({
+      cliente: { razonSocial: 'GLORIA S.A.' },
+      sede: { nombre: 'PLANTA_HUACHIPA' },
+      servicio: {
+        id: 'd2222222-2222-4000-8000-000000000099',
+        tipo: 'DESINFECCION AMBIENTAL',
+        tipoServicio: 'DSF',
+        requiereCertificado: false,
+      },
+      tecnicoNombre: 'Marco Ipusari',
+    });
+    f.insumos[0].lote = 'L-01';
+    f.insumos[0].vencimiento = '2027-10-01';
+    f.insumos[0].cantidad = '10';
+    f.insumos[0].zonas = 'Nave 1';
+    f.temperatura = '21';
+    f.humedad = '60';
+    f.viento = '8';
+    f.estadoGeneral = 'Bueno';
+    f.nivelInfestacion = 'Nulo';
+    f.responsableNoDisponible = true;
+
+    await repo.guardarCampo(f, { usuarioId: 'tecnico-operador-local' });
+    await expect(repo.finalizarYEncolarCampo(f, 'tecnico-operador-local')).rejects.toThrow();
+
+    // El borrador no fue eliminado y sync_outbox sigue vacío
+    expect(await repo.obtenerPorServicioId(f.servicioId, 'tecnico-operador-local')).not.toBeNull();
+    const outbox = new OutboxQueue();
+    await outbox.inicializar();
+    expect(outbox.obtenerPendientes()).toHaveLength(0);
+
+    // También rechaza si servicioId no es UUID aunque usuarioId sí sea UUID válido
+    const usuarioUuid = '33333333-3333-4000-8000-000000000009';
+    const fIdInvalido: FormularioCampo = { ...f, servicioId: 'contingencia-local-1' };
+    await repo.guardarCampo(fIdInvalido, { usuarioId: usuarioUuid });
+    await expect(repo.finalizarYEncolarCampo(fIdInvalido, usuarioUuid)).rejects.toThrow();
+    expect(await repo.obtenerPorServicioId(fIdInvalido.servicioId, usuarioUuid)).not.toBeNull();
+    await outbox.inicializar();
+    expect(outbox.obtenerPendientes()).toHaveLength(0);
+  });
+
+  it('permite coexistencia sin pérdida de datosCampo y datosDrt para el mismo servicioId y usuarioId (F1)', async () => {
+    const servicioUuid = 'd4444444-4444-4000-8000-000000000004';
+    const usuarioUuid = '33333333-3333-4000-8000-000000000004';
+
+    const campo = crearFormularioCampo({
+      cliente: { razonSocial: 'ALICORP S.A.A.' },
+      sede: { nombre: 'PLANTA_CALLAO' },
+      servicio: {
+        id: servicioUuid,
+        tipo: 'DESINSECTACION Y DESRATIZACION',
+      },
+      tecnicoNombre: 'Juan Perez',
+    });
+    campo.observacionesLibre = 'Hallazgos de campo guardados';
+    campo.insumos[0].lote = 'L-COEX-01';
+
+    const acta: ActaServicioDrt = {
+      servicioId: servicioUuid,
+      clienteRazonSocial: 'ALICORP S.A.A.',
+      sedeDireccion: 'PLANTA_CALLAO',
+      fecha: '2026-11-03',
+      horaInicio: '08:30',
+      horaTermino: '10:30',
+      actividad: 'MONITOREO',
+      tipoCebo: 'BLOQUE_10G',
+      cebosInstalados: 10,
+      cebosConsumidos: 2,
+      cebosRepuestos: 2,
+      tipoTrampa: 'MECANICA',
+      trampasInstaladas: 4,
+      trampasActivadas: 1,
+      roedoresDetectados: ['R_NORVEGICUS'],
+      resultadosRecomendaciones: '',
+      observacionesCliente: 'Conforme',
+      firmas: {
+        personalResponsableNombre: 'Juan Perez',
+        personalResponsableCargo: 'Técnico',
+        clienteConformidadNombre: 'Luis Vega',
+        clienteConformidadCargo: 'Supervisor',
+        fecha: '2026-11-03',
+      },
+      planillaEstaciones: [
+        { numero: 1, estado: 'CON_CONSUMO', consumoGramos: 10, repuestoGramos: 10 },
+      ],
+    };
+
+    // 1. Guardar campo primero, luego DRT: ambos deben coexistir
+    await repo.guardarCampo(campo, { usuarioId: usuarioUuid });
+    await repo.guardarDrt(acta, { usuarioId: usuarioUuid });
+
+    const trasDrt = await repo.obtenerPorServicioId(servicioUuid, usuarioUuid);
+    expect(trasDrt?.datosCampo?.insumos[0].lote).toBe('L-COEX-01');
+    expect(trasDrt?.datosCampo?.observacionesLibre).toBe('Hallazgos de campo guardados');
+    expect(trasDrt?.datosDrt?.planillaEstaciones[0].consumoGramos).toBe(10);
+    expect(trasDrt?.observaciones).toBe('Hallazgos de campo guardados');
+
+    // 2. Volver a guardar campo: datosDrt debe seguir intacto
+    campo.observacionesLibre = 'Hallazgos actualizados al volver';
+    await repo.guardarCampo(campo, { usuarioId: usuarioUuid });
+
+    const trasCampo = await repo.obtenerPorServicioId(servicioUuid, usuarioUuid);
+    expect(trasCampo?.datosCampo?.observacionesLibre).toBe('Hallazgos actualizados al volver');
+    expect(trasCampo?.datosDrt?.firmas.clienteConformidadNombre).toBe('Luis Vega');
+    expect(trasCampo?.datosDrt?.planillaEstaciones).toHaveLength(1);
   });
 
   it('elimina el borrador de SQLite al limpiar o finalizar', async () => {

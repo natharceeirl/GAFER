@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   crearFormularioCampo,
+  clasificarTipoServicio,
   validarCierre,
   cerrarFormulario,
   registrarGuardado,
@@ -10,6 +11,19 @@ import {
   INSUMOS_CATALOGO_SEMILLA,
   EQUIPOS_CATALOGO_SEMILLA,
 } from './formulario-campo';
+import {
+  decodificarBase64Utf8,
+  esFirmaDataUriValida,
+  generarSvgFirmaBase64,
+} from './firma-svg';
+
+const FIRMA_SVG_VALIDA = generarSvgFirmaBase64([
+  [
+    { x: 10, y: 20 },
+    { x: 80, y: 60 },
+    { x: 140, y: 30 },
+  ],
+]);
 
 describe('formulario-campo (Mobile §4, §8.2, §8.3)', () => {
   const mockCliente = {
@@ -80,7 +94,7 @@ describe('formulario-campo (Mobile §4, §8.2, §8.3)', () => {
       observaciones: ['Acceso normal a todas las zonas asignadas'],
       observacionesLibre: 'Cebaderos perimetrales inspeccionados.',
       recomendaciones: ['Mantener despejada la franja de 30 cm de los zócalos'],
-      firma: 'data:image/png;base64,mockFirmaTrace...',
+      firma: FIRMA_SVG_VALIDA,
       firmanteNombre: 'Julio Valdivia',
       firmanteCargo: 'Supervisor de Planta',
       certificadoNumero: 'CERT-ALICORP-001-2026',
@@ -231,6 +245,118 @@ describe('formulario-campo (Mobile §4, §8.2, §8.3)', () => {
       expect(tipoDocumentoDe('DRT')).toBe('REPORTE');
       expect(tipoDocumentoDe('DSF')).toBe('INFORME');
       expect(tipoDocumentoDe('DSS')).toBe('INFORME');
+    });
+  });
+
+  describe('correcciones de revisión PR #34 (F4, F5, F7, F9)', () => {
+    it('clasifica servicios combinados DRT correctamente sin confundirlos con DSS (F4)', () => {
+      expect(clasificarTipoServicio('DESINSECTACION Y DESRATIZACION (DRT)')).toBe('DRT');
+      expect(clasificarTipoServicio('DESINSECTACION Y DESRATIZACION')).toBe('DRT');
+      expect(clasificarTipoServicio('Desinsectación y Desratización')).toBe('DRT');
+      expect(clasificarTipoServicio('CONTROL DE ROEDORES (MURINO)')).toBe('DRT');
+      expect(clasificarTipoServicio('DESINSECTACION')).toBe('DSS');
+      expect(clasificarTipoServicio('DESINFECCION AMBIENTAL')).toBe('DSF');
+      // Si se especifica tipoServicio explícito, prevalece
+      expect(clasificarTipoServicio('DESINSECTACION Y DESRATIZACION', 'DSS')).toBe('DSS');
+
+      const fCombinado = crearFormularioCampo({
+        cliente: mockCliente,
+        sede: mockSede,
+        servicio: {
+          id: 'd1111111-1111-4000-8000-000000000001',
+          tipo: 'DESINSECTACION Y DESRATIZACION',
+        },
+        tecnicoNombre: 'Marco Ipusari',
+      });
+      expect(fCombinado.tipoServicio).toBe('DRT');
+      expect(fCombinado.metodos).toContain('Cebado');
+      expect(fCombinado.insumos[0].principioActivo).toBe('Brodifacoum');
+      expect(tipoDocumentoDe(fCombinado.tipoServicio)).toBe('REPORTE');
+    });
+
+    it('conserva metadatos de equipos autorizados fuera del catálogo semilla (F5)', () => {
+      const equipoCustom = {
+        id: 'e9999999-9999-4000-8000-000000000088',
+        codigoInterno: 'EQ-CUSTOM-88',
+        nombre: 'Cámara térmica FLIR',
+        tipo: 'MEDICION',
+      };
+      const f = crearFormularioCampo({
+        cliente: mockCliente,
+        sede: mockSede,
+        servicio: {
+          id: 'd1111111-1111-4000-8000-000000000002',
+          tipo: 'DESINFECCION AMBIENTAL',
+          equiposAutorizados: [equipoCustom],
+        },
+      });
+      expect(f.equipos).toEqual([equipoCustom.id]);
+      expect(f.equiposCatalogo).toEqual([equipoCustom]);
+    });
+
+    it('genera SVG Base64 real y rechaza firmas simuladas o corruptas en validarCierre (F7)', () => {
+      expect(() => generarSvgFirmaBase64([])).toThrow();
+      expect(() => generarSvgFirmaBase64([[{ x: 1, y: 1 }]])).toThrow();
+      expect(esFirmaDataUriValida(FIRMA_SVG_VALIDA)).toBe(true);
+      const svg = decodificarBase64Utf8(
+        FIRMA_SVG_VALIDA.replace('data:image/svg+xml;base64,', ''),
+      );
+      expect(svg).toContain('<svg');
+      expect(svg).toContain('<path');
+
+      const conMock = {
+        ...formularioCompleto(),
+        firma: 'data:image/svg+xml;base64,mockFirmaTrace-1700000000000',
+      };
+      expect(validarCierre(conMock).conformidad).toBeDefined();
+    });
+
+    it('valida formato ISO calendario AAAA-MM-DD en vencimiento de insumos y fechas de certificado (F9)', () => {
+      const f = formularioCompleto();
+
+      // Vencimiento de insumo con formato inválido o fecha inexistente
+      expect(
+        validarCierre({ ...f, insumos: [{ ...f.insumos[0], vencimiento: 'abc' }] }).insumos,
+      ).toBeDefined();
+      expect(
+        validarCierre({ ...f, insumos: [{ ...f.insumos[0], vencimiento: '30/06/2028' }] }).insumos,
+      ).toBeDefined();
+      expect(
+        validarCierre({ ...f, insumos: [{ ...f.insumos[0], vencimiento: '2027-02-29' }] }).insumos,
+      ).toBeDefined();
+
+      // Certificado con texto libre que pasaría comparación lexicográfica ('xyz' > 'abc')
+      expect(
+        validarCierre({
+          ...f,
+          certificadoEmision: 'abc',
+          certificadoVencimiento: 'xyz',
+        }).certificado,
+      ).toBeDefined();
+      // Formato DD/MM/AAAA rechazado explícitamente
+      expect(
+        validarCierre({
+          ...f,
+          certificadoEmision: '03/11/2026',
+          certificadoVencimiento: '01/12/2026',
+        }).certificado,
+      ).toBeDefined();
+      // Fecha calendario inexistente (febrero 30)
+      expect(
+        validarCierre({
+          ...f,
+          certificadoEmision: '2026-02-01',
+          certificadoVencimiento: '2026-02-30',
+        }).certificado,
+      ).toBeDefined();
+      // Fecha vencimiento igual a emisión
+      expect(
+        validarCierre({
+          ...f,
+          certificadoEmision: '2026-11-03',
+          certificadoVencimiento: '2026-11-03',
+        }).certificado,
+      ).toBeDefined();
     });
   });
 });

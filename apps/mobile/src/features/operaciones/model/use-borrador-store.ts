@@ -10,7 +10,7 @@
 import { create } from 'zustand';
 import { ActaServicioDrt } from '@gafer/contracts';
 import { BorradorRepository } from './borrador-repository';
-import { FormularioCampo } from './formulario-campo';
+import { ConfigServicioBorrador, FormularioCampo } from './formulario-campo';
 
 export interface MetadataBorrador {
   /** Técnico dueño del borrador en este dispositivo. */
@@ -19,6 +19,8 @@ export interface MetadataBorrador {
   sedeNombre?: string;
   numeroOrden?: string;
   servicioTipo?: string;
+  /** Configuración precargada del servicio contratado (§8.2). */
+  configServicio?: ConfigServicioBorrador;
 }
 
 export interface BorradorInspeccion {
@@ -29,6 +31,7 @@ export interface BorradorInspeccion {
   sedeNombre?: string;
   numeroOrden?: string;
   servicioTipo?: string;
+  configServicio?: ConfigServicioBorrador;
   datosDrt?: ActaServicioDrt;
   datosCampo?: FormularioCampo;
 }
@@ -153,9 +156,17 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
   },
 
   actualizarCampo: async (formulario, metadata) => {
+    const revisionPropia = ++revisionEstado;
     try {
       const repo = new BorradorRepository();
-      const persistido = await repo.guardarCampo(formulario, metadata);
+      // El formulario pertenece al técnico dueño del borrador activo (clave compuesta servicio+usuario).
+      const persistido = await repo.guardarCampo(formulario, {
+        ...metadata,
+        usuarioId: metadata?.usuarioId ?? get().borrador?.usuarioId,
+      });
+      if (revisionEstado !== revisionPropia) {
+        return true;
+      }
       set({ borrador: persistido, errorPersistencia: null });
       return true;
     } catch (error) {
@@ -180,12 +191,15 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
   },
 
   finalizarServicioCampo: async (formulario, usuarioId) => {
+    revisionEstado += 1;
     const repo = new BorradorRepository();
     const resultado = await repo.finalizarYEncolarCampo(formulario, usuarioId);
 
+    revisionEstado += 1;
     set({
       borrador: null,
       colaEnvioPendiente: true,
+      errorPersistencia: null,
     });
 
     return resultado;

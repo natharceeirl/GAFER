@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ActaServicioDrtSchema } from '@gafer/contracts';
+import { OperacionSyncSchema } from '@gafer/contracts';
 import { flushMicrotasks } from '../../../test-utils/rn-test-harness';
 
 const { testRuntime, rnTools } = await vi.hoisted(async () => {
@@ -62,7 +62,7 @@ describe('AgendaScreen (F1, F3, F6)', () => {
     await cerrarBaseDeDatos();
   });
 
-  it('espera a persistir el borrador antes de montar FormularioDrtScreen con los datos reales de la visita (F1)', async () => {
+  it('espera a persistir el borrador antes de montar FormularioCampoScreen con los datos reales de la visita (F1, F2, F5)', async () => {
     let resolverInicio!: (ok: boolean) => void;
     const iniciarOriginal = useAgendaStore.getState().iniciarAtencionVisita;
     const iniciarSpy = vi.fn((visitaId: string) => {
@@ -86,24 +86,25 @@ describe('AgendaScreen (F1, F3, F6)', () => {
       const botonIniciar = testRuntime.getByTestId(`boton-atender-${visita.id}`);
       const promesaClick = (botonIniciar.props.onPress as () => Promise<void>)();
 
-      // Mientras SQLite aún no confirmó el borrador, FormularioDrtScreen NO debe montarse
+      // Mientras SQLite aún no confirmó el borrador, FormularioCampoScreen NO debe montarse
+      expect(testRuntime.queryByTestId('boton-cerrar-inspeccion')).toBeNull();
       expect(testRuntime.queryByTestId('boton-finalizar-drt')).toBeNull();
-      expect(testRuntime.getTextContent()).not.toContain('ACTA DE SERVICIO DRT');
 
       // Ahora sí termina la persistencia en SQLite
       resolverInicio(true);
       await promesaClick;
       await flushMicrotasks();
 
-      // FormularioDrtScreen se montó con los datos reales de la visita (no el fallback 'Cliente Asignado')
-      expect(testRuntime.getTextContent()).toContain('ACTA DE SERVICIO DRT');
-      const inputCliente = testRuntime.getByTestId('input-cliente-razon-social');
-      const inputSede = testRuntime.getByTestId('input-sede-direccion');
-      expect(inputCliente.props.value).toBe(visita.clienteRazonSocial);
-      expect(inputSede.props.value).toBe(visita.sedeNombre);
+      // FormularioCampoScreen se montó con los datos reales de la visita y botón Planilla DRT habilitado
+      expect(testRuntime.queryByTestId('boton-cerrar-inspeccion')).not.toBeNull();
+      expect(testRuntime.queryByTestId('boton-abrir-planilla-drt')).not.toBeNull();
+      const texto = testRuntime.getTextContent();
+      expect(texto).toContain(visita.clienteRazonSocial);
+      expect(texto).toContain(visita.sedeNombre);
+      expect(texto).toContain('DemoRaticida Bloque B');
       expect(useBorradorStore.getState().borrador?.servicioId).toBe(visita.servicioId);
       expect(
-        ActaServicioDrtSchema.shape.servicioId.safeParse(
+        OperacionSyncSchema.shape.agregadoId.safeParse(
           useBorradorStore.getState().borrador?.servicioId,
         ).success,
       ).toBe(true);
@@ -112,7 +113,7 @@ describe('AgendaScreen (F1, F3, F6)', () => {
     }
   });
 
-  it('si falla la persistencia en SQLite (GAF-33), NO abre FormularioDrtScreen y muestra el error en AgendaScreen (F1)', async () => {
+  it('si falla la persistencia en SQLite (GAF-33), NO abre FormularioCampoScreen y muestra el error en AgendaScreen (F1)', async () => {
     testRuntime.render(AgendaScreen);
     await flushMicrotasks();
 
@@ -123,13 +124,14 @@ describe('AgendaScreen (F1, F3, F6)', () => {
     await (botonIniciar.props.onPress as () => Promise<void>)();
     await flushMicrotasks();
 
+    expect(testRuntime.queryByTestId('boton-cerrar-inspeccion')).toBeNull();
     expect(testRuntime.queryByTestId('boton-finalizar-drt')).toBeNull();
     expect(useBorradorStore.getState().borrador).toBeNull();
     expect(useBorradorStore.getState().errorPersistencia).not.toBeNull();
     expect(testRuntime.getTextContent()).toContain('No se pudo guardar en el almacenamiento');
   });
 
-  it('espera iniciarAtencionEnSede y abre FormularioDrtScreen con servicioId UUID válido (F1, F3)', async () => {
+  it('espera iniciarAtencionEnSede y abre FormularioCampoScreen con servicioId UUID válido y sin exigir certificado (F1, F3, F5)', async () => {
     testRuntime.render(AgendaScreen);
     await flushMicrotasks();
 
@@ -145,11 +147,50 @@ describe('AgendaScreen (F1, F3, F6)', () => {
     await (botonSede.props.onPress as () => Promise<void>)();
     await flushMicrotasks();
 
-    expect(testRuntime.getTextContent()).toContain('ACTA DE SERVICIO DRT');
+    expect(testRuntime.queryByTestId('boton-cerrar-inspeccion')).not.toBeNull();
+    // Contingencia no exige bloque de certificado por defecto
+    expect(testRuntime.queryByTestId('input-certificado-numero')).toBeNull();
     const borrador = useBorradorStore.getState().borrador;
     expect(borrador?.clienteRazonSocial).toBe(sede.clienteRazonSocial);
     expect(borrador?.sedeNombre).toBe(sede.nombre);
-    expect(ActaServicioDrtSchema.shape.servicioId.safeParse(borrador?.servicioId).success).toBe(true);
+    expect(OperacionSyncSchema.shape.agregadoId.safeParse(borrador?.servicioId).success).toBe(true);
+  });
+
+  it('al alternar entre FormularioCampoScreen y FormularioDrtScreen en el mismo servicio preserva ambos borradores (F1)', async () => {
+    testRuntime.render(AgendaScreen);
+    await flushMicrotasks();
+
+    const visita = useAgendaStore.getState().items[0];
+    await (testRuntime.getByTestId(`boton-atender-${visita.id}`).props.onPress as () => Promise<void>)();
+    await flushMicrotasks();
+
+    // Editar observación en FormularioCampoScreen
+    const inputObs = testRuntime.getByTestId('input-observaciones-libre');
+    (inputObs.props.onChangeText as (t: string) => void)('Observación de campo persistente');
+
+    // Abrir Planilla DRT desde el botón integrado (debe guardar datosCampo antes de cambiar)
+    await (testRuntime.getByTestId('boton-abrir-planilla-drt').props.onPress as () => Promise<void>)();
+    await flushMicrotasks();
+
+    expect(testRuntime.queryByTestId('boton-finalizar-drt')).not.toBeNull();
+
+    // Editar conformidad en FormularioDrtScreen y volver (guarda datosDrt)
+    (testRuntime.getByTestId('input-cliente-conformidad-nombre').props.onChangeText as (t: string) => void)(
+      'Elena Ruiz',
+    );
+    await (testRuntime.getByTestId('boton-volver-drt').props.onPress as () => Promise<void>)();
+    await flushMicrotasks();
+
+    // Reabrir FormularioCampoScreen desde la placa activa
+    (testRuntime.getByTestId('boton-abrir-formulario-campo').props.onPress as () => void)();
+    await flushMicrotasks();
+
+    expect(testRuntime.getByTestId('input-observaciones-libre').props.value).toBe(
+      'Observación de campo persistente',
+    );
+    const borrador = useBorradorStore.getState().borrador;
+    expect(borrador?.datosCampo?.observacionesLibre).toBe('Observación de campo persistente');
+    expect(borrador?.datosDrt?.firmas.clienteConformidadNombre).toBe('Elena Ruiz');
   });
 
   describe('Pestaña CERRADOS (GAF-104: F1, F3, F5, F6, F7)', () => {

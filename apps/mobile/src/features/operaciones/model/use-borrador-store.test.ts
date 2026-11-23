@@ -176,6 +176,33 @@ describe('useBorradorStore (Mobile)', () => {
     expect(estado.borrador?.observaciones).toBe('Aplicación focalizada en almacén 3.');
   });
 
+  it('actualizarCampo conserva usuarioId activo y expone errorPersistencia si SQLite falla (F3, F8)', async () => {
+    const servicioUuid = 'd5555555-5555-4000-8000-000000000005';
+    const usuarioUuid = '33333333-3333-4000-8000-000000000005';
+    await useBorradorStore.getState().iniciarBorrador(servicioUuid, { usuarioId: usuarioUuid });
+
+    const f = crearFormularioCampo({
+      cliente: { razonSocial: 'SAN FERNANDO S.A.' },
+      sede: { nombre: 'PLANTA_CHORRILLOS' },
+      servicio: { id: servicioUuid, tipo: 'DESINFECCION AMBIENTAL', requiereCertificado: false },
+      tecnicoNombre: 'Marco Ipusari',
+    });
+    f.observacionesLibre = 'Guardado ok';
+
+    const ok1 = await useBorradorStore.getState().actualizarCampo(f);
+    expect(ok1).toBe(true);
+    expect(useBorradorStore.getState().borrador?.usuarioId).toBe(usuarioUuid);
+
+    // Simular fallo de SQLite
+    await cerrarBaseDeDatos();
+    const ok2 = await useBorradorStore
+      .getState()
+      .actualizarCampo({ ...f, observacionesLibre: 'No guardado' });
+    expect(ok2).toBe(false);
+    expect(useBorradorStore.getState().errorPersistencia).toContain(MENSAJE_ERROR_PERSISTENCIA);
+    expect(useBorradorStore.getState().borrador?.datosCampo?.observacionesLibre).toBe('Guardado ok');
+  });
+
   it('una restauración tardía no sobrescribe un borrador iniciado después (F3)', async () => {
     let resolverLectura!: (valor: { servicioId: string; usuarioId: string; observaciones: string } | null) => void;
     const lecturaPendiente = new Promise<{
@@ -322,6 +349,108 @@ describe('useBorradorStore (Mobile)', () => {
       expect(useBorradorStore.getState().borrador).toBeNull();
 
       liberarGuardarDrt();
+      await autoGuardadoEnVuelo;
+      spyGuardar.mockRestore();
+
+      expect(useBorradorStore.getState().borrador).toBeNull();
+    });
+  });
+
+  describe('finalizarServicioCampo (F3, F6, F8)', () => {
+    const usuarioUuid = '33333333-3333-4000-8000-000000000010';
+    const servicioUuid = 'd6666666-6666-4000-8000-000000000010';
+
+    function crearCampoValido(): FormularioCampo {
+      const f = crearFormularioCampo({
+        cliente: { razonSocial: 'GLORIA S.A.' },
+        sede: { nombre: 'PLANTA_HUACHIPA' },
+        servicio: {
+          id: servicioUuid,
+          tipo: 'DESINFECCION AMBIENTAL',
+          requiereCertificado: false,
+        },
+        tecnicoNombre: 'Juan Perez',
+        tecnicoId: usuarioUuid,
+      });
+      f.insumos[0].lote = 'L-STORE-01';
+      f.insumos[0].vencimiento = '2027-12-31';
+      f.insumos[0].cantidad = '12';
+      f.insumos[0].zonas = 'Almacén central';
+      f.temperatura = '21';
+      f.humedad = '62';
+      f.viento = '8';
+      f.estadoGeneral = 'Bueno';
+      f.nivelInfestacion = 'Nulo';
+      f.responsableNoDisponible = true;
+      return f;
+    }
+
+    it('finaliza el servicio de campo, encola OperacionSync válida y limpia memoria y disco', async () => {
+      const campo = crearCampoValido();
+      await useBorradorStore.getState().iniciarBorrador(servicioUuid, { usuarioId: usuarioUuid });
+      await useBorradorStore.getState().actualizarCampo(campo);
+
+      const res = await useBorradorStore.getState().finalizarServicioCampo(campo, usuarioUuid);
+
+      expect(res.operationId).toBeDefined();
+      const state = useBorradorStore.getState();
+      expect(state.borrador).toBeNull();
+      expect(state.colaEnvioPendiente).toBe(true);
+      expect(state.errorPersistencia).toBeNull();
+      expect(
+        await new BorradorRepository().obtenerPorServicioId(servicioUuid, usuarioUuid),
+      ).toBeNull();
+
+      const outbox = new OutboxQueue();
+      await outbox.inicializar();
+      const pendientes = outbox.obtenerPendientes();
+      expect(pendientes).toHaveLength(1);
+      expect(OperacionSyncSchema.safeParse(pendientes[0].operacion).success).toBe(true);
+      expect(pendientes[0].operacion.tipo).toBe('REGISTRO_SERVICIO_CAMPO');
+      expect(pendientes[0].operacion.agregadoId).toBe(servicioUuid);
+      expect(pendientes[0].operacion.actorId).toBe(usuarioUuid);
+    });
+
+    it('rechaza finalizarServicioCampo con actorId no-UUID sin borrar el borrador ni encolar (F6)', async () => {
+      const campo = crearCampoValido();
+      await useBorradorStore
+        .getState()
+        .iniciarBorrador(servicioUuid, { usuarioId: 'tecnico-operador-local' });
+
+      await expect(
+        useBorradorStore.getState().finalizarServicioCampo(campo, 'tecnico-operador-local'),
+      ).rejects.toThrow();
+
+      expect(useBorradorStore.getState().borrador?.servicioId).toBe(servicioUuid);
+      const outbox = new OutboxQueue();
+      await outbox.inicializar();
+      expect(outbox.obtenerPendientes()).toHaveLength(0);
+    });
+
+    it('un actualizarCampo en vuelo que resuelve tras finalizarServicioCampo no resucita el borrador (F3)', async () => {
+      const campo = crearCampoValido();
+      await useBorradorStore.getState().iniciarBorrador(servicioUuid, { usuarioId: usuarioUuid });
+
+      let liberarGuardarCampo!: () => void;
+      const esperaGuardar = new Promise<void>((resolve) => {
+        liberarGuardarCampo = resolve;
+      });
+      const guardarOriginal = BorradorRepository.prototype.guardarCampo;
+      const spyGuardar = vi
+        .spyOn(BorradorRepository.prototype, 'guardarCampo')
+        .mockImplementationOnce(async function (this: BorradorRepository, f, m) {
+          const resultado = await guardarOriginal.call(this, f, m);
+          await esperaGuardar;
+          return resultado;
+        });
+
+      const autoGuardadoEnVuelo = useBorradorStore.getState().actualizarCampo(campo);
+      await Promise.resolve();
+
+      await useBorradorStore.getState().finalizarServicioCampo(campo, usuarioUuid);
+      expect(useBorradorStore.getState().borrador).toBeNull();
+
+      liberarGuardarCampo();
       await autoGuardadoEnVuelo;
       spyGuardar.mockRestore();
 
