@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -21,6 +21,7 @@ import {
   ModoFiltroAgenda,
 } from '../model/agenda';
 import { useBorradorStore } from '../../operaciones/model/use-borrador-store';
+import { FormularioDrtScreen } from '../../operaciones';
 import { Button, AlertBanner } from '../../../shared/ui';
 import { TOKENS } from '../../../shared/theme/tokens';
 
@@ -31,6 +32,7 @@ export const AgendaScreen: React.FC = () => {
   const {
     items,
     sedesActivas,
+    sedeSeleccionada,
     cargando,
     error,
     cargarAgenda,
@@ -47,6 +49,8 @@ export const AgendaScreen: React.FC = () => {
 
   const [vistaActiva, setVistaActiva] = useState<VistaAgenda>('MIS_VISITAS');
   const [busquedaSede, setBusquedaSede] = useState('');
+  const [modoFormularioDrt, setModoFormularioDrt] = useState(false);
+  const iniciandoAtencionRef = useRef(false);
 
   const tecnicoId = usuario?.id || 'tecnico-defecto-id';
 
@@ -77,12 +81,30 @@ export const AgendaScreen: React.FC = () => {
     ]);
   };
 
-  const handleIniciarVisita = (visita: ItemAgenda) => {
-    iniciarAtencionVisita(visita.id);
+  const handleIniciarVisita = async (visita: ItemAgenda) => {
+    if (iniciandoAtencionRef.current) return;
+    iniciandoAtencionRef.current = true;
+    try {
+      const iniciado = await iniciarAtencionVisita(visita.id);
+      if (iniciado) {
+        setModoFormularioDrt(true);
+      }
+    } finally {
+      iniciandoAtencionRef.current = false;
+    }
   };
 
-  const handleIniciarSede = (sede: SedeActiva) => {
-    iniciarAtencionEnSede(sede);
+  const handleIniciarSede = async (sede: SedeActiva) => {
+    if (iniciandoAtencionRef.current) return;
+    iniciandoAtencionRef.current = true;
+    try {
+      const iniciado = await iniciarAtencionEnSede(sede);
+      if (iniciado) {
+        setModoFormularioDrt(true);
+      }
+    } finally {
+      iniciandoAtencionRef.current = false;
+    }
   };
 
   const handleConcluirInspeccion = () => {
@@ -194,7 +216,9 @@ export const AgendaScreen: React.FC = () => {
   };
 
   const renderItemSede = ({ item }: { item: SedeActiva }) => {
-    const estaSeleccionada = borrador?.servicioId?.includes(item.id.substring(0, 8));
+    const estaSeleccionada =
+      borrador?.numeroOrden === 'CONTINGENCIA' &&
+      (borrador?.sedeNombre === item.nombre || sedeSeleccionada?.id === item.id);
 
     return (
       <View style={[styles.fichaOrden, estaSeleccionada && styles.fichaEnCurso]}>
@@ -228,6 +252,10 @@ export const AgendaScreen: React.FC = () => {
       </View>
     );
   };
+
+  if (modoFormularioDrt) {
+    return <FormularioDrtScreen onVolver={() => setModoFormularioDrt(false)} />;
+  }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -263,10 +291,14 @@ export const AgendaScreen: React.FC = () => {
       {/* Placa de Inspección Activa en Garita */}
       {borrador ? (
         <View style={styles.placaInspeccionActiva}>
-          <View style={styles.placaInspeccionInfo}>
+          <TouchableOpacity
+            style={styles.placaInspeccionInfo}
+            onPress={() => setModoFormularioDrt(true)}
+            activeOpacity={0.8}
+          >
             <View style={styles.indicadorEnServicio}>
               <View style={styles.puntoVerdeActivo} />
-              <Text style={styles.indicadorTexto}>EN SERVICIO ACTIVO</Text>
+              <Text style={styles.indicadorTexto}>EN SERVICIO ACTIVO (TOCA PARA EDITAR)</Text>
             </View>
             <Text style={styles.placaClienteTexto} numberOfLines={1}>
               {borrador.clienteRazonSocial || 'Atención en Sede'}
@@ -276,16 +308,27 @@ export const AgendaScreen: React.FC = () => {
               {borrador.servicioTipo || 'Inspección de Saneamiento'}
               {borrador.numeroOrden ? ` · ${borrador.numeroOrden}` : ''}
             </Text>
-          </View>
-          <TouchableOpacity
-            testID="boton-concluir-inspeccion"
-            onPress={handleConcluirInspeccion}
-            style={styles.botonConcluir}
-            accessibilityRole="button"
-            accessibilityLabel="Concluir inspección activa"
-          >
-            <Text style={styles.textoBotonConcluir}>CONCLUIR</Text>
           </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+            <TouchableOpacity
+              testID="boton-abrir-acta-drt"
+              onPress={() => setModoFormularioDrt(true)}
+              style={styles.botonAbrirActaDrt}
+              accessibilityRole="button"
+              accessibilityLabel="Abrir acta de servicio DRT"
+            >
+              <Text style={styles.textoBotonAbrirActaDrt}>ACTA DRT</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="boton-concluir-inspeccion"
+              onPress={handleConcluirInspeccion}
+              style={styles.botonConcluir}
+              accessibilityRole="button"
+              accessibilityLabel="Concluir inspección activa"
+            >
+              <Text style={styles.textoBotonConcluir}>CERRAR</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       ) : null}
 
@@ -496,6 +539,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: TOKENS.inkSoft,
     marginTop: 1,
+  },
+  botonAbrirActaDrt: {
+    backgroundColor: TOKENS.marca,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: TOKENS.radiusSm,
+  },
+  textoBotonAbrirActaDrt: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   botonConcluir: {
     backgroundColor: TOKENS.panel,

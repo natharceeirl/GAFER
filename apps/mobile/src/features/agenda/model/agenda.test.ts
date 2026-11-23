@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { ActaServicioDrtSchema, VisitaProgramadaSchema } from '@gafer/contracts';
 import { inicializarBaseDeDatos, cerrarBaseDeDatos } from '../../../shared/db/sqlite';
 import { BorradorRepository } from '../../operaciones/model/borrador-repository';
 import {
@@ -276,7 +277,7 @@ describe('Agenda de Campo (Decisión C12 / Spec §8.1)', () => {
       expect(useBorradorStore.getState().errorPersistencia).not.toBeNull();
     });
 
-    it('iniciarAtencionEnSede activa una sede y genera borrador para contingencia', async () => {
+    it('iniciarAtencionEnSede activa una sede y genera borrador para contingencia con servicioId UUID válido', async () => {
       const store = useAgendaStore.getState();
       const sede = store.sedesActivas[0];
 
@@ -286,7 +287,20 @@ describe('Agenda de Campo (Decisión C12 / Spec §8.1)', () => {
       expect(useAgendaStore.getState().sedeSeleccionada?.id).toBe(sede.id);
       const borrador = useBorradorStore.getState().borrador;
       expect(borrador).not.toBeNull();
-      expect(borrador?.servicioId).toContain('contingencia-');
+      expect(borrador?.numeroOrden).toBe('CONTINGENCIA');
+      expect(ActaServicioDrtSchema.shape.servicioId.safeParse(borrador?.servicioId).success).toBe(true);
+    });
+
+    it('todas las visitas semilla de cargarAgenda cumplen con UUID válido en servicioId y VisitaProgramadaSchema (F3)', async () => {
+      const tecnicoUuid = '33333333-3333-4000-8000-000000000001';
+      await useAgendaStore.getState().cargarAgenda(tecnicoUuid);
+
+      const items = useAgendaStore.getState().items;
+      expect(items.length).toBeGreaterThan(0);
+      for (const item of items) {
+        expect(VisitaProgramadaSchema.safeParse(item).success).toBe(true);
+        expect(ActaServicioDrtSchema.shape.servicioId.safeParse(item.servicioId).success).toBe(true);
+      }
     });
   });
 });

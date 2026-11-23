@@ -8,6 +8,7 @@
  */
 
 import { create } from 'zustand';
+import { ActaServicioDrt } from '@gafer/contracts';
 import { BorradorRepository } from './borrador-repository';
 
 export interface MetadataBorrador {
@@ -27,6 +28,7 @@ export interface BorradorInspeccion {
   sedeNombre?: string;
   numeroOrden?: string;
   servicioTipo?: string;
+  datosDrt?: ActaServicioDrt;
 }
 
 export const MENSAJE_ERROR_PERSISTENCIA =
@@ -48,6 +50,9 @@ interface BorradorStore {
   ) => Promise<boolean>;
   /** Devuelve false si no hay borrador activo o si no se pudo guardar en disco. */
   actualizarObservaciones: (observaciones: string) => Promise<boolean>;
+  /** Guarda el acta DRT en disco y luego la muestra. Devuelve false si no se pudo guardar. */
+  actualizarDrt: (acta: ActaServicioDrt, metadata?: MetadataBorrador) => Promise<boolean>;
+  finalizarServicioDrt: (acta: ActaServicioDrt, usuarioId: string) => Promise<{ operationId: string }>;
   marcarComoPendienteDeSincronizar: () => void;
   restaurarBorrador: (borrador: BorradorInspeccion | null) => void;
   /**
@@ -120,6 +125,41 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
       errorPersistencia: null,
     }));
     return true;
+  },
+
+  actualizarDrt: async (acta, metadata) => {
+    const revisionPropia = ++revisionEstado;
+    try {
+      const repo = new BorradorRepository();
+      // El acta pertenece al técnico dueño del borrador activo (clave compuesta servicio+usuario).
+      const persistido = await repo.guardarDrt(acta, {
+        ...metadata,
+        usuarioId: metadata?.usuarioId ?? get().borrador?.usuarioId,
+      });
+      if (revisionEstado !== revisionPropia) {
+        return true;
+      }
+      set({ borrador: persistido, errorPersistencia: null });
+      return true;
+    } catch (error) {
+      set({ errorPersistencia: describirError(error) });
+      return false;
+    }
+  },
+
+  finalizarServicioDrt: async (acta, usuarioId) => {
+    revisionEstado += 1;
+    const repo = new BorradorRepository();
+    const resultado = await repo.finalizarYEncolarDrt(acta, usuarioId);
+
+    revisionEstado += 1;
+    set({
+      borrador: null,
+      colaEnvioPendiente: true,
+      errorPersistencia: null,
+    });
+
+    return resultado;
   },
 
   marcarComoPendienteDeSincronizar: () => set({ colaEnvioPendiente: true }),

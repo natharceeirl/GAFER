@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { ActaServicioDrt, OperacionSyncSchema } from '@gafer/contracts';
 import { useBorradorStore, MENSAJE_ERROR_PERSISTENCIA } from './use-borrador-store';
 import { BorradorRepository } from './borrador-repository';
 import { inicializarBaseDeDatos, cerrarBaseDeDatos } from '../../../shared/db/sqlite';
+import { OutboxQueue } from '../../../shared/db/outbox';
 
 function reiniciarStore() {
   useBorradorStore.setState({ borrador: null, colaEnvioPendiente: false, errorPersistencia: null });
@@ -104,6 +106,50 @@ describe('useBorradorStore (Mobile)', () => {
     expect(await new BorradorRepository().obtenerPorServicioId('srv-fin')).toBeNull();
   });
 
+
+  it('actualiza y almacena el formulario del Acta DRT (GAF-103)', async () => {
+    const acta: ActaServicioDrt = {
+      servicioId: 'f1a2b3c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c',
+      clienteRazonSocial: 'BACKUS & JOHNSTON',
+      sedeDireccion: 'Planta Ate',
+      fecha: '2026-11-03',
+      horaInicio: '08:00',
+      horaTermino: '10:00',
+      actividad: 'MONITOREO',
+      tipoCebo: 'BLOQUE_5G',
+      cebosInstalados: 20,
+      cebosConsumidos: 5,
+      cebosRepuestos: 5,
+      tipoTrampa: 'MECANICA',
+      trampasInstaladas: 10,
+      trampasActivadas: 1,
+      roedoresDetectados: ['MUS_MUSCULUS'],
+      resultadosRecomendaciones: 'Monitoreo mensual sin incidencias críticas.',
+      observacionesCliente: 'Conforme.',
+      firmas: {
+        personalResponsableNombre: 'Carlos Prado',
+        personalResponsableCargo: 'Técnico Especialista',
+        clienteConformidadNombre: 'Ana Rivas',
+        clienteConformidadCargo: 'Jefa de Calidad',
+        fecha: '2026-11-03',
+      },
+      planillaEstaciones: [
+        { numero: 1, estado: 'SIN_ACTIVIDAD' },
+        { numero: 2, estado: 'CON_CONSUMO', consumoGramos: 5, repuestoGramos: 5 },
+      ],
+    };
+
+    await useBorradorStore.getState().iniciarBorrador(acta.servicioId, { usuarioId: 'tec-drt' });
+    const ok = await useBorradorStore.getState().actualizarDrt(acta);
+    expect(ok).toBe(true);
+    const estado = useBorradorStore.getState();
+    expect(estado.borrador?.servicioId).toBe(acta.servicioId);
+    expect(estado.borrador?.datosDrt?.tipoCebo).toBe('BLOQUE_5G');
+    expect(estado.borrador?.datosDrt?.planillaEstaciones.length).toBe(2);
+    // El upsert del acta conserva al dueño del borrador (hallazgo 5 del PR #29).
+    expect(estado.borrador?.usuarioId).toBe('tec-drt');
+  });
+
   it('una restauración tardía no sobrescribe un borrador iniciado después (F3)', async () => {
     let resolverLectura!: (valor: { servicioId: string; usuarioId: string; observaciones: string } | null) => void;
     const lecturaPendiente = new Promise<{
@@ -150,5 +196,110 @@ describe('useBorradorStore (Mobile)', () => {
     const restauradoA = await useBorradorStore.getState().restaurarActivoDeUsuario('tec-A');
     expect(restauradoA?.observaciones).toBe('Notas A');
     expect(restauradoA?.usuarioId).toBe('tec-A');
+  });
+
+  describe('finalizarServicioDrt (F2, F5, F6)', () => {
+    const usuarioUuid = '33333333-3333-4000-8000-000000000001';
+    const actaValida: ActaServicioDrt = {
+      servicioId: 'd1111111-1111-4000-8000-000000000001',
+      clienteRazonSocial: 'ALICORP S.A.A.',
+      sedeDireccion: 'PLANTA_CALLAO',
+      fecha: '2026-11-03',
+      areaTratadaM2: 500,
+      horaInicio: '08:30',
+      horaTermino: '11:00',
+      actividad: 'MONITOREO',
+      tipoCebo: 'BLOQUE_10G',
+      cebosInstalados: 20,
+      cebosConsumidos: 2,
+      cebosRepuestos: 3,
+      tipoTrampa: 'MECANICA',
+      trampasInstaladas: 5,
+      trampasActivadas: 1,
+      roedoresDetectados: ['MUS_MUSCULUS'],
+      resultadosRecomendaciones: 'Sin novedad crítica.',
+      observacionesCliente: 'Conforme.',
+      firmas: {
+        personalResponsableNombre: 'Juan Perez',
+        personalResponsableCargo: 'Técnico',
+        clienteConformidadNombre: 'Maria Lopez',
+        clienteConformidadCargo: 'Jefa de Planta',
+        fecha: '2026-11-03',
+      },
+      planillaEstaciones: [
+        { numero: 1, estado: 'CON_CONSUMO', consumoGramos: 10, repuestoGramos: 20 },
+      ],
+    };
+
+    it('finaliza el servicio DRT, encola OperacionSync válida y limpia el borrador en memoria y disco', async () => {
+      await useBorradorStore
+        .getState()
+        .iniciarBorrador(actaValida.servicioId, { usuarioId: usuarioUuid });
+      await useBorradorStore.getState().actualizarDrt(actaValida);
+
+      const res = await useBorradorStore.getState().finalizarServicioDrt(actaValida, usuarioUuid);
+
+      expect(res.operationId).toBeDefined();
+      const state = useBorradorStore.getState();
+      expect(state.borrador).toBeNull();
+      expect(state.colaEnvioPendiente).toBe(true);
+      expect(
+        await new BorradorRepository().obtenerPorServicioId(actaValida.servicioId, usuarioUuid),
+      ).toBeNull();
+
+      const outbox = new OutboxQueue();
+      await outbox.inicializar();
+      const pendientes = outbox.obtenerPendientes();
+      expect(pendientes).toHaveLength(1);
+      expect(OperacionSyncSchema.safeParse(pendientes[0].operacion).success).toBe(true);
+      expect(pendientes[0].operacion.operationId).toBe(res.operationId);
+      expect(pendientes[0].operacion.actorId).toBe(usuarioUuid);
+    });
+
+    it('rechaza finalizarServicioDrt con actorId no-UUID sin borrar el borrador ni encolar', async () => {
+      await useBorradorStore
+        .getState()
+        .iniciarBorrador(actaValida.servicioId, { usuarioId: 'tecnico-local-01' });
+
+      await expect(
+        useBorradorStore.getState().finalizarServicioDrt(actaValida, 'tecnico-local-01'),
+      ).rejects.toThrow();
+
+      expect(useBorradorStore.getState().borrador?.servicioId).toBe(actaValida.servicioId);
+      const outbox = new OutboxQueue();
+      await outbox.inicializar();
+      expect(outbox.obtenerPendientes()).toHaveLength(0);
+    });
+
+    it('un actualizarDrt en vuelo que resuelve tras finalizarServicioDrt no resucita el borrador en el store', async () => {
+      await useBorradorStore
+        .getState()
+        .iniciarBorrador(actaValida.servicioId, { usuarioId: usuarioUuid });
+
+      let liberarGuardarDrt!: () => void;
+      const esperaGuardar = new Promise<void>((resolve) => {
+        liberarGuardarDrt = resolve;
+      });
+      const guardarOriginal = BorradorRepository.prototype.guardarDrt;
+      const spyGuardar = vi
+        .spyOn(BorradorRepository.prototype, 'guardarDrt')
+        .mockImplementationOnce(async function (this: BorradorRepository, a, m) {
+          const resultado = await guardarOriginal.call(this, a, m);
+          await esperaGuardar;
+          return resultado;
+        });
+
+      const autoGuardadoEnVuelo = useBorradorStore.getState().actualizarDrt(actaValida);
+      await Promise.resolve();
+
+      await useBorradorStore.getState().finalizarServicioDrt(actaValida, usuarioUuid);
+      expect(useBorradorStore.getState().borrador).toBeNull();
+
+      liberarGuardarDrt();
+      await autoGuardadoEnVuelo;
+      spyGuardar.mockRestore();
+
+      expect(useBorradorStore.getState().borrador).toBeNull();
+    });
   });
 });
