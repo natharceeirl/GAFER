@@ -203,6 +203,7 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
         clienteConformidadCargo: 'Encargado de Seguridad',
         fecha: '2026-11-03',
         responsableNoDisponible: false,
+        firmaDigitalBase64: 'data:image/svg+xml;base64,PHN2Zz48cGF0aCBkPSJNIDAgMCBMIDEwIDEwIi8+PC9zdmc+',
       },
       planillaEstaciones: [
         { numero: 1, estado: 'SIN_ACTIVIDAD' },
@@ -261,8 +262,11 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
         clienteConformidadNombre: 'Luis Mendoza',
         clienteConformidadCargo: 'Encargado de Seguridad',
         fecha: '2026-11-03',
+        responsableNoDisponible: false,
+        firmaDigitalBase64: 'data:image/svg+xml;base64,PHN2Zz48cGF0aCBkPSJNIDAgMCBMIDEwIDEwIi8+PC9zdmc+',
       },
       planillaEstaciones: [{ numero: 1, estado: 'SIN_ACTIVIDAD' }],
+      fotos: [],
     };
 
     await repo.guardarDrt(acta, { usuarioId: 'tecnico-local-01' });
@@ -306,6 +310,8 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
         clienteConformidadNombre: 'Luis Mendoza',
         clienteConformidadCargo: 'Encargado de Seguridad',
         fecha: '2026-11-03',
+        responsableNoDisponible: false,
+        firmaDigitalBase64: 'data:image/svg+xml;base64,PHN2Zz48cGF0aCBkPSJNIDAgMCBMIDEwIDEwIi8+PC9zdmc+',
       },
       planillaEstaciones: [
         // huboConsumo undefined pero estado CON_CONSUMO -> huboConsumo: true y colorIcono: 'ROJO'
@@ -326,6 +332,7 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
           observaciones: 'Tapa fisurada',
         },
       ],
+      fotos: [],
     };
 
     await repo.guardarDrt(acta, { usuarioId: usuarioUuid });
@@ -498,10 +505,13 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
         clienteConformidadNombre: 'Luis Vega',
         clienteConformidadCargo: 'Supervisor',
         fecha: '2026-11-03',
+        responsableNoDisponible: false,
+        firmaDigitalBase64: 'data:image/svg+xml;base64,PHN2Zz48cGF0aCBkPSJNIDAgMCBMIDEwIDEwIi8+PC9zdmc+',
       },
       planillaEstaciones: [
         { numero: 1, estado: 'CON_CONSUMO', consumoGramos: 10, repuestoGramos: 10 },
       ],
+      fotos: [],
     };
 
     // 1. Guardar campo primero, luego DRT: ambos deben coexistir
