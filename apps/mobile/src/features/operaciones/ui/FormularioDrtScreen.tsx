@@ -45,6 +45,7 @@ import {
   ESTADOS_FISICOS,
 } from '../model/estaciones-drt';
 import { MAX_TAMANO_FOTO_BYTES } from '../model/fotos-compresion';
+import { formatearDetalleBorrador } from '../model/trabajo-colaborativo';
 import { ArchivosLocalRepository } from '../model/archivos-local.repository';
 import { CapturadorFotosPort } from '../model/captura-fotos';
 import { FirmaPadModal, ResultadoFirma } from './FirmaPadModal';
@@ -130,6 +131,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
 }) => {
   const { usuario } = useAuthStore();
   const borrador = useBorradorStore((state) => state.borrador);
+  const revisionRemota = useBorradorStore((state) => state.revisionRemota);
   const actualizarDrt = useBorradorStore((state) => state.actualizarDrt);
   const finalizarServicioDrt = useBorradorStore((state) => state.finalizarServicioDrt);
   const repoArchivos = useMemo(() => archivosRepo ?? new ArchivosLocalRepository(), [archivosRepo]);
@@ -193,12 +195,18 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
 
   const [modalFirmaVisible, setModalFirmaVisible] = useState(false);
 
+  // Detección de inspección cerrada / bloqueada para colaboración multi-técnico (§8.2, GAF-37)
+  const estaBloqueada = !!borrador?.bloqueada || !!acta.cerradaEnRevision;
+  const estaBloqueadaRef = useRef(estaBloqueada);
+  estaBloqueadaRef.current = estaBloqueada;
+
   // Referencia mutable siempre actualizada para auto-guardado seguro
   const ultimaActaRef = useRef(acta);
   ultimaActaRef.current = acta;
   const montadoRef = useRef(true);
   const finalizandoRef = useRef(false);
   const finalizadoRef = useRef(false);
+  const saltarAutoSaveRef = useRef(false);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const guardadoEnCursoRef = useRef<Promise<boolean> | null>(null);
 
@@ -217,12 +225,38 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
     };
   }, [cancelarAutoGuardado]);
 
+  // Reflejar fusiones remotas LWW o bloqueos externos en pantalla sin rearmar auto-guardado (§8.2, GAF-37)
+  useEffect(() => {
+    if (revisionRemota === 0) {
+      return;
+    }
+    if (borrador?.servicioId === ultimaActaRef.current.servicioId && borrador.datosDrt) {
+      cancelarAutoGuardado();
+      saltarAutoSaveRef.current = true;
+      setActa(borrador.datosDrt);
+    }
+  }, [revisionRemota, borrador, cancelarAutoGuardado]);
+
+  useEffect(() => {
+    if (estaBloqueada) {
+      cancelarAutoGuardado();
+      setModalFirmaVisible(false);
+    }
+  }, [estaBloqueada, cancelarAutoGuardado]);
+
   const usuarioId = usuario?.id;
+  const tecnicoNombre = usuario ? `${usuario.nombres} ${usuario.apellidos}` : 'Técnico Operador';
+  const tecnicoCargo = usuario?.cargo;
+
+  const metaActualizacionEstacion = () => ({
+    actualizadoEn: new Date().toISOString(),
+    actualizadoPor: tecnicoNombre,
+  });
 
   // Guarda el acta en SQLite. Devuelve false si no quedó en disco (el store expone el error).
   const guardarActa = useCallback(
     async (actaAGuardar: ActaServicioDrt): Promise<boolean> => {
-      if (finalizandoRef.current || finalizadoRef.current) {
+      if (estaBloqueadaRef.current || finalizandoRef.current || finalizadoRef.current) {
         return false;
       }
       const promesa = actualizarDrt(actaAGuardar, {
@@ -230,6 +264,10 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
         clienteRazonSocial: actaAGuardar.clienteRazonSocial,
         sedeNombre: actaAGuardar.sedeDireccion,
         servicioTipo: 'DESRATIZACION_DRT',
+        // Autoría del guardado para el trabajo colaborativo (§8.2, GAF-37).
+        tecnicoId: usuarioId,
+        tecnicoNombre,
+        tecnicoCargo,
       });
       guardadoEnCursoRef.current = promesa;
       try {
@@ -240,12 +278,17 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
         }
       }
     },
-    [actualizarDrt, usuarioId],
+    [actualizarDrt, usuarioId, tecnicoNombre, tecnicoCargo],
   );
 
   // Auto-guardado en segundo plano en SQLite (debounced 2.5s) bajo la regla §2.4: Durable before visible
   useEffect(() => {
-    if (finalizado || finalizandoRef.current || finalizadoRef.current) {
+    if (saltarAutoSaveRef.current) {
+      saltarAutoSaveRef.current = false;
+      cancelarAutoGuardado();
+      return;
+    }
+    if (estaBloqueada || finalizado || finalizandoRef.current || finalizadoRef.current) {
       cancelarAutoGuardado();
       return;
     }
@@ -253,11 +296,11 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
     cancelarAutoGuardado();
     autoSaveTimerRef.current = setTimeout(() => {
       autoSaveTimerRef.current = null;
-      if (finalizandoRef.current || finalizadoRef.current) {
+      if (estaBloqueadaRef.current || finalizandoRef.current || finalizadoRef.current) {
         return;
       }
       guardarActa(ultimaActaRef.current).then((ok) => {
-        if (!montadoRef.current || finalizandoRef.current || finalizadoRef.current) {
+        if (!montadoRef.current || estaBloqueadaRef.current || finalizandoRef.current || finalizadoRef.current) {
           return;
         }
         setMensajeGuardado(
@@ -269,12 +312,12 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
     }, 2500);
 
     return cancelarAutoGuardado;
-  }, [acta, finalizado, guardarActa, cancelarAutoGuardado]);
+  }, [acta, estaBloqueada, finalizado, guardarActa, cancelarAutoGuardado]);
 
   // Manejador seguro para regresar: espera a que el acta quede en SQLite antes de desmontar
   const handleVolver = useCallback(async () => {
     cancelarAutoGuardado();
-    if (finalizadoRef.current) {
+    if (estaBloqueadaRef.current || finalizadoRef.current) {
       onVolver();
       return;
     }
@@ -294,7 +337,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
       return;
     }
     onVolver();
-  }, [cancelarAutoGuardado, guardarActa, onVolver]);
+  }, [cancelarAutoGuardado, estaBloqueada, guardarActa, onVolver]);
 
   // Interceptar botón atrás de hardware en Android (y navegación por gestos)
   useEffect(() => {
@@ -337,6 +380,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
 
   // Sincronizar automáticamente conteos de cebos si el técnico usa la planilla
   const actualizarConteoDesdePlanilla = () => {
+    if (estaBloqueadaRef.current) return;
     setActa((prev) => ({
       ...prev,
       cebosConsumidos: metricasEstaciones.conConsumo,
@@ -345,6 +389,13 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
   };
 
   const handleGuardarBorradorManual = async () => {
+    if (estaBloqueadaRef.current) {
+      Alert.alert(
+        'Inspección Cerrada (§8.2)',
+        'Esta inspección ya fue finalizada y enviada a revisión. Se encuentra bloqueada para nuevas modificaciones.',
+      );
+      return;
+    }
     if (finalizandoRef.current || finalizadoRef.current) {
       return;
     }
@@ -357,7 +408,11 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
         throw new Error('No se pudo guardar el acta en SQLite');
       }
       const hora = horaActualIso();
-      setMensajeGuardado(`Borrador guardado en SQLite local a las ${hora}`);
+      setMensajeGuardado(`Borrador guardado a las ${hora} por ${tecnicoNombre}`);
+      Alert.alert(
+        'Borrador Guardado (§8.2)',
+        `Se guardó el borrador en SQLite local a las ${hora} por ${tecnicoNombre}. Los datos están seguros y listos para trabajo colaborativo.`,
+      );
     } catch {
       Alert.alert('Error al guardar', 'No se pudo guardar el borrador en la base de datos local.');
     } finally {
@@ -366,6 +421,13 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
   };
 
   const handleFinalizarServicio = async () => {
+    if (estaBloqueadaRef.current) {
+      Alert.alert(
+        'Inspección Ya Cerrada (§8.2)',
+        'Esta inspección ya fue finalizada previamente y enviada a revisión.',
+      );
+      return;
+    }
     if (finalizandoRef.current || finalizadoRef.current) {
       return;
     }
@@ -444,7 +506,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
           text: 'Concluir y Encolar',
           style: 'default',
           onPress: async () => {
-            if (finalizandoRef.current || finalizadoRef.current) {
+            if (estaBloqueadaRef.current || finalizandoRef.current || finalizadoRef.current) {
               return;
             }
             finalizandoRef.current = true;
@@ -454,7 +516,14 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
               if (guardadoEnCursoRef.current) {
                 await guardadoEnCursoRef.current;
               }
-              const res = await finalizarServicioDrt(resultado.data, userId, {
+              const actaParaCierre: ActaServicioDrt = {
+                ...resultado.data,
+                cerradaEnRevision: true,
+                cerradoPor: tecnicoNombre,
+                actualizadoEn: new Date().toISOString(),
+                actualizadoPor: tecnicoNombre,
+              };
+              const res = await finalizarServicioDrt(actaParaCierre, userId, {
                 encolarEstacionesIndividuales: true,
               });
               finalizadoRef.current = true;
@@ -481,6 +550,9 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
   // Manejador de firma capturada o ausencia de responsable (§13, GAF-36)
   // Persiste la firma de forma durable en filesystem + files_local + sync_outbox antes de actualizar UI (§2.4, §13.2).
   const handleGuardarFirmaModal = async (resultado: ResultadoFirma) => {
+    if (estaBloqueadaRef.current) {
+      return;
+    }
     const actaActual = ultimaActaRef.current;
     const firmaArchivoPrevioId = actaActual.firmas.firmaArchivoId;
 
@@ -551,7 +623,13 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
   };
 
   // Mutadores de campos
+  const actualizarCampoActa = (updater: (prev: ActaServicioDrt) => ActaServicioDrt) => {
+    if (estaBloqueadaRef.current) return;
+    setActa(updater);
+  };
+
   const toggleEspecieRoedor = (esp: EspecieRoedorDrt) => {
+    if (estaBloqueadaRef.current) return;
     setActa((prev) => {
       const yaExiste = prev.roedoresDetectados.includes(esp);
       return {
@@ -563,13 +641,20 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
     });
   };
 
-  // Mutadores de primera visita y planilla §5.1
+  // Mutadores de primera visita y planilla §5.1 (con marca temporal y autor para LWW §8.2)
   const handleTogglePrimeraVisita = (esPrimera: boolean) => {
+    if (estaBloqueadaRef.current) return;
+    const meta = metaActualizacionEstacion();
     setActa((prev) => {
-      const estacionesActualizadas = aplicarPrimeraVisita(prev.planillaEstaciones, esPrimera, {
-        tipoCebo: prev.tipoCebo,
-        cantidadGramos: 20,
-      });
+      const estacionesActualizadas = aplicarPrimeraVisita(
+        prev.planillaEstaciones,
+        esPrimera,
+        {
+          tipoCebo: prev.tipoCebo,
+          cantidadGramos: 20,
+        },
+        meta,
+      );
       return {
         ...prev,
         primeraVisita: esPrimera,
@@ -580,6 +665,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
   };
 
   const handleCopiarCeboATodas = () => {
+    if (estaBloqueadaRef.current) return;
     if (acta.planillaEstaciones.length === 0) return;
     const ref = acta.planillaEstaciones[0];
     const cebo = {
@@ -588,10 +674,11 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
       lote: ref.lote || 'LOTE-001',
       vencimiento: ref.vencimiento || '2026-12-31',
     };
+    const meta = metaActualizacionEstacion();
 
     setActa((prev) => ({
       ...prev,
-      planillaEstaciones: copiarCeboALote(prev.planillaEstaciones, cebo),
+      planillaEstaciones: copiarCeboALote(prev.planillaEstaciones, cebo, meta),
     }));
 
     Alert.alert(
@@ -601,37 +688,45 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
   };
 
   const cambiarEstadoEstacion = (numero: number, nuevoEstado: EstadoEstacionPlanilla) => {
+    if (estaBloqueadaRef.current) return;
+    const meta = metaActualizacionEstacion();
     setActa((prev) => ({
       ...prev,
       planillaEstaciones: prev.planillaEstaciones.map((est) =>
-        est.numero === numero ? actualizarEstadoEstacion(est, nuevoEstado) : est,
+        est.numero === numero ? actualizarEstadoEstacion(est, nuevoEstado, meta) : est,
       ),
     }));
   };
 
   const cambiarConsumoPorcentaje = (numero: number, huboConsumo: boolean, porcentaje?: PorcentajeConsumo) => {
+    if (estaBloqueadaRef.current) return;
+    const meta = metaActualizacionEstacion();
     setActa((prev) => ({
       ...prev,
       planillaEstaciones: prev.planillaEstaciones.map((est) =>
-        est.numero === numero ? actualizarConsumoEstacion(est, huboConsumo, porcentaje) : est,
+        est.numero === numero ? actualizarConsumoEstacion(est, huboConsumo, porcentaje, meta) : est,
       ),
     }));
   };
 
   const cambiarCantidadGramosEstacion = (numero: number, gramos: number) => {
+    if (estaBloqueadaRef.current) return;
+    const meta = metaActualizacionEstacion();
     setActa((prev) => ({
       ...prev,
       planillaEstaciones: prev.planillaEstaciones.map((est) =>
-        est.numero === numero ? actualizarCantidadGramosEstacion(est, gramos) : est,
+        est.numero === numero ? actualizarCantidadGramosEstacion(est, gramos, meta) : est,
       ),
     }));
   };
 
   const cambiarEstadoFisico = (numero: number, estadoFisico: EstadoFisicoEstacion) => {
+    if (estaBloqueadaRef.current) return;
+    const meta = metaActualizacionEstacion();
     setActa((prev) => ({
       ...prev,
       planillaEstaciones: prev.planillaEstaciones.map((est) =>
-        est.numero === numero ? actualizarEstadoFisicoEstacion(est, estadoFisico) : est,
+        est.numero === numero ? actualizarEstadoFisicoEstacion(est, estadoFisico, undefined, meta) : est,
       ),
     }));
   };
@@ -641,46 +736,56 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
     campo: K,
     valor: ItemEstacionPlanilla[K],
   ) => {
+    if (estaBloqueadaRef.current) return;
+    const meta = metaActualizacionEstacion();
     setActa((prev) => ({
       ...prev,
       planillaEstaciones: prev.planillaEstaciones.map((est) =>
-        est.numero === numero ? { ...est, [campo]: valor } : est,
+        est.numero === numero ? { ...est, [campo]: valor, ...meta } : est,
       ),
     }));
   };
 
   const cambiarConsumoEstacion = (numero: number, gramos: number) => {
+    if (estaBloqueadaRef.current) return;
     const valorSeguro = Number.isFinite(gramos) && gramos >= 0 ? gramos : 0;
+    const meta = metaActualizacionEstacion();
     setActa((prev) => ({
       ...prev,
       planillaEstaciones: prev.planillaEstaciones.map((est) =>
-        est.numero === numero ? { ...est, consumoGramos: valorSeguro } : est,
+        est.numero === numero ? { ...est, consumoGramos: valorSeguro, ...meta } : est,
       ),
     }));
   };
 
   const cambiarRepuestoEstacion = (numero: number, gramos: number) => {
+    if (estaBloqueadaRef.current) return;
     const valorSeguro = Number.isFinite(gramos) && gramos >= 0 ? gramos : 0;
+    const meta = metaActualizacionEstacion();
     setActa((prev) => ({
       ...prev,
       planillaEstaciones: prev.planillaEstaciones.map((est) =>
         est.numero === numero
-          ? { ...est, repuestoGramos: valorSeguro, cantidadReposicion: valorSeguro }
+          ? { ...est, repuestoGramos: valorSeguro, cantidadReposicion: valorSeguro, ...meta }
           : est,
       ),
     }));
   };
 
   const cambiarNotaEstacion = (numero: number, observaciones: string) => {
+    if (estaBloqueadaRef.current) return;
+    const meta = metaActualizacionEstacion();
     setActa((prev) => ({
       ...prev,
       planillaEstaciones: prev.planillaEstaciones.map((est) =>
-        est.numero === numero ? { ...est, observaciones } : est,
+        est.numero === numero ? { ...est, observaciones, ...meta } : est,
       ),
     }));
   };
 
   const agregarEstaciones = (cantidad = 1) => {
+    if (estaBloqueadaRef.current) return;
+    const meta = metaActualizacionEstacion();
     setActa((prev) => {
       const actuales = [...prev.planillaEstaciones];
       const ultimoNumero = actuales.length > 0 ? actuales[actuales.length - 1].numero : 0;
@@ -695,6 +800,7 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
             vencimiento: ref?.vencimiento || '2026-12-31',
             estadoFisico: 'BUENAS_CONDICIONES',
             esInstalacion: !!prev.primeraVisita,
+            ...meta,
           }),
         );
       }
@@ -732,6 +838,26 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
           contentContainerStyle={styles.scrollContenido}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Alerta de Inspección Bloqueada / Cerrada para Colaboración (§8.2, GAF-37) */}
+          {estaBloqueada ? (
+            <View style={styles.alertaBloqueo}>
+              <Text style={styles.alertaBloqueoTitulo}>🔒 Inspección Cerrada y en Revisión (§8.2)</Text>
+              <Text style={styles.alertaBloqueoTexto}>
+                Esta inspección fue concluida por {acta.cerradoPor || borrador?.guardadoPor?.nombre || 'otro operador'} y enviada a revisión. El formulario se encuentra en modo de solo lectura para evitar inconsistencias o pérdida de datos.
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Banner Informativo de Borrador Colaborativo con Técnico y Hora (§8.2) */}
+          <View testID="banner-borrador-info" style={styles.bannerBorradorInfo}>
+            <Text style={styles.textoBorradorInfo}>
+              💾 {formatearDetalleBorrador(
+                borrador?.actualizadoEn || acta.actualizadoEn,
+                borrador?.guardadoPor?.nombre || acta.actualizadoPor || (usuario ? `${usuario.nombres} ${usuario.apellidos}` : 'Técnico Operador'),
+              )}
+            </Text>
+          </View>
+
           {mensajeGuardado ? (
             <View style={styles.alertaGuardado}>
               <Text style={styles.alertaGuardadoTexto}>✓ {mensajeGuardado}</Text>
@@ -748,18 +874,20 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
             <Text style={styles.campoEtiqueta}>Cliente / Razón Social:</Text>
             <TextInput
               testID="input-cliente-razon-social"
-              style={styles.inputTexto}
+              style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+              editable={!estaBloqueada}
               value={acta.clienteRazonSocial}
-              onChangeText={(t) => setActa((p) => ({ ...p, clienteRazonSocial: t }))}
+              onChangeText={(t) => actualizarCampoActa((p) => ({ ...p, clienteRazonSocial: t }))}
               placeholder="Razón Social"
             />
 
             <Text style={styles.campoEtiqueta}>Dirección / Sede:</Text>
             <TextInput
               testID="input-sede-direccion"
-              style={styles.inputTexto}
+              style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+              editable={!estaBloqueada}
               value={acta.sedeDireccion}
-              onChangeText={(t) => setActa((p) => ({ ...p, sedeDireccion: t }))}
+              onChangeText={(t) => actualizarCampoActa((p) => ({ ...p, sedeDireccion: t }))}
               placeholder="Dirección del establecimiento"
             />
 
@@ -767,18 +895,20 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
               <View style={styles.columnaInput}>
                 <Text style={styles.campoEtiqueta}>Fecha (AAAA-MM-DD):</Text>
                 <TextInput
-                  style={styles.inputTexto}
+                  style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                  editable={!estaBloqueada}
                   value={acta.fecha}
-                  onChangeText={(t) => setActa((p) => ({ ...p, fecha: t }))}
+                  onChangeText={(t) => actualizarCampoActa((p) => ({ ...p, fecha: t }))}
                 />
               </View>
               <View style={styles.columnaInput}>
                 <Text style={styles.campoEtiqueta}>Área Tratada (m²):</Text>
                 <TextInput
-                  style={styles.inputTexto}
+                  style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                  editable={!estaBloqueada}
                   value={acta.areaTratadaM2 ? String(acta.areaTratadaM2) : ''}
                   keyboardType="numeric"
-                  onChangeText={(t) => setActa((p) => ({ ...p, areaTratadaM2: Number(t) || 0 }))}
+                  onChangeText={(t) => actualizarCampoActa((p) => ({ ...p, areaTratadaM2: Number(t) || 0 }))}
                   placeholder="Ej. 1200"
                 />
               </View>
@@ -788,17 +918,19 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
               <View style={styles.columnaInput}>
                 <Text style={styles.campoEtiqueta}>Hora Inicio (HH:MM):</Text>
                 <TextInput
-                  style={styles.inputTexto}
+                  style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                  editable={!estaBloqueada}
                   value={acta.horaInicio}
-                  onChangeText={(t) => setActa((p) => ({ ...p, horaInicio: t }))}
+                  onChangeText={(t) => actualizarCampoActa((p) => ({ ...p, horaInicio: t }))}
                 />
               </View>
               <View style={styles.columnaInput}>
                 <Text style={styles.campoEtiqueta}>Hora Término (HH:MM):</Text>
                 <TextInput
-                  style={styles.inputTexto}
+                  style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                  editable={!estaBloqueada}
                   value={acta.horaTermino}
-                  onChangeText={(t) => setActa((p) => ({ ...p, horaTermino: t }))}
+                  onChangeText={(t) => actualizarCampoActa((p) => ({ ...p, horaTermino: t }))}
                 />
               </View>
             </View>
@@ -813,8 +945,10 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                 return (
                   <TouchableOpacity
                     key={`act-${act}`}
-                    style={[styles.chip, seleccionado && styles.chipActivo]}
-                    onPress={() => setActa((p) => ({ ...p, actividad: act }))}
+                    testID={`chip-actividad-${act}`}
+                    disabled={estaBloqueada}
+                    style={[styles.chip, seleccionado && styles.chipActivo, estaBloqueada && styles.controlBloqueado]}
+                    onPress={() => actualizarCampoActa((p) => ({ ...p, actividad: act }))}
                   >
                     <Text style={[styles.chipTexto, seleccionado && styles.chipTextoActivo]}>
                       {LABELS_ACTIVIDAD[act]}
@@ -835,8 +969,9 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                 return (
                   <TouchableOpacity
                     key={`cebo-${tc}`}
-                    style={[styles.chip, seleccionado && styles.chipActivo]}
-                    onPress={() => setActa((p) => ({ ...p, tipoCebo: tc }))}
+                    disabled={estaBloqueada}
+                    style={[styles.chip, seleccionado && styles.chipActivo, estaBloqueada && styles.controlBloqueado]}
+                    onPress={() => actualizarCampoActa((p) => ({ ...p, tipoCebo: tc }))}
                   >
                     <Text style={[styles.chipTexto, seleccionado && styles.chipTextoActivo]}>
                       {LABELS_CEBO[tc]}
@@ -850,33 +985,40 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
               <View style={styles.columnaTres}>
                 <Text style={styles.campoEtiqueta}>Instalados:</Text>
                 <TextInput
-                  style={styles.inputTexto}
+                  style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                  editable={!estaBloqueada}
                   value={String(acta.cebosInstalados)}
                   keyboardType="numeric"
-                  onChangeText={(t) => setActa((p) => ({ ...p, cebosInstalados: Number(t) || 0 }))}
+                  onChangeText={(t) => actualizarCampoActa((p) => ({ ...p, cebosInstalados: Number(t) || 0 }))}
                 />
               </View>
               <View style={styles.columnaTres}>
                 <Text style={styles.campoEtiqueta}>Consumidos:</Text>
                 <TextInput
-                  style={styles.inputTexto}
+                  style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                  editable={!estaBloqueada}
                   value={String(acta.cebosConsumidos)}
                   keyboardType="numeric"
-                  onChangeText={(t) => setActa((p) => ({ ...p, cebosConsumidos: Number(t) || 0 }))}
+                  onChangeText={(t) => actualizarCampoActa((p) => ({ ...p, cebosConsumidos: Number(t) || 0 }))}
                 />
               </View>
               <View style={styles.columnaTres}>
                 <Text style={styles.campoEtiqueta}>Repuestos:</Text>
                 <TextInput
-                  style={styles.inputTexto}
+                  style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                  editable={!estaBloqueada}
                   value={String(acta.cebosRepuestos)}
                   keyboardType="numeric"
-                  onChangeText={(t) => setActa((p) => ({ ...p, cebosRepuestos: Number(t) || 0 }))}
+                  onChangeText={(t) => actualizarCampoActa((p) => ({ ...p, cebosRepuestos: Number(t) || 0 }))}
                 />
               </View>
             </View>
             {metricasEstaciones.conConsumo > 0 ? (
-              <TouchableOpacity style={styles.botonAutoSuma} onPress={actualizarConteoDesdePlanilla}>
+              <TouchableOpacity
+                style={[styles.botonAutoSuma, estaBloqueada && styles.controlBloqueado]}
+                disabled={estaBloqueada}
+                onPress={actualizarConteoDesdePlanilla}
+              >
                 <Text style={styles.textoAutoSuma}>
                   ⚡ Actualizar con suma de planilla ({metricasEstaciones.conConsumo} consumos / {metricasEstaciones.totalConsumoGramos}g)
                 </Text>
@@ -894,8 +1036,9 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                 return (
                   <TouchableOpacity
                     key={`trampa-${tt}`}
-                    style={[styles.chip, seleccionado && styles.chipActivo]}
-                    onPress={() => setActa((p) => ({ ...p, tipoTrampa: tt }))}
+                    disabled={estaBloqueada}
+                    style={[styles.chip, seleccionado && styles.chipActivo, estaBloqueada && styles.controlBloqueado]}
+                    onPress={() => actualizarCampoActa((p) => ({ ...p, tipoTrampa: tt }))}
                   >
                     <Text style={[styles.chipTexto, seleccionado && styles.chipTextoActivo]}>
                       {LABELS_TRAMPA[tt]}
@@ -909,19 +1052,21 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
               <View style={styles.columnaInput}>
                 <Text style={styles.campoEtiqueta}>Trampas Instaladas:</Text>
                 <TextInput
-                  style={styles.inputTexto}
+                  style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                  editable={!estaBloqueada}
                   value={String(acta.trampasInstaladas)}
                   keyboardType="numeric"
-                  onChangeText={(t) => setActa((p) => ({ ...p, trampasInstaladas: Number(t) || 0 }))}
+                  onChangeText={(t) => actualizarCampoActa((p) => ({ ...p, trampasInstaladas: Number(t) || 0 }))}
                 />
               </View>
               <View style={styles.columnaInput}>
                 <Text style={styles.campoEtiqueta}>Trampas Activadas:</Text>
                 <TextInput
-                  style={styles.inputTexto}
+                  style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                  editable={!estaBloqueada}
                   value={String(acta.trampasActivadas)}
                   keyboardType="numeric"
-                  onChangeText={(t) => setActa((p) => ({ ...p, trampasActivadas: Number(t) || 0 }))}
+                  onChangeText={(t) => actualizarCampoActa((p) => ({ ...p, trampasActivadas: Number(t) || 0 }))}
                 />
               </View>
             </View>
@@ -937,7 +1082,8 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                 return (
                   <TouchableOpacity
                     key={`esp-${esp}`}
-                    style={[styles.chip, marcada && styles.chipActivo]}
+                    disabled={estaBloqueada}
+                    style={[styles.chip, marcada && styles.chipActivo, estaBloqueada && styles.controlBloqueado]}
                     onPress={() => toggleEspecieRoedor(esp)}
                   >
                     <Text style={[styles.chipTexto, marcada && styles.chipTextoActivo]}>
@@ -955,21 +1101,23 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
             <Text style={styles.seccionTitulo}>6. RESULTADOS, RECOMENDACIONES Y OBSERVACIONES</Text>
             <Text style={styles.campoEtiqueta}>Resultados y Recomendaciones Técnicas:</Text>
             <TextInput
-              style={[styles.inputTexto, styles.inputArea]}
+              style={[styles.inputTexto, styles.inputArea, estaBloqueada && styles.inputBloqueado]}
+              editable={!estaBloqueada}
               value={acta.resultadosRecomendaciones}
               multiline
               numberOfLines={3}
-              onChangeText={(t) => setActa((p) => ({ ...p, resultadosRecomendaciones: t }))}
+              onChangeText={(t) => actualizarCampoActa((p) => ({ ...p, resultadosRecomendaciones: t }))}
               placeholder="Describa el estado del perímetro, hallazgos y medidas sanitarias..."
             />
 
             <Text style={styles.campoEtiqueta}>Observaciones del Cliente:</Text>
             <TextInput
-              style={[styles.inputTexto, styles.inputArea]}
+              style={[styles.inputTexto, styles.inputArea, estaBloqueada && styles.inputBloqueado]}
+              editable={!estaBloqueada}
               value={acta.observacionesCliente}
               multiline
               numberOfLines={2}
-              onChangeText={(t) => setActa((p) => ({ ...p, observacionesCliente: t }))}
+              onChangeText={(t) => actualizarCampoActa((p) => ({ ...p, observacionesCliente: t }))}
               placeholder="Comentarios adicionales del responsable de sede..."
             />
           </View>
@@ -982,20 +1130,22 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
               <View style={styles.columnaInput}>
                 <Text style={styles.campoEtiqueta}>Nombre del Técnico:</Text>
                 <TextInput
-                  style={styles.inputTexto}
+                  style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                  editable={!estaBloqueada}
                   value={acta.firmas.personalResponsableNombre}
                   onChangeText={(t) =>
-                    setActa((p) => ({ ...p, firmas: { ...p.firmas, personalResponsableNombre: t } }))
+                    actualizarCampoActa((p) => ({ ...p, firmas: { ...p.firmas, personalResponsableNombre: t } }))
                   }
                 />
               </View>
               <View style={styles.columnaInput}>
                 <Text style={styles.campoEtiqueta}>Cargo:</Text>
                 <TextInput
-                  style={styles.inputTexto}
+                  style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                  editable={!estaBloqueada}
                   value={acta.firmas.personalResponsableCargo}
                   onChangeText={(t) =>
-                    setActa((p) => ({ ...p, firmas: { ...p.firmas, personalResponsableCargo: t } }))
+                    actualizarCampoActa((p) => ({ ...p, firmas: { ...p.firmas, personalResponsableCargo: t } }))
                   }
                 />
               </View>
@@ -1007,11 +1157,12 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                 <Text style={styles.campoEtiqueta}>Nombre del Contacto:</Text>
                 <TextInput
                   testID="input-cliente-conformidad-nombre"
-                  style={styles.inputTexto}
+                  style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                  editable={!estaBloqueada}
                   value={acta.firmas.clienteConformidadNombre}
                   placeholder="Persona que recibe"
                   onChangeText={(t) =>
-                    setActa((p) => ({ ...p, firmas: { ...p.firmas, clienteConformidadNombre: t } }))
+                    actualizarCampoActa((p) => ({ ...p, firmas: { ...p.firmas, clienteConformidadNombre: t } }))
                   }
                 />
               </View>
@@ -1019,11 +1170,12 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                 <Text style={styles.campoEtiqueta}>Cargo del Contacto:</Text>
                 <TextInput
                   testID="input-cliente-conformidad-cargo"
-                  style={styles.inputTexto}
+                  style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                  editable={!estaBloqueada}
                   value={acta.firmas.clienteConformidadCargo}
                   placeholder="Cargo / Área"
                   onChangeText={(t) =>
-                    setActa((p) => ({ ...p, firmas: { ...p.firmas, clienteConformidadCargo: t } }))
+                    actualizarCampoActa((p) => ({ ...p, firmas: { ...p.firmas, clienteConformidadCargo: t } }))
                   }
                 />
               </View>
@@ -1053,8 +1205,13 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
 
               <TouchableOpacity
                 testID="boton-abrir-firma"
-                style={styles.botonAbrirFirma}
-                onPress={() => setModalFirmaVisible(true)}
+                disabled={estaBloqueada}
+                style={[styles.botonAbrirFirma, estaBloqueada && styles.controlBloqueado]}
+                onPress={() => {
+                  if (!estaBloqueadaRef.current) {
+                    setModalFirmaVisible(true);
+                  }
+                }}
               >
                 <Text style={styles.textoBotonAbrirFirma}>
                   {acta.firmas.firmaArchivoId ||
@@ -1072,13 +1229,26 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
             <View style={styles.cabeceraPlanilla}>
               <Text style={styles.seccionTitulo}>8. PLANILLA POR ESTACIÓN DE CONTROL (§5.1)</Text>
               <View style={styles.grupoBotonesAgregar}>
-                <TouchableOpacity style={styles.botonAgregarEstacion} onPress={() => agregarEstaciones(1)}>
+                <TouchableOpacity
+                  testID="boton-agregar-estacion-1"
+                  disabled={estaBloqueada}
+                  style={[styles.botonAgregarEstacion, estaBloqueada && styles.controlBloqueado]}
+                  onPress={() => agregarEstaciones(1)}
+                >
                   <Text style={styles.textoBotonAgregar}>+1</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.botonAgregarEstacion} onPress={() => agregarEstaciones(5)}>
+                <TouchableOpacity
+                  disabled={estaBloqueada}
+                  style={[styles.botonAgregarEstacion, estaBloqueada && styles.controlBloqueado]}
+                  onPress={() => agregarEstaciones(5)}
+                >
                   <Text style={styles.textoBotonAgregar}>+5</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.botonAgregarEstacion} onPress={() => agregarEstaciones(10)}>
+                <TouchableOpacity
+                  disabled={estaBloqueada}
+                  style={[styles.botonAgregarEstacion, estaBloqueada && styles.controlBloqueado]}
+                  onPress={() => agregarEstaciones(10)}
+                >
                   <Text style={styles.textoBotonAgregar}>+10</Text>
                 </TouchableOpacity>
               </View>
@@ -1091,9 +1261,11 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                 <View style={styles.chipsContenedorCompacto}>
                   <TouchableOpacity
                     testID="chip-primera-visita-false"
+                    disabled={estaBloqueada}
                     style={[
                       styles.chipCompacto,
                       !acta.primeraVisita && styles.chipCompactoActivoVerde,
+                      estaBloqueada && styles.controlBloqueado,
                     ]}
                     onPress={() => handleTogglePrimeraVisita(false)}
                   >
@@ -1108,9 +1280,11 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                   </TouchableOpacity>
                   <TouchableOpacity
                     testID="chip-primera-visita-true"
+                    disabled={estaBloqueada}
                     style={[
                       styles.chipCompacto,
                       acta.primeraVisita && styles.chipCompactoActivoVerde,
+                      estaBloqueada && styles.controlBloqueado,
                     ]}
                     onPress={() => handleTogglePrimeraVisita(true)}
                   >
@@ -1136,7 +1310,8 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
 
               {/* Botón rápido para replicar cebo a todas las estaciones */}
               <TouchableOpacity
-                style={styles.botonCopiarCebo}
+                disabled={estaBloqueada}
+                style={[styles.botonCopiarCebo, estaBloqueada && styles.controlBloqueado]}
                 onPress={handleCopiarCeboATodas}
               >
                 <Text style={styles.textoBotonCopiarCebo}>⚡ Replicar Cebo, Lote y Vencimiento a todas</Text>
@@ -1193,7 +1368,8 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                       <Text style={styles.campoEtiqueta}>Formulación Cebo:</Text>
                       <TextInput
                         testID={`input-tipo-cebo-estacion-${est.numero}`}
-                        style={styles.inputTexto}
+                        style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                        editable={!estaBloqueada}
                         value={est.tipoCebo || ''}
                         placeholder="Ej. BLOQUE_10G"
                         onChangeText={(t) => cambiarDatoEstacion(est.numero, 'tipoCebo', t)}
@@ -1203,7 +1379,8 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                       <Text style={styles.campoEtiqueta}>Gramos Base:</Text>
                       <TextInput
                         testID={`input-gramos-base-estacion-${est.numero}`}
-                        style={styles.inputTexto}
+                        style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                        editable={!estaBloqueada}
                         keyboardType="numeric"
                         value={est.cantidadGramos ? String(est.cantidadGramos) : ''}
                         placeholder="20"
@@ -1217,7 +1394,8 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                     <View style={styles.columnaInput}>
                       <Text style={styles.campoEtiqueta}>Lote:</Text>
                       <TextInput
-                        style={styles.inputTexto}
+                        style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                        editable={!estaBloqueada}
                         value={est.lote || ''}
                         placeholder="Ej. L-2026-01"
                         onChangeText={(t) => cambiarDatoEstacion(est.numero, 'lote', t)}
@@ -1226,7 +1404,8 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                     <View style={styles.columnaInput}>
                       <Text style={styles.campoEtiqueta}>Vencimiento (YYYY-MM-DD):</Text>
                       <TextInput
-                        style={styles.inputTexto}
+                        style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                        editable={!estaBloqueada}
                         value={est.vencimiento || ''}
                         placeholder="2026-12-31"
                         onChangeText={(t) => cambiarDatoEstacion(est.numero, 'vencimiento', t)}
@@ -1243,12 +1422,14 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                       return (
                         <TouchableOpacity
                           key={`ef-${est.numero}-${ef}`}
+                          disabled={estaBloqueada}
                           style={[
                             styles.chipCompacto,
                             activo && {
                               backgroundColor: esMalo ? '#dc2626' : '#16a34a',
                               borderColor: esMalo ? '#dc2626' : '#16a34a',
                             },
+                            estaBloqueada && styles.controlBloqueado,
                           ]}
                           onPress={() => cambiarEstadoFisico(est.numero, ef)}
                         >
@@ -1277,12 +1458,14 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                             <TouchableOpacity
                               key={`opcion-${est.numero}-${estOpcion}`}
                               testID={`chip-estacion-${est.numero}-${estOpcion}`}
+                              disabled={estaBloqueada}
                               style={[
                                 styles.chipCompacto,
                                 estaActivo && {
                                   backgroundColor: opcionConf.color,
                                   borderColor: opcionConf.color,
                                 },
+                                estaBloqueada && styles.controlBloqueado,
                               ]}
                               onPress={() => cambiarEstadoEstacion(est.numero, estOpcion)}
                             >
@@ -1304,9 +1487,11 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                       <View style={styles.chipsContenedorCompacto}>
                         <TouchableOpacity
                           testID={`chip-consumo-no-estacion-${est.numero}`}
+                          disabled={estaBloqueada}
                           style={[
                             styles.chipCompacto,
                             !est.huboConsumo && styles.chipCompactoActivoVerde,
+                            estaBloqueada && styles.controlBloqueado,
                           ]}
                           onPress={() => cambiarConsumoPorcentaje(est.numero, false)}
                         >
@@ -1321,9 +1506,11 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                         </TouchableOpacity>
                         <TouchableOpacity
                           testID={`chip-consumo-si-estacion-${est.numero}`}
+                          disabled={estaBloqueada}
                           style={[
                             styles.chipCompacto,
                             est.huboConsumo && styles.chipCompactoActivoNaranja,
+                            estaBloqueada && styles.controlBloqueado,
                           ]}
                           onPress={() =>
                             cambiarConsumoPorcentaje(
@@ -1355,9 +1542,11 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                                 <TouchableOpacity
                                   key={`porc-${est.numero}-${p}`}
                                   testID={`chip-porcentaje-estacion-${est.numero}-${p}`}
+                                  disabled={estaBloqueada}
                                   style={[
                                     styles.chipCompacto,
                                     activo && styles.chipCompactoActivoNaranja,
+                                    estaBloqueada && styles.controlBloqueado,
                                   ]}
                                   onPress={() => cambiarConsumoPorcentaje(est.numero, true, p)}
                                 >
@@ -1379,7 +1568,8 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                               <Text style={styles.campoEtiqueta}>Consumo (gramos):</Text>
                               <TextInput
                                 testID={`input-consumo-estacion-${est.numero}`}
-                                style={styles.inputTexto}
+                                style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                                editable={!estaBloqueada}
                                 keyboardType="numeric"
                                 value={est.consumoGramos ? String(est.consumoGramos) : ''}
                                 placeholder="Ej. 10"
@@ -1390,7 +1580,8 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                               <Text style={styles.campoEtiqueta}>Repuesto (gramos):</Text>
                               <TextInput
                                 testID={`input-repuesto-estacion-${est.numero}`}
-                                style={styles.inputTexto}
+                                style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                                editable={!estaBloqueada}
                                 keyboardType="numeric"
                                 value={
                                   (est.cantidadReposicion ?? est.repuestoGramos)
@@ -1437,7 +1628,8 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
                               : 'Observación:'}
                       </Text>
                       <TextInput
-                        style={styles.inputTexto}
+                        style={[styles.inputTexto, estaBloqueada && styles.inputBloqueado]}
+                        editable={!estaBloqueada}
                         value={est.observaciones || ''}
                         placeholder="Indique motivo o detalle del daño..."
                         onChangeText={(t) => cambiarNotaEstacion(est.numero, t)}
@@ -1456,8 +1648,9 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
             actorId={usuario?.id}
             archivosRepo={repoArchivos}
             capturador={capturadorFotos}
+            soloLectura={estaBloqueada}
             onFotosChange={(fotosActualizadas) =>
-              setActa((prev) => ({ ...prev, fotos: fotosActualizadas }))
+              actualizarCampoActa((prev) => ({ ...prev, fotos: fotosActualizadas }))
             }
           />
 
@@ -1465,30 +1658,40 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Barra de Acciones Fijas Inferiores */}
+      {/* Barra de Acciones Fijas Inferiores (§8.2) */}
       <View style={styles.barraAccionesFija}>
-        <Button
-          testID="boton-guardar-borrador"
-          titulo="Guardar Borrador"
-          onPress={handleGuardarBorradorManual}
-          variante="secundario"
-          deshabilitado={guardando || finalizado}
-          style={styles.botonBarra}
-        />
-        <Button
-          testID="boton-finalizar-drt"
-          titulo="Finalizar y Encolar"
-          onPress={handleFinalizarServicio}
-          variante="primario"
-          deshabilitado={guardando || finalizado}
-          cargando={guardando}
-          style={styles.botonBarra}
-        />
+        {estaBloqueada ? (
+          <View testID="banner-barra-bloqueada" style={styles.bannerBarraBloqueada}>
+            <Text style={styles.textoBarraBloqueada}>
+              🔒 Inspección enviada a revisión (§8.2) — Modo Solo Lectura
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.botonesBarraContenedor}>
+            <Button
+              testID="boton-guardar-borrador"
+              titulo="Guardar Borrador"
+              onPress={handleGuardarBorradorManual}
+              variante="secundario"
+              deshabilitado={guardando || finalizado}
+              style={styles.botonBarra}
+            />
+            <Button
+              testID="boton-finalizar-drt"
+              titulo="Finalizar y Encolar"
+              onPress={handleFinalizarServicio}
+              variante="primario"
+              deshabilitado={guardando || finalizado}
+              cargando={guardando}
+              style={styles.botonBarra}
+            />
+          </View>
+        )}
       </View>
 
       {/* Modal de Firma en Pantalla (§13, GAF-36) */}
       <FirmaPadModal
-        visible={modalFirmaVisible}
+        visible={modalFirmaVisible && !estaBloqueada}
         onCerrar={() => setModalFirmaVisible(false)}
         onGuardar={handleGuardarFirmaModal}
         nombreContactoInicial={acta.firmas.clienteConformidadNombre}
@@ -1615,6 +1818,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     fontSize: 12,
     color: TOKENS.ink,
+  },
+  inputBloqueado: {
+    backgroundColor: '#e2e8f0',
+    color: '#64748b',
+  },
+  controlBloqueado: {
+    opacity: 0.55,
   },
   inputArea: {
     minHeight: 60,
@@ -1874,6 +2084,11 @@ const styles = StyleSheet.create({
   botonBarra: {
     flex: 1,
   },
+  botonesBarraContenedor: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 10,
+  },
   contenedorEstadoFirma: {
     marginTop: 10,
     gap: 8,
@@ -1924,6 +2139,53 @@ const styles = StyleSheet.create({
   textoBotonAbrirFirma: {
     color: '#ffffff',
     fontSize: 12,
+    fontWeight: '800',
+  },
+  alertaBloqueo: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  alertaBloqueoTitulo: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#991b1b',
+    marginBottom: 4,
+  },
+  alertaBloqueoTexto: {
+    fontSize: 11,
+    color: '#7f1d1d',
+    lineHeight: 16,
+  },
+  bannerBorradorInfo: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginBottom: 6,
+  },
+  textoBorradorInfo: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '700',
+  },
+  bannerBarraBloqueada: {
+    flex: 1,
+    backgroundColor: '#f1f5f9',
+    borderColor: '#cbd5e1',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  textoBarraBloqueada: {
+    fontSize: 12,
+    color: '#64748b',
     fontWeight: '800',
   },
 });

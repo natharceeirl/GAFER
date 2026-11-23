@@ -52,6 +52,29 @@ function generarUuidOffline(): string {
 }
 
 /**
+ * Metadatos de autoría y marca temporal para resolución LWW (§8.2, GAF-37).
+ */
+export interface MetadataActualizacionEstacion {
+  actualizadoEn?: string;
+  actualizadoPor?: string;
+}
+
+function sellarActualizacionEstacion(
+  estacion: ItemEstacionPlanilla,
+  meta?: MetadataActualizacionEstacion,
+): ItemEstacionPlanilla {
+  return {
+    ...estacion,
+    actualizadoEn: meta?.actualizadoEn ?? new Date().toISOString(),
+    ...(meta?.actualizadoPor !== undefined
+      ? { actualizadoPor: meta.actualizadoPor }
+      : estacion.actualizadoPor !== undefined
+        ? { actualizadoPor: estacion.actualizadoPor }
+        : {}),
+  };
+}
+
+/**
  * Crea una estación inicial para la planilla DRT.
  */
 export function crearEstacionDrt(
@@ -73,6 +96,8 @@ export function crearEstacionDrt(
     estadoFisico: config?.estadoFisico ?? 'BUENAS_CONDICIONES',
     esInstalacion: config?.esInstalacion ?? false,
     observaciones: config?.observaciones ?? '',
+    ...(config?.actualizadoEn !== undefined ? { actualizadoEn: config.actualizadoEn } : {}),
+    ...(config?.actualizadoPor !== undefined ? { actualizadoPor: config.actualizadoPor } : {}),
   };
 }
 
@@ -87,32 +112,44 @@ export function aplicarPrimeraVisita(
   estaciones: ItemEstacionPlanilla[],
   esPrimera: boolean,
   ceboDefecto?: Partial<Pick<ItemEstacionPlanilla, 'tipoCebo' | 'cantidadGramos' | 'lote' | 'vencimiento'>>,
+  meta?: MetadataActualizacionEstacion,
 ): ItemEstacionPlanilla[] {
+  const ahora = meta?.actualizadoEn ?? new Date().toISOString();
+  const metaResuelta: MetadataActualizacionEstacion = {
+    actualizadoEn: ahora,
+    actualizadoPor: meta?.actualizadoPor,
+  };
   return estaciones.map((est) => {
     if (esPrimera) {
-      return {
-        ...est,
-        esInstalacion: true,
-        huboConsumo: false,
-        porcentajeConsumo: 0,
-        consumoGramos: 0,
-        repuestoGramos: 0,
-        cantidadReposicion: 0,
-        estado: 'SIN_ACTIVIDAD',
-        estadoFisico: est.estadoFisico || 'BUENAS_CONDICIONES',
-        tipoCebo: est.tipoCebo?.trim() ? est.tipoCebo : (ceboDefecto?.tipoCebo ?? 'BLOQUE_10G'),
-        cantidadGramos:
-          est.cantidadGramos !== undefined && est.cantidadGramos > 0
-            ? est.cantidadGramos
-            : (ceboDefecto?.cantidadGramos ?? 20),
-        lote: est.lote?.trim() ? est.lote : (ceboDefecto?.lote ?? 'LOTE-001'),
-        vencimiento: est.vencimiento?.trim() ? est.vencimiento : (ceboDefecto?.vencimiento ?? '2026-12-31'),
-      };
+      return sellarActualizacionEstacion(
+        {
+          ...est,
+          esInstalacion: true,
+          huboConsumo: false,
+          porcentajeConsumo: 0,
+          consumoGramos: 0,
+          repuestoGramos: 0,
+          cantidadReposicion: 0,
+          estado: 'SIN_ACTIVIDAD',
+          estadoFisico: est.estadoFisico || 'BUENAS_CONDICIONES',
+          tipoCebo: est.tipoCebo?.trim() ? est.tipoCebo : (ceboDefecto?.tipoCebo ?? 'BLOQUE_10G'),
+          cantidadGramos:
+            est.cantidadGramos !== undefined && est.cantidadGramos > 0
+              ? est.cantidadGramos
+              : (ceboDefecto?.cantidadGramos ?? 20),
+          lote: est.lote?.trim() ? est.lote : (ceboDefecto?.lote ?? 'LOTE-001'),
+          vencimiento: est.vencimiento?.trim() ? est.vencimiento : (ceboDefecto?.vencimiento ?? '2026-12-31'),
+        },
+        metaResuelta,
+      );
     } else {
-      return {
-        ...est,
-        esInstalacion: false,
-      };
+      return sellarActualizacionEstacion(
+        {
+          ...est,
+          esInstalacion: false,
+        },
+        metaResuelta,
+      );
     }
   });
 }
@@ -132,32 +169,39 @@ export function actualizarConsumoEstacion(
   estacion: ItemEstacionPlanilla,
   huboConsumo: boolean,
   porcentaje: PorcentajeConsumo = 25,
+  meta?: MetadataActualizacionEstacion,
 ): ItemEstacionPlanilla {
   if (!huboConsumo || porcentaje === 0) {
-    return {
-      ...estacion,
-      huboConsumo: false,
-      porcentajeConsumo: 0,
-      consumoGramos: 0,
-      repuestoGramos: 0,
-      cantidadReposicion: 0,
-      estado: estacion.estado === 'CON_CONSUMO' ? 'SIN_ACTIVIDAD' : estacion.estado,
-    };
+    return sellarActualizacionEstacion(
+      {
+        ...estacion,
+        huboConsumo: false,
+        porcentajeConsumo: 0,
+        consumoGramos: 0,
+        repuestoGramos: 0,
+        cantidadReposicion: 0,
+        estado: estacion.estado === 'CON_CONSUMO' ? 'SIN_ACTIVIDAD' : estacion.estado,
+      },
+      meta,
+    );
   }
 
   const p = porcentaje;
   const gramosBase = estacion.cantidadGramos ?? 20;
   const cGramos = calcularConsumoGramos(gramosBase, p);
 
-  return {
-    ...estacion,
-    huboConsumo: true,
-    porcentajeConsumo: p,
-    consumoGramos: cGramos,
-    repuestoGramos: cGramos,
-    cantidadReposicion: cGramos,
-    estado: 'CON_CONSUMO',
-  };
+  return sellarActualizacionEstacion(
+    {
+      ...estacion,
+      huboConsumo: true,
+      porcentajeConsumo: p,
+      consumoGramos: cGramos,
+      repuestoGramos: cGramos,
+      cantidadReposicion: cGramos,
+      estado: 'CON_CONSUMO',
+    },
+    meta,
+  );
 }
 
 /**
@@ -166,31 +210,38 @@ export function actualizarConsumoEstacion(
 export function actualizarEstadoEstacion(
   estacion: ItemEstacionPlanilla,
   nuevoEstado: EstadoEstacionPlanilla,
+  meta?: MetadataActualizacionEstacion,
 ): ItemEstacionPlanilla {
   if (nuevoEstado === 'CON_CONSUMO') {
     if (estacion.huboConsumo && estacion.porcentajeConsumo && estacion.porcentajeConsumo > 0) {
-      return {
-        ...estacion,
-        estado: 'CON_CONSUMO',
-        huboConsumo: true,
-      };
+      return sellarActualizacionEstacion(
+        {
+          ...estacion,
+          estado: 'CON_CONSUMO',
+          huboConsumo: true,
+        },
+        meta,
+      );
     }
     const porcentajeInicial: PorcentajeConsumo =
       estacion.porcentajeConsumo && estacion.porcentajeConsumo > 0
         ? estacion.porcentajeConsumo
         : 25;
-    return actualizarConsumoEstacion(estacion, true, porcentajeInicial);
+    return actualizarConsumoEstacion(estacion, true, porcentajeInicial, meta);
   }
 
-  return {
-    ...estacion,
-    estado: nuevoEstado,
-    huboConsumo: false,
-    porcentajeConsumo: 0,
-    consumoGramos: 0,
-    repuestoGramos: 0,
-    cantidadReposicion: 0,
-  };
+  return sellarActualizacionEstacion(
+    {
+      ...estacion,
+      estado: nuevoEstado,
+      huboConsumo: false,
+      porcentajeConsumo: 0,
+      consumoGramos: 0,
+      repuestoGramos: 0,
+      cantidadReposicion: 0,
+    },
+    meta,
+  );
 }
 
 /**
@@ -199,6 +250,7 @@ export function actualizarEstadoEstacion(
 export function actualizarCantidadGramosEstacion(
   estacion: ItemEstacionPlanilla,
   cantidadGramos: number,
+  meta?: MetadataActualizacionEstacion,
 ): ItemEstacionPlanilla {
   const gramosSeguros = Number.isFinite(cantidadGramos) && cantidadGramos >= 0 ? cantidadGramos : 0;
   const tieneConsumo = Boolean(
@@ -208,13 +260,16 @@ export function actualizarCantidadGramosEstacion(
     ? calcularConsumoGramos(gramosSeguros, estacion.porcentajeConsumo!)
     : 0;
 
-  return {
-    ...estacion,
-    cantidadGramos: gramosSeguros,
-    consumoGramos: recalculado,
-    repuestoGramos: recalculado,
-    cantidadReposicion: recalculado,
-  };
+  return sellarActualizacionEstacion(
+    {
+      ...estacion,
+      cantidadGramos: gramosSeguros,
+      consumoGramos: recalculado,
+      repuestoGramos: recalculado,
+      cantidadReposicion: recalculado,
+    },
+    meta,
+  );
 }
 
 /**
@@ -224,12 +279,16 @@ export function actualizarEstadoFisicoEstacion(
   estacion: ItemEstacionPlanilla,
   estadoFisico: EstadoFisicoEstacion,
   observaciones?: string,
+  meta?: MetadataActualizacionEstacion,
 ): ItemEstacionPlanilla {
-  return {
-    ...estacion,
-    estadoFisico,
-    ...(observaciones !== undefined ? { observaciones } : {}),
-  };
+  return sellarActualizacionEstacion(
+    {
+      ...estacion,
+      estadoFisico,
+      ...(observaciones !== undefined ? { observaciones } : {}),
+    },
+    meta,
+  );
 }
 
 /**
@@ -243,22 +302,33 @@ export function copiarCeboALote(
     lote: string;
     vencimiento: string;
   },
+  meta?: MetadataActualizacionEstacion,
 ): ItemEstacionPlanilla[] {
-  return estaciones.map((est) => ({
-    ...est,
-    tipoCebo: cebo.tipoCebo,
-    cantidadGramos: cebo.cantidadGramos,
-    lote: cebo.lote,
-    vencimiento: cebo.vencimiento,
-    // Si la estación ya tenía consumo, recalcular gramos en base al nuevo peso base
-    ...(est.huboConsumo && est.porcentajeConsumo
-      ? {
-          consumoGramos: calcularConsumoGramos(cebo.cantidadGramos, est.porcentajeConsumo),
-          repuestoGramos: calcularConsumoGramos(cebo.cantidadGramos, est.porcentajeConsumo),
-          cantidadReposicion: calcularConsumoGramos(cebo.cantidadGramos, est.porcentajeConsumo),
-        }
-      : {}),
-  }));
+  const ahora = meta?.actualizadoEn ?? new Date().toISOString();
+  const metaResuelta: MetadataActualizacionEstacion = {
+    actualizadoEn: ahora,
+    actualizadoPor: meta?.actualizadoPor,
+  };
+  return estaciones.map((est) =>
+    sellarActualizacionEstacion(
+      {
+        ...est,
+        tipoCebo: cebo.tipoCebo,
+        cantidadGramos: cebo.cantidadGramos,
+        lote: cebo.lote,
+        vencimiento: cebo.vencimiento,
+        // Si la estación ya tenía consumo, recalcular gramos en base al nuevo peso base
+        ...(est.huboConsumo && est.porcentajeConsumo
+          ? {
+              consumoGramos: calcularConsumoGramos(cebo.cantidadGramos, est.porcentajeConsumo),
+              repuestoGramos: calcularConsumoGramos(cebo.cantidadGramos, est.porcentajeConsumo),
+              cantidadReposicion: calcularConsumoGramos(cebo.cantidadGramos, est.porcentajeConsumo),
+            }
+          : {}),
+      },
+      metaResuelta,
+    ),
+  );
 }
 
 /**

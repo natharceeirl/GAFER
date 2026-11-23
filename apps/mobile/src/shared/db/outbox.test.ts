@@ -335,4 +335,53 @@ describe('OutboxQueue (Móvil Offline-First con sync.v1 - GAP-05)', () => {
       expect(fila?.status).toBe('SYNCED');
     });
   });
+
+  describe('manejo de rechazo 409 y errores transitorios (PR37-F2)', () => {
+    it('en modo OutboxStorage marca rechazado ante HTTP 409, no reenvía en la misma sesión ni tras reiniciar', async () => {
+      const storage = new MemoryOutboxStorage();
+      const queue = new OutboxQueue(storage);
+      await queue.encolar(dummyOperacion);
+
+      const mockFetch409 = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        statusText: 'Conflict',
+        json: async () => ({ message: 'La inspección está cerrada (Sección 8.2)' }),
+      });
+
+      const res1 = await queue.enviarLote('http://localhost:3000', dummyOperacion.agregadoId, mockFetch409 as any);
+      expect(res1).toBeNull();
+      expect(queue.obtenerPendientes()).toHaveLength(0);
+      expect(queue.obtenerRechazadas()).toHaveLength(1);
+
+      // Segundo envío en la misma sesión: no debe volver a llamar a fetch
+      await queue.enviarLote('http://localhost:3000', dummyOperacion.agregadoId, mockFetch409 as any);
+      expect(mockFetch409).toHaveBeenCalledTimes(1);
+
+      // Tras reinicio desde OutboxStorage: sigue sin aparecer en pendientes ni reenviarse
+      const queueReiniciada = new OutboxQueue(storage);
+      await queueReiniciada.inicializar();
+      expect(queueReiniciada.obtenerPendientes()).toHaveLength(0);
+      expect(queueReiniciada.obtenerRechazadas()).toHaveLength(1);
+      await queueReiniciada.enviarLote('http://localhost:3000', dummyOperacion.agregadoId, mockFetch409 as any);
+      expect(mockFetch409).toHaveBeenCalledTimes(1);
+    });
+
+    it('un HTTP 500 cuyo mensaje contiene "cerrada" se mantiene pendiente para reintento y no se rechaza', async () => {
+      const storage = new MemoryOutboxStorage();
+      const queue = new OutboxQueue(storage);
+      await queue.encolar(dummyOperacion);
+
+      const mockFetch500 = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        json: async () => ({ message: 'Error transitorio: conexión cerrada por el upstream' }),
+      });
+
+      await queue.enviarLote('http://localhost:3000', dummyOperacion.agregadoId, mockFetch500 as any);
+      expect(queue.obtenerPendientes()).toHaveLength(1);
+      expect(queue.obtenerRechazadas()).toHaveLength(0);
+    });
+  });
 });

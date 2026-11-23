@@ -23,6 +23,8 @@ export interface GaleriaEvidenciasFotosProps {
   actorId?: string;
   archivosRepo?: ArchivosLocalRepository;
   capturador?: CapturadorFotosPort;
+  /** Cuando es true, impide capturar, recuperar o eliminar fotos (modo solo lectura, §8.2). */
+  soloLectura?: boolean;
 }
 
 export const GaleriaEvidenciasFotos: React.FC<GaleriaEvidenciasFotosProps> = ({
@@ -32,6 +34,7 @@ export const GaleriaEvidenciasFotos: React.FC<GaleriaEvidenciasFotosProps> = ({
   actorId,
   archivosRepo,
   capturador,
+  soloLectura = false,
 }) => {
   const [procesando, setProcesando] = useState(false);
   const repo = useMemo(() => archivosRepo ?? new ArchivosLocalRepository(), [archivosRepo]);
@@ -77,6 +80,9 @@ export const GaleriaEvidenciasFotos: React.FC<GaleriaEvidenciasFotosProps> = ({
 
   // Recuperar captura pendiente en Android si MainActivity fue destruida al usar cámara (§13.1.1)
   useEffect(() => {
+    if (soloLectura) {
+      return;
+    }
     let montado = true;
     if (typeof capturadorActivo.recuperarCapturaPendiente !== 'function') {
       return;
@@ -100,9 +106,12 @@ export const GaleriaEvidenciasFotos: React.FC<GaleriaEvidenciasFotosProps> = ({
     return () => {
       montado = false;
     };
-  }, [capturadorActivo, procesarFotoCapturada]);
+  }, [capturadorActivo, procesarFotoCapturada, soloLectura]);
 
   const handleCapturar = async (origen: 'CAMARA' | 'GALERIA') => {
+    if (soloLectura) {
+      return;
+    }
     try {
       setProcesando(true);
       const capturada =
@@ -125,6 +134,9 @@ export const GaleriaEvidenciasFotos: React.FC<GaleriaEvidenciasFotosProps> = ({
   };
 
   const handleEliminarFoto = async (fotoId: string) => {
+    if (soloLectura) {
+      return;
+    }
     try {
       await repo.eliminar(fotoId);
       onFotosChange(fotos.filter((f) => f.id !== fotoId));
@@ -145,9 +157,9 @@ export const GaleriaEvidenciasFotos: React.FC<GaleriaEvidenciasFotosProps> = ({
         <View style={styles.grupoBotonesCaptura}>
           <TouchableOpacity
             testID="boton-capturar-camara"
-            style={[styles.botonCapturar, procesando && { opacity: 0.6 }]}
+            style={[styles.botonCapturar, (procesando || soloLectura) && { opacity: 0.5 }]}
             onPress={() => handleCapturar('CAMARA')}
-            disabled={procesando}
+            disabled={procesando || soloLectura}
           >
             <Text style={styles.textoBotonCapturar}>
               {procesando ? 'Procesando...' : '📷 Cámara'}
@@ -155,9 +167,9 @@ export const GaleriaEvidenciasFotos: React.FC<GaleriaEvidenciasFotosProps> = ({
           </TouchableOpacity>
           <TouchableOpacity
             testID="boton-seleccionar-galeria"
-            style={[styles.botonGaleria, procesando && { opacity: 0.6 }]}
+            style={[styles.botonGaleria, (procesando || soloLectura) && { opacity: 0.5 }]}
             onPress={() => handleCapturar('GALERIA')}
-            disabled={procesando}
+            disabled={procesando || soloLectura}
           >
             <Text style={styles.textoBotonGaleria}>🖼️ Galería</Text>
           </TouchableOpacity>
@@ -225,8 +237,9 @@ export const GaleriaEvidenciasFotos: React.FC<GaleriaEvidenciasFotosProps> = ({
                 </View>
                 <TouchableOpacity
                   testID={`boton-eliminar-foto-${foto.id}`}
-                  style={styles.botonEliminar}
+                  style={[styles.botonEliminar, soloLectura && { opacity: 0.4 }]}
                   onPress={() => handleEliminarFoto(foto.id)}
+                  disabled={soloLectura}
                 >
                   <Text style={styles.textoEliminar}>✕</Text>
                 </TouchableOpacity>

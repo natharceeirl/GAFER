@@ -386,4 +386,138 @@ describe('FormularioDrtScreen (F2, F3, F4, F5, F6)', () => {
     expect(enDisco?.datosDrt?.planillaEstaciones[0].tipoCebo).toBe('PASTA');
     expect(enDisco?.datosDrt?.planillaEstaciones[0].cantidadGramos).toBe(40);
   });
+
+  it('en modo solo lectura deshabilita todos los controles, firma y galería, y BackHandler tras bloqueo no sobrescribe el borrador (PR37-F3)', async () => {
+    await prepararBorradorActivo();
+    const onVolver = vi.fn();
+    const spyGuardarDrt = vi.spyOn(BorradorRepository.prototype, 'guardarDrt');
+
+    testRuntime.render(FormularioDrtScreen, { onVolver });
+
+    // Guardar una versión inicial antes de que la inspección se bloquee externamente
+    (testRuntime.getByTestId('input-cliente-razon-social').props.onChangeText as (t: string) => void)(
+      'ALICORP ORIGINAL',
+    );
+    await (testRuntime.getByTestId('boton-guardar-borrador').props.onPress as () => Promise<void>)();
+    spyGuardarDrt.mockClear();
+
+    // Bloquear la inspección dinámicamente (simula cierre remoto/409 mientras la pantalla ya estaba montada)
+    await useBorradorStore
+      .getState()
+      .marcarBloqueada(SERVICIO_UUID, { usuarioId: TECNICO_UUID, cerradoPor: 'Pedro Gomez' });
+    await flushMicrotasks();
+
+    expect(testRuntime.queryByTestId('banner-barra-bloqueada')).not.toBeNull();
+    expect(testRuntime.queryByTestId('boton-guardar-borrador')).toBeNull();
+    expect(testRuntime.queryByTestId('boton-finalizar-drt')).toBeNull();
+
+    // Todos los TextInput deben quedar editable=false y rechazar ediciones
+    const textInputs = testRuntime.findAll((n) => n.type === 'TextInput');
+    expect(textInputs.length).toBeGreaterThan(5);
+    for (const input of textInputs) {
+      expect(input.props.editable).toBe(false);
+    }
+    (testRuntime.getByTestId('input-cliente-razon-social').props.onChangeText as (t: string) => void)(
+      'INTENTO MUTACION',
+    );
+    expect(testRuntime.getByTestId('input-cliente-razon-social').props.value).toBe('ALICORP ORIGINAL');
+
+    // Chips, selector de estación, +1, botón de firma y galería deben estar deshabilitados
+    expect(testRuntime.getByTestId('chip-actividad-EVALUACION').props.disabled).toBe(true);
+    expect(testRuntime.getByTestId('chip-estacion-1-CON_CONSUMO').props.disabled).toBe(true);
+    expect(testRuntime.getByTestId('chip-primera-visita-true').props.disabled).toBe(true);
+    expect(testRuntime.getByTestId('boton-agregar-estacion-1').props.disabled).toBe(true);
+    expect(testRuntime.getByTestId('boton-abrir-firma').props.disabled).toBe(true);
+    expect(testRuntime.getByTestId('boton-capturar-camara').props.disabled).toBe(true);
+    expect(testRuntime.getByTestId('boton-seleccionar-galeria').props.disabled).toBe(true);
+
+    // Intentar abrir firma no debe abrir FirmaPadModal
+    (testRuntime.getByTestId('boton-abrir-firma').props.onPress as () => void)();
+    expect(testRuntime.queryByTestId('lienzo-firma')).toBeNull();
+
+    // Presionar Atrás de hardware en Android tras el bloqueo NO debe guardar sobre el borrador bloqueado
+    rnTools.triggerHardwareBack();
+    await flushMicrotasks();
+
+    expect(onVolver).toHaveBeenCalledTimes(1);
+    expect(spyGuardarDrt).not.toHaveBeenCalled();
+    spyGuardarDrt.mockRestore();
+  });
+
+  it('mutar estaciones en pantalla asigna actualizadoEn y actualizadoPor para LWW real (PR37-F5)', async () => {
+    await prepararBorradorActivo();
+    testRuntime.render(FormularioDrtScreen, { onVolver: vi.fn() });
+
+    (testRuntime.getByTestId('chip-estacion-1-CON_CONSUMO').props.onPress as () => void)();
+    (testRuntime.getByTestId('input-consumo-estacion-1').props.onChangeText as (t: string) => void)('12');
+    await (testRuntime.getByTestId('boton-guardar-borrador').props.onPress as () => Promise<void>)();
+
+    const enDisco = await new BorradorRepository().obtenerPorServicioId(SERVICIO_UUID, TECNICO_UUID);
+    const est1 = enDisco?.datosDrt?.planillaEstaciones.find((e) => e.numero === 1);
+    expect(est1?.actualizadoEn).toBeDefined();
+    expect(Number.isNaN(new Date(est1!.actualizadoEn!).getTime())).toBe(false);
+    expect(est1?.actualizadoPor).toBe('Juan Perez');
+  });
+
+  it('muestra "Borrador sin guardar" cuando el borrador aún no tiene timestamp en lugar de una hora ficticia (PR37-F6)', () => {
+    useBorradorStore.setState({ borrador: null, colaEnvioPendiente: false, errorPersistencia: null });
+    testRuntime.render(FormularioDrtScreen, { onVolver: vi.fn() });
+
+    const banner = testRuntime.getByTestId('banner-borrador-info');
+    expect(testRuntime.getTextContent(banner)).toContain('Borrador sin guardar');
+  });
+
+  it('handleFinalizarServicio marca cerradaEnRevision y cerradoPor en el acta encolada y refleja fusiones remotas LWW (PR37-F8)', async () => {
+    await prepararBorradorActivo();
+    const onVolver = vi.fn();
+    testRuntime.render(FormularioDrtScreen, { onVolver });
+
+    // Guardar borrador inicial y aplicar fusión remota LWW desde el store
+    await (testRuntime.getByTestId('boton-guardar-borrador').props.onPress as () => Promise<void>)();
+    const borradorLocal = useBorradorStore.getState().borrador!;
+    await useBorradorStore.getState().fusionarBorradorRemoto(
+      SERVICIO_UUID,
+      {
+        ...borradorLocal.datosDrt!,
+        planillaEstaciones: [
+          {
+            numero: 6,
+            estado: 'CON_CONSUMO',
+            huboConsumo: true,
+            porcentajeConsumo: 50,
+            consumoGramos: 10,
+            repuestoGramos: 10,
+            cantidadReposicion: 10,
+            tipoCebo: 'BLOQUE_10G',
+            cantidadGramos: 20,
+            lote: 'L-2026-01',
+            vencimiento: '2026-12-31',
+            estadoFisico: 'BUENAS_CONDICIONES',
+            actualizadoEn: '2026-11-03T12:00:00Z',
+            actualizadoPor: 'Pedro Gomez',
+          },
+        ],
+      },
+      { usuarioId: TECNICO_UUID },
+    );
+    await flushMicrotasks();
+
+    // La estación #6 fusionada desde el colaborador debe aparecer en pantalla
+    expect(testRuntime.queryByTestId('input-consumo-estacion-6')).not.toBeNull();
+
+    await completarConformidadCliente();
+    await (testRuntime.getByTestId('boton-finalizar-drt').props.onPress as () => Promise<void>)();
+    const botones = rnTools.alertMock.mock.calls.at(-1)![2] as AlertButtonLike[];
+    await botones.find((b) => b.text === 'Concluir y Encolar')!.onPress!();
+    await flushMicrotasks();
+
+    const outbox = new OutboxQueue();
+    await outbox.inicializar();
+    const opDrt = outbox
+      .obtenerPendientes()
+      .find((p) => p.operacion.tipo === 'REGISTRO_SERVICIO_DRT');
+    expect(opDrt).toBeDefined();
+    expect(opDrt?.operacion.payload.cerradaEnRevision).toBe(true);
+    expect(opDrt?.operacion.payload.cerradoPor).toBe('Juan Perez');
+  });
 });

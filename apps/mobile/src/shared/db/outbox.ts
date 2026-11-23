@@ -43,6 +43,7 @@ export interface OutboxRecord {
   operacion: OperacionSync;
   intentos: number;
   sincronizado: boolean;
+  rechazado?: boolean;
   ultimoError?: string;
   aggregateSeq?: number;
   priority?: string;
@@ -125,6 +126,7 @@ export class OutboxQueue {
           },
           intentos: fila.attempt_count,
           sincronizado: fila.status === 'SYNCED',
+          rechazado: fila.status === 'REJECTED',
           ultimoError: fila.last_error_message_sanitized ?? undefined,
           aggregateSeq: fila.aggregate_seq,
           priority: fila.priority,
@@ -294,6 +296,7 @@ export class OutboxQueue {
           ...record,
           aggregateSeq: existente.aggregate_seq,
           sincronizado: existente.status === 'SYNCED',
+          rechazado: existente.status === 'REJECTED',
         };
       }
     } else {
@@ -306,7 +309,11 @@ export class OutboxQueue {
   }
 
   obtenerPendientes(): OutboxRecord[] {
-    return this.cola.filter((op) => !op.sincronizado);
+    return this.cola.filter((op) => !op.sincronizado && !op.rechazado);
+  }
+
+  obtenerRechazadas(): OutboxRecord[] {
+    return this.cola.filter((op) => Boolean(op.rechazado));
   }
 
   async marcarSincronizadas(ids: string[]): Promise<void> {
@@ -355,6 +362,7 @@ export class OutboxQueue {
     apiUrl: string,
     inspeccionId: string,
     fetchFn: typeof fetch = fetch,
+    onInspeccionCerrada?: (inspeccionId: string) => void | Promise<void>,
   ): Promise<LoteSyncResponse | null> {
     // Dentro de una inspección el orden lo da la secuencia, no la prioridad.
     const pendientes = this.obtenerPendientes()
@@ -378,12 +386,21 @@ export class OutboxQueue {
       );
 
       if (!response.ok) {
-        const errorMsg = `HTTP ${response.status}: ${response.statusText}`;
-        const ahora = new Date().toISOString();
-        for (const item of pendientes) {
-          item.intentos += 1;
-          item.ultimoError = errorMsg;
+        let detalleError = response.statusText;
+        try {
+          const jsonError = (await response.json()) as { message?: string } | undefined;
+          if (jsonError && typeof jsonError.message === 'string') {
+            detalleError = jsonError.message;
+          }
+        } catch {
+          // Fallback a texto o statusText
         }
+
+        const errorMsg = `HTTP ${response.status}: ${detalleError}`;
+        // Solo HTTP 409 Conflict indica cierre definitivo en servidor (§8.2);
+        // errores transitorios 500/503 nunca deben rechazar operaciones ni bloquear borradores.
+        const esInspeccionCerrada = response.status === 409;
+        const ahora = new Date().toISOString();
 
         if (this.db) {
           await this.db.withExclusiveTransactionAsync(async (tx) => {
@@ -392,15 +409,46 @@ export class OutboxQueue {
                 `UPDATE sync_outbox 
                  SET attempt_count = attempt_count + 1,
                      last_attempt_at = ?,
-                     last_error_message_sanitized = ?
+                     last_error_code = ?,
+                     last_error_message_sanitized = ?,
+                     status = ?
                  WHERE operation_id = ?;`,
-                [ahora, errorMsg, item.operacion.operationId],
+                [
+                  ahora,
+                  esInspeccionCerrada ? 'INSPECCION_CERRADA' : null,
+                  errorMsg,
+                  esInspeccionCerrada ? 'REJECTED' : 'PENDING',
+                  item.operacion.operationId,
+                ],
+              );
+            }
+
+            // Bloquear borradores locales si la inspección fue cerrada en el servidor (§8.2)
+            if (esInspeccionCerrada) {
+              await tx.runAsync(
+                `UPDATE borradores_inspeccion 
+                 SET sync_status = 'LOCKED',
+                     actualizado_en = ?
+                 WHERE servicio_id = ?;`,
+                [ahora, inspeccionId],
               );
             }
           });
         }
 
+        for (const item of pendientes) {
+          item.intentos += 1;
+          item.ultimoError = errorMsg;
+          if (esInspeccionCerrada) {
+            item.sincronizado = false;
+            item.rechazado = true;
+          }
+        }
+
         await this.persistir();
+        if (esInspeccionCerrada && onInspeccionCerrada) {
+          await onInspeccionCerrada(inspeccionId);
+        }
         return null;
       }
 

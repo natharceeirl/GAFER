@@ -19,6 +19,9 @@ export interface MetadataBorrador {
   sedeNombre?: string;
   numeroOrden?: string;
   servicioTipo?: string;
+  tecnicoId?: string;
+  tecnicoNombre?: string;
+  tecnicoCargo?: string;
   /** Configuración precargada del servicio contratado (§8.2). */
   configServicio?: ConfigServicioBorrador;
 }
@@ -34,6 +37,15 @@ export interface BorradorInspeccion {
   configServicio?: ConfigServicioBorrador;
   datosDrt?: ActaServicioDrt;
   datosCampo?: FormularioCampo;
+  actualizadoEn?: string;
+  guardadoPor?: {
+    tecnicoId?: string;
+    nombre?: string;
+    cargo?: string;
+  };
+  bloqueada?: boolean;
+  motivoBloqueo?: string;
+  syncStatus?: string;
 }
 
 export const MENSAJE_ERROR_PERSISTENCIA =
@@ -44,6 +56,8 @@ interface BorradorStore {
   colaEnvioPendiente: boolean;
   /** Último error al escribir en SQLite; null si la última escritura fue exitosa. */
   errorPersistencia: string | null;
+  /** Contador que aumenta solo en fusiones remotas o bloqueos externos para refrescar la UI sin bucles de auto-guardado. */
+  revisionRemota: number;
   /**
    * Abre (o reabre) el borrador del servicio. Si ya existía, conserva sus observaciones.
    * Devuelve false si no se pudo guardar en disco.
@@ -59,6 +73,17 @@ interface BorradorStore {
   actualizarDrt: (acta: ActaServicioDrt, metadata?: MetadataBorrador) => Promise<boolean>;
   /** Guarda el formulario de campo en disco y luego lo muestra. Devuelve false si no se pudo guardar. */
   actualizarCampo: (formulario: FormularioCampo, metadata?: MetadataBorrador) => Promise<boolean>;
+  /** Fusiona de forma atómica un acta remota (LWW) en SQLite y refresca el borrador activo en memoria (§8.2). */
+  fusionarBorradorRemoto: (
+    servicioId: string,
+    actaRemota: ActaServicioDrt,
+    metadata?: MetadataBorrador,
+  ) => Promise<BorradorInspeccion | null>;
+  /** Bloquea durablemente la inspección en SQLite y refleja el modo solo lectura en el borrador activo (§8.2). */
+  marcarBloqueada: (
+    servicioId: string,
+    opciones?: string | { usuarioId?: string; cerradoPor?: string; motivo?: string },
+  ) => Promise<boolean>;
   finalizarServicioDrt: (
     acta: ActaServicioDrt,
     usuarioId: string,
@@ -97,6 +122,7 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
   borrador: null,
   colaEnvioPendiente: false,
   errorPersistencia: null,
+  revisionRemota: 0,
 
   iniciarBorrador: async (servicioId, metadata, observacionesIniciales = '') => {
     revisionEstado += 1;
@@ -172,6 +198,63 @@ export const useBorradorStore = create<BorradorStore>((set, get) => ({
         return true;
       }
       set({ borrador: persistido, errorPersistencia: null });
+      return true;
+    } catch (error) {
+      set({ errorPersistencia: describirError(error) });
+      return false;
+    }
+  },
+
+  fusionarBorradorRemoto: async (servicioId, actaRemota, metadata) => {
+    const revisionPropia = ++revisionEstado;
+    try {
+      const repo = new BorradorRepository();
+      const usuarioId = metadata?.usuarioId ?? get().borrador?.usuarioId;
+      const fusionado = await repo.fusionarBorradorRemoto(servicioId, actaRemota, {
+        ...metadata,
+        usuarioId,
+      });
+      if (revisionEstado !== revisionPropia) {
+        return fusionado;
+      }
+      set((state) => ({
+        borrador:
+          !state.borrador ||
+          (state.borrador.servicioId === servicioId &&
+            (state.borrador.usuarioId ?? '') === (usuarioId ?? ''))
+            ? fusionado
+            : state.borrador,
+        errorPersistencia: null,
+        revisionRemota: state.revisionRemota + 1,
+      }));
+      return fusionado;
+    } catch (error) {
+      set({ errorPersistencia: describirError(error) });
+      return null;
+    }
+  },
+
+  marcarBloqueada: async (servicioId, opciones) => {
+    const revisionPropia = ++revisionEstado;
+    try {
+      const repo = new BorradorRepository();
+      await repo.marcarBloqueada(servicioId, opciones);
+      const actual = get().borrador;
+      if (!actual || actual.servicioId !== servicioId) {
+        return true;
+      }
+      const actualizado = await repo.obtenerPorServicioId(servicioId, actual.usuarioId);
+      if (revisionEstado !== revisionPropia) {
+        return true;
+      }
+      set((state) => ({
+        borrador:
+          state.borrador?.servicioId === servicioId && actualizado
+            ? actualizado
+            : state.borrador,
+        errorPersistencia: null,
+        revisionRemota: state.revisionRemota + 1,
+      }));
       return true;
     } catch (error) {
       set({ errorPersistencia: describirError(error) });

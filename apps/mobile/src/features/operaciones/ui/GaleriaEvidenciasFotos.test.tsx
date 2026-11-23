@@ -145,4 +145,64 @@ describe('GaleriaEvidenciasFotos (F2, F9, F10)', () => {
 
     await expect(capturador.seleccionarDeGaleria()).rejects.toThrow(/permiso de galería/i);
   });
+
+  it('en modo soloLectura deshabilita cámara, galería y borrado e impide mutar fotos locales (PR37-F3)', async () => {
+    const jpegReal = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0xff, 0xd9]);
+    const guardada = await archivosRepo.guardarFoto({
+      inspectionId: SERVICIO_UUID,
+      nombre: 'foto_cerrada.jpg',
+      buffer: jpegReal,
+      mimeType: 'image/jpeg',
+      actorId: TECNICO_UUID,
+    });
+    const fotoExistente: FotoEvidenciaDrt = {
+      id: guardada.file_id,
+      nombre: 'foto_cerrada.jpg',
+      rutaLocalRelativa: guardada.local_path_relative,
+      tamanoBytes: guardada.size_bytes,
+      sha256: guardada.sha256,
+      mimeType: guardada.mime_type,
+      capturadaEn: guardada.captured_at,
+    };
+
+    const capturador: CapturadorFotosPort = {
+      capturarDesdeCamara: vi.fn(async () => ({
+        uri: 'file:///camera/no_debe_guardarse.jpg',
+        nombre: 'no_debe_guardarse.jpg',
+        mimeType: 'image/jpeg',
+        buffer: jpegReal,
+      })),
+      seleccionarDeGaleria: vi.fn(async () => null),
+      recuperarCapturaPendiente: vi.fn(async () => null),
+    };
+    const onFotosChange = vi.fn();
+
+    testRuntime.render(GaleriaEvidenciasFotos, {
+      inspectionId: SERVICIO_UUID,
+      fotos: [fotoExistente],
+      onFotosChange,
+      actorId: TECNICO_UUID,
+      archivosRepo,
+      capturador,
+      soloLectura: true,
+    });
+
+    const btnCamara = testRuntime.getByTestId('boton-capturar-camara');
+    const btnGaleria = testRuntime.getByTestId('boton-seleccionar-galeria');
+    const btnEliminar = testRuntime.getByTestId(`boton-eliminar-foto-${fotoExistente.id}`);
+
+    expect(btnCamara.props.disabled).toBe(true);
+    expect(btnGaleria.props.disabled).toBe(true);
+    expect(btnEliminar.props.disabled).toBe(true);
+
+    await (btnCamara.props.onPress as () => Promise<void>)();
+    await (btnGaleria.props.onPress as () => Promise<void>)();
+    await (btnEliminar.props.onPress as () => Promise<void>)();
+
+    expect(capturador.capturarDesdeCamara).not.toHaveBeenCalled();
+    expect(capturador.seleccionarDeGaleria).not.toHaveBeenCalled();
+    expect(capturador.recuperarCapturaPendiente).not.toHaveBeenCalled();
+    expect(onFotosChange).not.toHaveBeenCalled();
+    expect(await fs.existe(fotoExistente.rutaLocalRelativa)).toBe(true);
+  });
 });

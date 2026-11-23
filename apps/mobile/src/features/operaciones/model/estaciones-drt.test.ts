@@ -481,4 +481,39 @@ describe('Estaciones DRT (§5.1, GAF-35)', () => {
       expect(conConsumoFallback.colorAura).toBeUndefined();
     });
   });
+
+  describe('metadatos LWW en mutadores de estaciones (PR37-F5)', () => {
+    it('asigna actualizadoEn y actualizadoPor al mutar estado, consumo, gramos, estado físico o replicar cebo', () => {
+      const base = crearEstacionDrt(1, { cantidadGramos: 20 });
+      expect(base.actualizadoEn).toBeUndefined();
+
+      const meta = { actualizadoEn: '2026-11-03T10:15:00.000Z', actualizadoPor: 'Juan Perez' };
+      const conConsumo = actualizarConsumoEstacion(base, true, 50, meta);
+      expect(conConsumo.actualizadoEn).toBe(meta.actualizadoEn);
+      expect(conConsumo.actualizadoPor).toBe('Juan Perez');
+
+      const conEstado = actualizarEstadoEstacion(conConsumo, 'SIN_ACCESO', {
+        actualizadoEn: '2026-11-03T10:20:00.000Z',
+        actualizadoPor: 'Pedro Gomez',
+      });
+      expect(conEstado.actualizadoEn).toBe('2026-11-03T10:20:00.000Z');
+      expect(conEstado.actualizadoPor).toBe('Pedro Gomez');
+
+      const conGramos = actualizarCantidadGramosEstacion(base, 40, meta);
+      expect(conGramos.actualizadoEn).toBe(meta.actualizadoEn);
+      expect(conGramos.actualizadoPor).toBe('Juan Perez');
+
+      const conFisico = actualizarEstadoFisicoEstacion(base, 'MALAS_CONDICIONES', 'Rota', meta);
+      expect(conFisico.actualizadoEn).toBe(meta.actualizadoEn);
+      expect(conFisico.actualizadoPor).toBe('Juan Perez');
+
+      const replicadas = copiarCeboALote(
+        [base],
+        { tipoCebo: 'PASTA', cantidadGramos: 30, lote: 'L-1', vencimiento: '2027-01-01' },
+        meta,
+      );
+      expect(replicadas[0].actualizadoEn).toBe(meta.actualizadoEn);
+      expect(replicadas[0].actualizadoPor).toBe('Juan Perez');
+    });
+  });
 });
