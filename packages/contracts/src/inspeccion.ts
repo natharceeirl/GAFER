@@ -72,3 +72,32 @@ export const CrearInspeccionSchema = z.object({
   servicioId: z.string().uuid().describe('ID del servicio contratado'),
 });
 export type CrearInspeccion = z.infer<typeof CrearInspeccionSchema>;
+
+/** Solicitud de corrección enviada por el técnico a supervisión para un servicio cerrado (GAF-104). */
+export const SolicitudCorreccionSchema = z.object({
+  motivo: z
+    .string()
+    .trim()
+    .min(5, 'El motivo de la corrección debe contener al menos 5 caracteres descriptivos')
+    .max(500, 'El motivo no puede exceder los 500 caracteres'),
+});
+export type SolicitudCorreccion = z.infer<typeof SolicitudCorreccionSchema>;
+
+/** Resumen de servicio/inspección para la vista de solo lectura del técnico (GAF-104). */
+export const ResumenServicioTecnicoSchema = z.object({
+  id: z.string().uuid(),
+  servicioId: z.string().uuid(),
+  codigoInspeccion: z.string().min(1),
+  estado: EstadoInspeccionSchema,
+  versionSync: z.number().int().min(1),
+  fechaEjecucion: FechaSchema,
+  horaInicio: HoraSchema.nullish(),
+  horaFin: HoraSchema.nullish(),
+  tecnicosParticipantes: z.array(TecnicoParticipanteSchema),
+  puedeSolicitarCorreccion: z.boolean(),
+  clienteRazonSocial: z.string().optional(),
+  sedeNombre: z.string().optional(),
+  servicioTipo: z.string().optional(),
+  snapshotCatalogos: z.record(z.unknown()).optional(),
+});
+export type ResumenServicioTecnico = z.infer<typeof ResumenServicioTecnicoSchema>;

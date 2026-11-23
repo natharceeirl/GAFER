@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
+  BadRequestException,
   Get,
   Param,
   ParseUUIDPipe,
@@ -18,12 +20,21 @@ import {
   ApiConsultarInspeccionDoc,
   ApiConsultarAuditoriaDoc,
   ApiSincronizarInspeccionDoc,
+  ApiListarMisServiciosDoc,
+  ApiSolicitarCorreccionDoc,
 } from './operaciones.controller.doc';
 import { SincronizarInspeccionUseCase } from '../application/sincronizar-inspeccion.usecase';
 import { AuditoriaService } from '../../shared/auditoria/auditoria.service';
 import { Optional } from '@nestjs/common';
-import { CerrarInspeccionDto, CrearInspeccionDto, SincronizarLoteDto } from './dto/operaciones.dto';
+import {
+  CerrarInspeccionDto,
+  CrearInspeccionDto,
+  SincronizarLoteDto,
+  SolicitudCorreccionDto,
+} from './dto/operaciones.dto';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator';
+import { UsuarioActual } from '../../auth/infrastructure/decorators/usuario-actual.decorator';
+import { TokenPayload } from '../../auth/domain/ports/token.service.port';
 
 @ApiTags('Operaciones')
 @ApiBearerAuth()
@@ -53,10 +64,28 @@ export class OperacionesController {
     };
   }
 
+  private verificarPermisoTecnico(
+    inspeccion: { tecnicosParticipantes: Array<{ id: string; nombre: string }> },
+    user: TokenPayload | undefined,
+    mensaje: string,
+  ): void {
+    if (user && user.cargo === 'TECNICO_OPERADOR') {
+      const esParticipante = inspeccion.tecnicosParticipantes.some(
+        (t) => t.id === user.id,
+      );
+      if (!esParticipante) {
+        throw new ForbiddenException(mensaje);
+      }
+    }
+  }
+
   @Get()
   @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiConsultarInspeccionDoc()
-  async consultar(@Query('servicioId') servicioId?: string) {
+  async consultar(
+    @Query('servicioId') servicioId?: string,
+    @UsuarioActual() user?: TokenPayload,
+  ) {
     if (!servicioId) {
       return null;
     }
@@ -64,6 +93,14 @@ export class OperacionesController {
     if (!inspeccion) {
       return null;
     }
+
+    // GAF-104: El técnico operador solo puede consultar inspecciones donde participó
+    this.verificarPermisoTecnico(
+      inspeccion,
+      user,
+      'No tiene permisos para consultar servicios de otros técnicos',
+    );
+
     return {
       id: inspeccion.id,
       servicioId: inspeccion.servicioId,
@@ -78,13 +115,64 @@ export class OperacionesController {
     };
   }
 
+  @Get('mis-servicios')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
+  @ApiListarMisServiciosDoc()
+  async listarMisServicios(@UsuarioActual() user?: TokenPayload) {
+    const inspecciones =
+      user?.cargo === 'TECNICO_OPERADOR'
+        ? await this.obtenerInspeccion.ejecutarPorTecnico(user.id)
+        : await this.obtenerInspeccion.ejecutarTodas();
+
+    return inspecciones
+      .filter((insp) => insp.getEstado() === 'CERRADO')
+      .map((insp) => {
+        const snapshot = insp.getSnapshot();
+        const clienteRazonSocial =
+          (typeof snapshot.clienteRazonSocial === 'string' && snapshot.clienteRazonSocial) ||
+          insp.clienteRazonSocial;
+        const sedeNombre =
+          (typeof snapshot.sedeNombre === 'string' && snapshot.sedeNombre) ||
+          insp.sedeNombre;
+        const servicioTipo =
+          (typeof snapshot.servicioTipo === 'string' && snapshot.servicioTipo) ||
+          insp.servicioTipo;
+
+        return {
+          id: insp.id,
+          servicioId: insp.servicioId,
+          codigoInspeccion: insp.codigoInspeccion,
+          estado: insp.getEstado(),
+          versionSync: insp.getVersionSync(),
+          fechaEjecucion: insp.fechaEjecucion,
+          horaInicio: insp.horaInicio,
+          horaFin: insp.horaFin,
+          tecnicosParticipantes: insp.tecnicosParticipantes,
+          snapshotCatalogos: snapshot,
+          puedeSolicitarCorreccion: insp.getEstado() === 'CERRADO',
+          ...(clienteRazonSocial ? { clienteRazonSocial } : {}),
+          ...(sedeNombre ? { sedeNombre } : {}),
+          ...(servicioTipo ? { servicioTipo } : {}),
+        };
+      });
+  }
+
   @Get(':id')
   @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
   @ApiObtenerInspeccionPorIdDoc()
   async obtenerPorId(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @UsuarioActual() user?: TokenPayload,
   ) {
     const inspeccion = await this.obtenerInspeccion.ejecutarPorId(id);
+
+    // GAF-104: El técnico operador solo puede ver inspecciones donde participó
+    this.verificarPermisoTecnico(
+      inspeccion,
+      user,
+      'No tiene permisos para consultar servicios de otros técnicos',
+    );
+
     return {
       id: inspeccion.id,
       servicioId: inspeccion.servicioId,
@@ -118,6 +206,74 @@ export class OperacionesController {
       tecnicosParticipantes: inspeccion.tecnicosParticipantes,
       snapshotCatalogos: inspeccion.getSnapshot(),
       versionSync: inspeccion.getVersionSync(),
+    };
+  }
+
+  @Post(':id/solicitar-correccion')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR')
+  @ApiSolicitarCorreccionDoc()
+  async solicitarCorreccion(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: SolicitudCorreccionDto,
+    @UsuarioActual() user?: TokenPayload,
+  ) {
+    const inspeccion = await this.obtenerInspeccion.ejecutarPorId(id);
+
+    if (inspeccion.getEstado() !== 'CERRADO') {
+      throw new BadRequestException(
+        'Solo se pueden solicitar correcciones para servicios cerrados',
+      );
+    }
+
+    this.verificarPermisoTecnico(
+      inspeccion,
+      user,
+      'No tiene autorización para solicitar corrección de este servicio',
+    );
+
+    const solicitadaEn = new Date().toISOString();
+
+    if (this.auditoriaService) {
+      const actorId =
+        typeof this.auditoriaService.resolverActorId === 'function'
+          ? await this.auditoriaService.resolverActorId(user?.id)
+          : (user?.id ?? null);
+
+      if (actorId) {
+        await this.auditoriaService.persistirInspeccionAuditoria({
+          inspeccionId: id,
+          actorId,
+          accion: 'SOLICITUD_CORRECCION',
+          payloadAnterior: { estado: inspeccion.getEstado() },
+          payloadNuevo: {
+            motivo: dto.motivo,
+            solicitadoPor: user?.nombreCompleto || 'Técnico',
+            solicitanteId: user?.id,
+            fechaSolicitud: solicitadaEn,
+          },
+        });
+      }
+
+      await this.auditoriaService.registrarEvento({
+        actorId: actorId ?? undefined,
+        actorUsuario: user?.usuario || 'TECNICO',
+        actorRol: user?.cargo || 'TECNICO_OPERADOR',
+        modulo: 'operaciones',
+        accion: 'SOLICITAR_CORRECCION',
+        entidad: 'inspeccion',
+        entidadId: id,
+        detalles: {
+          motivo: dto.motivo,
+          codigoInspeccion: inspeccion.codigoInspeccion,
+        },
+      });
+    }
+
+    return {
+      ok: true,
+      mensaje: 'Solicitud de corrección enviada a supervisión exitosamente',
+      inspeccionId: id,
+      solicitadaEn,
     };
   }
 

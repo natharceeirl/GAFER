@@ -1,5 +1,5 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { GaferDatabase } from '../../../database/types';
 import { Inspeccion, EstadoInspeccion } from '../../domain/inspeccion';
 import { InspeccionRepository } from '../../domain/ports/inspeccion.repository';
@@ -80,6 +80,67 @@ export class KyselyInspeccionRepository implements InspeccionRepository {
     return row ? this.mapToDomain(row) : null;
   }
 
+  async listarPorTecnico(tecnicoId: string): Promise<Inspeccion[]> {
+    const rows = await this.db
+      .selectFrom('inspecciones')
+      .leftJoin('servicios_contratados', 'servicios_contratados.id', 'inspecciones.servicio_id')
+      .leftJoin('proyectos', 'proyectos.id', 'servicios_contratados.proyecto_id')
+      .leftJoin('clientes', 'clientes.id', 'proyectos.cliente_id')
+      .select([
+        'inspecciones.id',
+        'inspecciones.servicio_id',
+        'inspecciones.codigo_inspeccion',
+        'inspecciones.estado',
+        'inspecciones.version_sync',
+        'inspecciones.fecha_ejecucion',
+        'inspecciones.hora_inicio',
+        'inspecciones.hora_fin',
+        'inspecciones.tecnicos_participantes',
+        'inspecciones.snapshot_catalogos',
+        'clientes.razon_social as cliente_razon_social',
+        'proyectos.nombre as sede_nombre',
+        'servicios_contratados.tipo_servicio as servicio_tipo',
+      ])
+      .where('inspecciones.estado', '=', 'CERRADO')
+      .where(
+        sql<boolean>`inspecciones.tecnicos_participantes @> jsonb_build_array(jsonb_build_object('id', ${tecnicoId}::text))`,
+      )
+      .orderBy('inspecciones.fecha_ejecucion', 'desc')
+      .orderBy('inspecciones.created_at', 'desc')
+      .execute();
+
+    return rows.map((r) => this.mapToDomain(r));
+  }
+
+  async listarTodas(): Promise<Inspeccion[]> {
+    const rows = await this.db
+      .selectFrom('inspecciones')
+      .leftJoin('servicios_contratados', 'servicios_contratados.id', 'inspecciones.servicio_id')
+      .leftJoin('proyectos', 'proyectos.id', 'servicios_contratados.proyecto_id')
+      .leftJoin('clientes', 'clientes.id', 'proyectos.cliente_id')
+      .select([
+        'inspecciones.id',
+        'inspecciones.servicio_id',
+        'inspecciones.codigo_inspeccion',
+        'inspecciones.estado',
+        'inspecciones.version_sync',
+        'inspecciones.fecha_ejecucion',
+        'inspecciones.hora_inicio',
+        'inspecciones.hora_fin',
+        'inspecciones.tecnicos_participantes',
+        'inspecciones.snapshot_catalogos',
+        'clientes.razon_social as cliente_razon_social',
+        'proyectos.nombre as sede_nombre',
+        'servicios_contratados.tipo_servicio as servicio_tipo',
+      ])
+      .where('inspecciones.estado', '=', 'CERRADO')
+      .orderBy('inspecciones.fecha_ejecucion', 'desc')
+      .orderBy('inspecciones.created_at', 'desc')
+      .execute();
+
+    return rows.map((r) => this.mapToDomain(r));
+  }
+
   private formatFecha(val: unknown): string {
     if (!val) return '';
     if (val instanceof Date) {
@@ -92,6 +153,17 @@ export class KyselyInspeccionRepository implements InspeccionRepository {
     const d = new Date(str);
     if (!isNaN(d.getTime())) {
       return d.toISOString().slice(0, 10);
+    }
+    return str;
+  }
+
+  private formatHora(val: unknown): string | null {
+    if (val === null || val === undefined) return null;
+    const str = String(val).trim();
+    if (!str) return null;
+    const match = str.match(/^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d(?:\.\d+)?)?$/);
+    if (match) {
+      return `${match[1]}:${match[2]}`;
     }
     return str;
   }
@@ -114,10 +186,13 @@ export class KyselyInspeccionRepository implements InspeccionRepository {
       estado: row.estado as EstadoInspeccion,
       versionSync: row.version_sync,
       fechaEjecucion: this.formatFecha(row.fecha_ejecucion),
-      horaInicio: row.hora_inicio ? String(row.hora_inicio) : null,
-      horaFin: row.hora_fin ? String(row.hora_fin) : null,
+      horaInicio: this.formatHora(row.hora_inicio),
+      horaFin: this.formatHora(row.hora_fin),
       tecnicosParticipantes: tecnicos,
       snapshotCatalogos,
+      clienteRazonSocial: row.cliente_razon_social ?? undefined,
+      sedeNombre: row.sede_nombre ?? undefined,
+      servicioTipo: row.servicio_tipo ?? undefined,
     });
   }
 }

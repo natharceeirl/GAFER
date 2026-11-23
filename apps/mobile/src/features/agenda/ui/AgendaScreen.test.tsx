@@ -23,6 +23,7 @@ vi.mock('expo-status-bar', () => ({
 }));
 
 import { inicializarBaseDeDatos, cerrarBaseDeDatos } from '../../../shared/db/sqlite';
+import { MobileApiClient, ErrorDeConexion } from '../../../shared/api/api-client';
 import { useAuthStore } from '../../auth/model/use-auth-store';
 import { useAgendaStore } from '../model/agenda';
 import { useBorradorStore } from '../../operaciones/model/use-borrador-store';
@@ -132,9 +133,9 @@ describe('AgendaScreen (F1, F3, F6)', () => {
     testRuntime.render(AgendaScreen);
     await flushMicrotasks();
 
-    // Cambiar a la pestaña SEDES ACTIVAS
+    // Cambiar a la pestaña SEDES
     const tabSedes = testRuntime.findAll(
-      (n) => n.type === 'TouchableOpacity' && testRuntime.getTextContent(n).includes('SEDES ACTIVAS'),
+      (n) => n.type === 'TouchableOpacity' && testRuntime.getTextContent(n).includes('SEDES'),
     )[0];
     (tabSedes.props.onPress as () => void)();
     await flushMicrotasks();
@@ -149,5 +150,116 @@ describe('AgendaScreen (F1, F3, F6)', () => {
     expect(borrador?.clienteRazonSocial).toBe(sede.clienteRazonSocial);
     expect(borrador?.sedeNombre).toBe(sede.nombre);
     expect(ActaServicioDrtSchema.shape.servicioId.safeParse(borrador?.servicioId).success).toBe(true);
+  });
+
+  describe('Pestaña CERRADOS (GAF-104: F1, F3, F5, F6, F7)', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('cuando la API devuelve lista vacía muestra ListEmptyComponent y NO inyecta datos ficticios ALICORP/GLORIA (F1)', async () => {
+      vi.spyOn(MobileApiClient.prototype, 'obtenerMisServicios').mockResolvedValue([]);
+
+      testRuntime.render(AgendaScreen);
+      await flushMicrotasks();
+
+      const tabCerrados = testRuntime.getByTestId('tab-cerrados');
+      (tabCerrados.props.onPress as () => void)();
+      await flushMicrotasks();
+
+      const texto = testRuntime.getTextContent();
+      expect(texto).toContain('Sin servicios cerrados');
+      expect(texto).not.toContain('GAFER-2026-ALICORP-001');
+      expect(texto).not.toContain('GAFER-2026-GLORIA-004');
+    });
+
+    it('cuando la API falla muestra error real con opción de reintentar y NO inyecta datos ficticios (F1)', async () => {
+      vi.spyOn(MobileApiClient.prototype, 'obtenerMisServicios').mockRejectedValue(
+        new ErrorDeConexion('Sin conexión al servidor de operaciones'),
+      );
+
+      testRuntime.render(AgendaScreen);
+      await flushMicrotasks();
+
+      const tabCerrados = testRuntime.getByTestId('tab-cerrados');
+      (tabCerrados.props.onPress as () => void)();
+      await flushMicrotasks();
+
+      const texto = testRuntime.getTextContent();
+      expect(texto).toContain('Sin conexión al servidor de operaciones');
+      expect(testRuntime.queryByTestId('boton-reintentar-cerrados')).not.toBeNull();
+      expect(texto).not.toContain('GAFER-2026-ALICORP-001');
+      expect(texto).not.toContain('GAFER-2026-GLORIA-004');
+    });
+
+    it('muestra metadatos reales, respeta puedeSolicitarCorreccion y diferencia Ver Reporte vs Pedir Corrección (F3, F5, F6)', async () => {
+      const idCerrado = 'c1111111-2222-4000-8000-000000000011';
+      const idObservado = 'c1111111-2222-4000-8000-000000000012';
+      vi.spyOn(MobileApiClient.prototype, 'obtenerMisServicios').mockResolvedValue([
+        {
+          id: idCerrado,
+          servicioId: 'd1111111-1111-4000-8000-000000000011',
+          codigoInspeccion: 'GAFER-2026-KALLPA-099',
+          estado: 'CERRADO',
+          versionSync: 2,
+          fechaEjecucion: '2026-11-03',
+          horaInicio: '09:00',
+          horaFin: '11:30',
+          tecnicosParticipantes: [{ id: TECNICO_UUID, nombre: 'Juan Perez' }],
+          puedeSolicitarCorreccion: true,
+          clienteRazonSocial: 'KALLPA GENERACIÓN S.A.',
+          sedeNombre: 'CENTRAL_CHILCA',
+          servicioTipo: 'DSF',
+          snapshotCatalogos: {
+            insumos: [{ nombreHistorico: 'Amonio Cuaternario', lote: 'L-99' }],
+          },
+        },
+        {
+          id: idObservado,
+          servicioId: 'd1111111-1111-4000-8000-000000000012',
+          codigoInspeccion: 'GAFER-2026-OBS-001',
+          estado: 'OBSERVADO',
+          versionSync: 2,
+          fechaEjecucion: '2026-11-02',
+          horaInicio: null,
+          horaFin: null,
+          tecnicosParticipantes: [{ id: TECNICO_UUID, nombre: 'Juan Perez' }],
+          puedeSolicitarCorreccion: false,
+          clienteRazonSocial: 'MINERA SUR S.A.',
+          sedeNombre: 'CAMPAMENTO_NORTE',
+          servicioTipo: 'LRA',
+        },
+      ]);
+
+      testRuntime.render(AgendaScreen);
+      await flushMicrotasks();
+
+      (testRuntime.getByTestId('tab-cerrados').props.onPress as () => void)();
+      await flushMicrotasks();
+
+      const texto = testRuntime.getTextContent();
+      expect(texto).toContain('KALLPA GENERACIÓN S.A.');
+      expect(texto).toContain('CENTRAL_CHILCA');
+      expect(texto).toContain('Desinfección (DSF)');
+      expect(texto).toContain('OBSERVADO');
+      expect(testRuntime.queryByTestId(`boton-pedir-correccion-${idCerrado}`)).not.toBeNull();
+      expect(testRuntime.queryByTestId(`boton-pedir-correccion-${idObservado}`)).toBeNull();
+
+      // 1) Ver Reporte abre el modal SIN formulario de corrección abierto
+      (testRuntime.getByTestId(`boton-ver-reporte-${idCerrado}`).props.onPress as () => void)();
+      await flushMicrotasks();
+      expect(testRuntime.queryByTestId('formulario-correccion')).toBeNull();
+      expect(testRuntime.getTextContent()).toContain('Amonio Cuaternario');
+
+      // Cerrar modal
+      (testRuntime.getByTestId('boton-cerrar-modal-detalle').props.onPress as () => void)();
+      await flushMicrotasks();
+
+      // 2) Pedir Corrección abre el modal CON el formulario de corrección ya desplegado
+      (testRuntime.getByTestId(`boton-pedir-correccion-${idCerrado}`).props.onPress as () => void)();
+      await flushMicrotasks();
+      expect(testRuntime.queryByTestId('formulario-correccion')).not.toBeNull();
+      expect(testRuntime.queryByTestId('input-motivo-correccion')).not.toBeNull();
+    });
   });
 });

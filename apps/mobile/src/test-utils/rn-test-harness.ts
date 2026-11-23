@@ -284,14 +284,14 @@ export function createReactTestRuntime() {
     }
   };
 
-  const render = <P extends Record<string, unknown>>(
+  const render = <P extends object>(
     Component: (props: P) => unknown,
     props: P = {} as P,
   ) => {
     unmount();
     mounted = true;
-    rootComponent = Component as (p: Record<string, unknown>) => unknown;
-    rootProps = props;
+    rootComponent = Component as unknown as (p: Record<string, unknown>) => unknown;
+    rootProps = props as Record<string, unknown>;
     rerender();
   };
 
@@ -497,6 +497,8 @@ export function createReactNativeMock() {
     TextInput: makeHost('TextInput'),
     ActivityIndicator: makeHost('ActivityIndicator'),
     KeyboardAvoidingView: makeHost('KeyboardAvoidingView'),
+    Modal: (props: Record<string, unknown>) =>
+      props.visible === false ? null : { type: 'Modal', props },
     FlatList,
   };
 

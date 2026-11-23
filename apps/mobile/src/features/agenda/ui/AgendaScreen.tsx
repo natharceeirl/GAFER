@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import type { ResumenServicioTecnico } from '@gafer/contracts';
 import { useAuthStore } from '../../auth/model/use-auth-store';
 import {
   useAgendaStore,
@@ -21,14 +22,20 @@ import {
   ModoFiltroAgenda,
 } from '../model/agenda';
 import { useBorradorStore } from '../../operaciones/model/use-borrador-store';
-import { FormularioDrtScreen } from '../../operaciones';
+import { FormularioDrtScreen, DetalleServicioCerradoModal } from '../../operaciones';
+import {
+  etiquetaEstadoInspeccion,
+  etiquetaTipoServicio,
+  formatearHorarioServicio,
+} from '../../operaciones/model/formato-servicio';
+import { MobileApiClient } from '../../../shared/api/api-client';
 import { Button, AlertBanner } from '../../../shared/ui';
 import { TOKENS } from '../../../shared/theme/tokens';
 
-type VistaAgenda = 'MIS_VISITAS' | 'DISPONIBLES' | 'SEDES_ACTIVAS';
+type VistaAgenda = 'MIS_VISITAS' | 'DISPONIBLES' | 'SEDES_ACTIVAS' | 'CERRADOS';
 
 export const AgendaScreen: React.FC = () => {
-  const { usuario, cerrarSesion } = useAuthStore();
+  const { usuario, token, cerrarSesion } = useAuthStore();
   const {
     items,
     sedesActivas,
@@ -52,11 +59,45 @@ export const AgendaScreen: React.FC = () => {
   const [modoFormularioDrt, setModoFormularioDrt] = useState(false);
   const iniciandoAtencionRef = useRef(false);
 
+  // GAF-104: Estado de servicios cerrados en solo lectura
+  const [serviciosCerrados, setServiciosCerrados] = useState<ResumenServicioTecnico[]>([]);
+  const [cargandoCerrados, setCargandoCerrados] = useState(false);
+  const [errorCerrados, setErrorCerrados] = useState<string | null>(null);
+  const [servicioDetalle, setServicioDetalle] = useState<ResumenServicioTecnico | null>(null);
+  const [modalDetalleVisible, setModalDetalleVisible] = useState(false);
+  const [abrirModalConCorreccion, setAbrirModalConCorreccion] = useState(false);
+
   const tecnicoId = usuario?.id || 'tecnico-defecto-id';
 
   useEffect(() => {
     cargarAgenda(tecnicoId);
   }, [cargarAgenda, tecnicoId]);
+
+  // GAF-104: Cargar servicios cerrados reales desde la API
+  const cargarServiciosCerrados = useCallback(async () => {
+    setCargandoCerrados(true);
+    setErrorCerrados(null);
+    try {
+      const client = new MobileApiClient();
+      const res = await client.obtenerMisServicios(token || undefined);
+      setServiciosCerrados(res);
+    } catch (err: unknown) {
+      setServiciosCerrados([]);
+      const mensaje =
+        err instanceof Error && err.message
+          ? err.message
+          : 'No se pudieron cargar los servicios cerrados. Verifique su conexión.';
+      setErrorCerrados(mensaje);
+    } finally {
+      setCargandoCerrados(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (vistaActiva === 'CERRADOS') {
+      cargarServiciosCerrados();
+    }
+  }, [vistaActiva, cargarServiciosCerrados]);
 
   // Guarda de cierre de sesión para prevención de pérdida de datos offline
   const handleCerrarSesion = () => {
@@ -124,71 +165,48 @@ export const AgendaScreen: React.FC = () => {
     );
   };
 
-  const visitasMostradas =
-    vistaActiva === 'SEDES_ACTIVAS'
-      ? []
-      : filtrarAgendaPorTecnico(items, tecnicoId, vistaActiva as ModoFiltroAgenda);
+  // Filtrado de visitas según la pestaña activa (Decisión C12)
+  const modoFiltro: ModoFiltroAgenda =
+    vistaActiva === 'DISPONIBLES' ? 'DISPONIBLES' : 'MIS_VISITAS';
+  const visitasMostradas = filtrarAgendaPorTecnico(items, tecnicoId, modoFiltro);
 
-  const sedesMostradas =
-    vistaActiva === 'SEDES_ACTIVAS'
-      ? filtrarSedesActivas(sedesActivas, busquedaSede)
-      : [];
+  // Filtrado de sedes activas para contingencia (§8.2)
+  const sedesMostradas = filtrarSedesActivas(sedesActivas, busquedaSede);
 
   const renderItemVisita = ({ item }: { item: ItemAgenda }) => {
     const esTitular = item.tecnicoTitularId === tecnicoId;
     const esAbierta = item.tecnicoTitularId === null;
-    const enCurso = item.estadoCampo === 'EN_CURSO';
+    const estaEnCurso = borrador?.servicioId === item.servicioId;
 
     return (
-      <View style={[styles.fichaOrden, enCurso && styles.fichaEnCurso]}>
-        <View style={styles.cabeceraFicha}>
-          <View style={styles.badgeHora}>
-            <Text style={styles.textoHora}>
-              {item.hora} HRS{item.numeroOrden ? ` · ${item.numeroOrden}` : ''}
+      <View style={styles.fichaOrden}>
+        <View style={styles.fichaCabecera}>
+          <View style={styles.fichaOrdenInfo}>
+            <Text style={styles.numeroOrdenTexto}>
+              {item.numeroOrden || `ORD-${item.id.slice(0, 8)}`}
             </Text>
+            <Text style={styles.horaTexto}>{item.hora} hrs</Text>
           </View>
 
-          <View
-            style={[
-              styles.badgeTitular,
-              esTitular
-                ? styles.badgeTitularAsignada
-                : esAbierta
-                  ? styles.badgeTitularAbierta
-                  : styles.badgeTitularColega,
-            ]}
-          >
-            <Text
-              style={[
-                styles.textoBadgeTitular,
-                esTitular
-                  ? styles.textoTitularAsignada
-                  : esAbierta
-                    ? styles.textoTitularAbierta
-                    : styles.textoTitularColega,
-              ]}
-            >
-              {esTitular
-                ? 'ASIGNADA A MÍ'
-                : esAbierta
-                  ? 'DISPONIBLE (C12)'
-                  : (item.tecnicoTitularNombre || 'COLEGA').toUpperCase()}
-            </Text>
-          </View>
+          {esTitular ? (
+            <View style={styles.badgeTitular}>
+              <Text style={styles.textoBadgeTitular}>ASIGNADA (TITULAR)</Text>
+            </View>
+          ) : esAbierta ? (
+            <View style={styles.badgeAbierta}>
+              <Text style={styles.textoBadgeAbierta}>ABIERTA (SIN TITULAR)</Text>
+            </View>
+          ) : (
+            <View style={styles.badgeColega}>
+              <Text style={styles.textoBadgeColega}>OTRO TÉCNICO</Text>
+            </View>
+          )}
         </View>
 
         <Text style={styles.clienteNombre}>{item.clienteRazonSocial}</Text>
-        <Text style={styles.sedeNombre}>
-          SEDE: <Text style={styles.sedeValor}>{item.sedeNombre}</Text>
-        </Text>
+        <Text style={styles.sedeNombre}>{item.sedeNombre}</Text>
         <Text style={styles.direccionTexto}>{item.sedeDireccion}</Text>
-
-        <View style={styles.separadorFicha} />
-
-        <View style={styles.servicioFila}>
-          <Text style={styles.servicioEtiqueta}>SERVICIO:</Text>
-          <Text style={styles.servicioValor}>{item.servicioTipo}</Text>
-        </View>
+        <Text style={styles.servicioTexto}>{item.servicioTipo}</Text>
 
         {item.observaciones ? (
           <Text style={styles.observacionesTexto} numberOfLines={2}>
@@ -197,16 +215,16 @@ export const AgendaScreen: React.FC = () => {
         ) : null}
 
         <View style={styles.accionesVisita}>
-          {enCurso ? (
+          {estaEnCurso ? (
             <View style={styles.badgeEnCurso}>
-              <Text style={styles.textoEnCurso}>● INSPECCIÓN ACTIVA EN CURSO</Text>
+              <Text style={styles.textoEnCurso}>● EN ATENCIÓN ACTIVA</Text>
             </View>
           ) : (
             <Button
               testID={`boton-atender-${item.id}`}
-              titulo="Iniciar Inspección"
+              titulo={esTitular ? 'Atender Visita' : 'Tomar Visita (C12)'}
               onPress={() => handleIniciarVisita(item)}
-              variante="primario"
+              variante={esTitular ? 'primario' : 'secundario'}
               style={styles.botonAtender}
             />
           )}
@@ -221,8 +239,8 @@ export const AgendaScreen: React.FC = () => {
       (borrador?.sedeNombre === item.nombre || sedeSeleccionada?.id === item.id);
 
     return (
-      <View style={[styles.fichaOrden, estaSeleccionada && styles.fichaEnCurso]}>
-        <View style={styles.cabeceraFicha}>
+      <View style={styles.fichaOrden}>
+        <View style={styles.fichaCabecera}>
           <Text style={styles.sedeTitulo}>{item.nombre}</Text>
           <View style={styles.badgeActivo}>
             <Text style={styles.textoBadgeActivo}>SEDE ACTIVA</Text>
@@ -253,6 +271,62 @@ export const AgendaScreen: React.FC = () => {
     );
   };
 
+  // GAF-104: Renderizado de tarjetas de servicios cerrados en solo lectura
+  const renderItemServicioCerrado = ({ item }: { item: ResumenServicioTecnico }) => {
+    const etiquetaEstado = etiquetaEstadoInspeccion(item.estado);
+    return (
+      <View style={styles.tarjetaCerrado} testID={`tarjeta-cerrado-${item.id}`}>
+        <View style={styles.cabeceraCerrado}>
+          <Text style={styles.codigoCerrado}>{item.codigoInspeccion}</Text>
+          <View style={styles.badgeCerradoSoloLectura}>
+            <Text style={styles.textoBadgeCerrado}>🔒 {etiquetaEstado}</Text>
+          </View>
+        </View>
+
+        <Text style={styles.clienteCerrado}>
+          {item.clienteRazonSocial || 'Cliente no especificado'}
+        </Text>
+        <Text style={styles.sedeCerrado}>
+          Sede: {item.sedeNombre || 'No especificada'}
+        </Text>
+        <Text style={styles.servicioCerrado}>
+          Servicio: {etiquetaTipoServicio(item.servicioTipo)}
+        </Text>
+        <Text style={styles.horarioCerrado}>
+          📅 {item.fechaEjecucion} · {formatearHorarioServicio(item.horaInicio, item.horaFin)}
+        </Text>
+
+        <View style={styles.accionesCerrado}>
+          <TouchableOpacity
+            testID={`boton-ver-reporte-${item.id}`}
+            style={styles.botonVerReporte}
+            onPress={() => {
+              setAbrirModalConCorreccion(false);
+              setServicioDetalle(item);
+              setModalDetalleVisible(true);
+            }}
+          >
+            <Text style={styles.textoBotonVerReporte}>👁️ Ver Reporte</Text>
+          </TouchableOpacity>
+
+          {item.puedeSolicitarCorreccion ? (
+            <TouchableOpacity
+              testID={`boton-pedir-correccion-${item.id}`}
+              style={styles.botonPedirCorreccion}
+              onPress={() => {
+                setAbrirModalConCorreccion(true);
+                setServicioDetalle(item);
+                setModalDetalleVisible(true);
+              }}
+            >
+              <Text style={styles.textoBotonPedirCorreccion}>📝 Pedir Corrección</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
+    );
+  };
+
   if (modoFormularioDrt) {
     return <FormularioDrtScreen onVolver={() => setModoFormularioDrt(false)} />;
   }
@@ -266,7 +340,7 @@ export const AgendaScreen: React.FC = () => {
         <View style={styles.headerInfo}>
           <Text style={styles.appTitulo}>GAFER SANEAMIENTO AMBIENTAL</Text>
           <Text style={styles.usuarioNombre}>
-            {usuario ? usuario.nombres : 'Técnico Operador'}
+            {usuario ? `${usuario.nombres} ${usuario.apellidos}` : 'Técnico Operador'}
           </Text>
           <Text style={styles.fechaTexto}>
             {new Date().toLocaleDateString('es-PE', {
@@ -349,7 +423,24 @@ export const AgendaScreen: React.FC = () => {
         />
       ) : null}
 
-      {/* Pestañas de control de visitas (Decisión C12 + Sedes Activas §8.2) */}
+      {vistaActiva === 'CERRADOS' && errorCerrados ? (
+        <View style={styles.alertaMensaje}>
+          <AlertBanner
+            tipo="error"
+            mensaje={errorCerrados}
+            onCerrar={() => setErrorCerrados(null)}
+          />
+          <Button
+            testID="boton-reintentar-cerrados"
+            titulo="Reintentar carga"
+            onPress={cargarServiciosCerrados}
+            variante="secundario"
+            style={{ marginTop: 6 }}
+          />
+        </View>
+      ) : null}
+
+      {/* Pestañas de control de visitas (Decisión C12 + Sedes Activas §8.2 + Cerrados GAF-104) */}
       <View style={styles.tabsContainer}>
         <TouchableOpacity
           style={[styles.tab, vistaActiva === 'MIS_VISITAS' && styles.tabActivo]}
@@ -369,7 +460,7 @@ export const AgendaScreen: React.FC = () => {
           <Text
             style={[styles.tabTexto, vistaActiva === 'DISPONIBLES' && styles.tabTextoActivo]}
           >
-            ABIERTAS (C12)
+            ABIERTAS
           </Text>
         </TouchableOpacity>
 
@@ -380,7 +471,19 @@ export const AgendaScreen: React.FC = () => {
           <Text
             style={[styles.tabTexto, vistaActiva === 'SEDES_ACTIVAS' && styles.tabTextoActivo]}
           >
-            SEDES ACTIVAS
+            SEDES
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          testID="tab-cerrados"
+          style={[styles.tab, vistaActiva === 'CERRADOS' && styles.tabActivo]}
+          onPress={() => setVistaActiva('CERRADOS')}
+        >
+          <Text
+            style={[styles.tabTexto, vistaActiva === 'CERRADOS' && styles.tabTextoActivo]}
+          >
+            CERRADOS
           </Text>
         </TouchableOpacity>
       </View>
@@ -401,11 +504,30 @@ export const AgendaScreen: React.FC = () => {
 
       {/* Lista de Fichas de Campo */}
       <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.cuerpo}>
-        {cargando ? (
+        {cargando || (vistaActiva === 'CERRADOS' && cargandoCerrados) ? (
           <View style={styles.cargandoContenedor}>
             <ActivityIndicator size="large" color={TOKENS.marca} />
-            <Text style={styles.cargandoTexto}>Cargando agenda de operaciones...</Text>
+            <Text style={styles.cargandoTexto}>
+              {vistaActiva === 'CERRADOS'
+                ? 'Cargando servicios cerrados en solo lectura...'
+                : 'Cargando agenda de operaciones...'}
+            </Text>
           </View>
+        ) : vistaActiva === 'CERRADOS' ? (
+          <FlatList
+            data={serviciosCerrados}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItemServicioCerrado}
+            contentContainerStyle={styles.listaContenido}
+            ListEmptyComponent={
+              <View style={styles.vacioContenedor}>
+                <Text style={styles.vacioTitulo}>Sin servicios cerrados</Text>
+                <Text style={styles.vacioSubtitulo}>
+                  Aún no cuenta con reportes de servicio cerrados en su terminal móvil.
+                </Text>
+              </View>
+            }
+          />
         ) : vistaActiva === 'SEDES_ACTIVAS' ? (
           <FlatList
             data={sedesMostradas}
@@ -440,6 +562,21 @@ export const AgendaScreen: React.FC = () => {
           />
         )}
       </SafeAreaView>
+
+      {/* Modal de Detalle de Servicio Cerrado y Solicitud de Corrección (GAF-104) */}
+      <DetalleServicioCerradoModal
+        visible={modalDetalleVisible}
+        servicio={servicioDetalle}
+        token={token || undefined}
+        abrirConCorreccion={abrirModalConCorreccion}
+        onCerrar={() => {
+          setModalDetalleVisible(false);
+          setAbrirModalConCorreccion(false);
+        }}
+        onCorreccionEnviada={() => {
+          cargarServiciosCerrados();
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -476,18 +613,19 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   fechaTexto: {
-    color: '#d4edda',
+    color: '#a3e635',
     fontSize: 11,
-    marginTop: 2,
+    fontWeight: '700',
+    marginTop: 1,
     textTransform: 'capitalize',
   },
   botonSalir: {
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: '#034527',
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: TOKENS.radiusSm,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    borderColor: '#056036',
   },
   textoSalir: {
     color: TOKENS.marcaInk,
@@ -497,19 +635,17 @@ const styles = StyleSheet.create({
   },
   placaInspeccionActiva: {
     backgroundColor: TOKENS.panelRaised,
-    borderLeftWidth: 4,
-    borderLeftColor: TOKENS.marca,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     borderBottomWidth: 1.5,
     borderBottomColor: TOKENS.ruleStrong,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   placaInspeccionInfo: {
     flex: 1,
-    paddingRight: 10,
+    marginRight: 10,
   },
   indicadorEnServicio: {
     flexDirection: 'row',
@@ -517,23 +653,22 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   puntoVerdeActivo: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: TOKENS.marca,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: TOKENS.verde,
     marginRight: 6,
   },
   indicadorTexto: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
-    color: TOKENS.marca,
+    color: TOKENS.verde,
     letterSpacing: 0.6,
   },
   placaClienteTexto: {
-    fontSize: 14,
-    fontWeight: '900',
+    fontSize: 13,
+    fontWeight: '800',
     color: TOKENS.ink,
-    letterSpacing: 0.2,
   },
   placaDetalleTexto: {
     fontSize: 11,
@@ -589,10 +724,10 @@ const styles = StyleSheet.create({
     backgroundColor: TOKENS.panelRaised,
   },
   tabTexto: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: TOKENS.inkFaint,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   tabTextoActivo: {
     color: TOKENS.marca,
@@ -640,100 +775,99 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1.5,
     borderColor: TOKENS.ruleStrong,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  fichaEnCurso: {
-    borderColor: TOKENS.marca,
-    borderWidth: 2,
-    backgroundColor: TOKENS.panelRaised,
-  },
-  cabeceraFicha: {
+  fichaCabecera: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 8,
   },
-  badgeHora: {
-    backgroundColor: TOKENS.marca,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: TOKENS.radiusSm,
+  fichaOrdenInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  textoHora: {
-    color: TOKENS.marcaInk,
+  numeroOrdenTexto: {
     fontSize: 12,
     fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  badgeTitular: {
+    color: TOKENS.ink,
+    backgroundColor: TOKENS.panelRaised,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: TOKENS.radiusSm,
     borderWidth: 1,
+    borderColor: TOKENS.rule,
+  },
+  horaTexto: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: TOKENS.marca,
+  },
+  badgeTitular: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#10b981',
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: TOKENS.radiusSm,
   },
   textoBadgeTitular: {
-    fontSize: 10,
+    color: '#047857',
+    fontSize: 9,
     fontWeight: '800',
     letterSpacing: 0.4,
   },
-  badgeTitularAsignada: {
-    backgroundColor: TOKENS.verdeInk,
-    borderColor: TOKENS.verde,
+  badgeAbierta: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#f59e0b',
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: TOKENS.radiusSm,
   },
-  textoTitularAsignada: {
-    color: TOKENS.verde,
+  textoBadgeAbierta: {
+    color: '#b45309',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.4,
   },
-  badgeTitularAbierta: {
-    backgroundColor: TOKENS.infoInk,
-    borderColor: TOKENS.info,
-  },
-  textoTitularAbierta: {
-    color: TOKENS.info,
-  },
-  badgeTitularColega: {
+  badgeColega: {
     backgroundColor: TOKENS.panelRaised,
     borderColor: TOKENS.ruleStrong,
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: TOKENS.radiusSm,
   },
-  textoTitularColega: {
-    color: TOKENS.inkSoft,
+  textoBadgeColega: {
+    color: TOKENS.inkFaint,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.4,
   },
   clienteNombre: {
     fontSize: 15,
     fontWeight: '800',
     color: TOKENS.ink,
-    marginBottom: 3,
+    marginBottom: 2,
   },
   sedeNombre: {
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '700',
     color: TOKENS.inkSoft,
     marginBottom: 2,
-    fontWeight: '700',
-  },
-  sedeValor: {
-    fontWeight: '800',
-    color: TOKENS.ink,
   },
   direccionTexto: {
     fontSize: 12,
     color: TOKENS.inkFaint,
     marginBottom: 6,
   },
-  separadorFicha: {
-    height: 1,
-    backgroundColor: TOKENS.rule,
-    marginVertical: 6,
-  },
-  servicioFila: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  servicioEtiqueta: {
-    fontSize: 11,
-    color: TOKENS.inkFaint,
-    fontWeight: '700',
-    marginRight: 6,
-  },
-  servicioValor: {
+  servicioTexto: {
     fontSize: 12,
     fontWeight: '800',
     color: TOKENS.marca,
@@ -799,5 +933,96 @@ const styles = StyleSheet.create({
     color: TOKENS.inkFaint,
     textAlign: 'center',
     lineHeight: 16,
+  },
+
+  // Estilos GAF-104: Tarjetas de servicios cerrados
+  tarjetaCerrado: {
+    backgroundColor: TOKENS.panel,
+    borderRadius: TOKENS.radius,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: TOKENS.ruleStrong,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  cabeceraCerrado: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  codigoCerrado: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: TOKENS.ink,
+  },
+  badgeCerradoSoloLectura: {
+    backgroundColor: '#334155',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  textoBadgeCerrado: {
+    color: '#f8fafc',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  clienteCerrado: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: TOKENS.ink,
+    marginBottom: 2,
+  },
+  sedeCerrado: {
+    fontSize: 12,
+    color: TOKENS.inkSoft,
+    marginBottom: 4,
+  },
+  servicioCerrado: {
+    fontSize: 12,
+    color: TOKENS.marca,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  horarioCerrado: {
+    fontSize: 11,
+    color: TOKENS.inkFaint,
+    marginBottom: 10,
+  },
+  accionesCerrado: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  botonVerReporte: {
+    flex: 1,
+    backgroundColor: TOKENS.panelRaised,
+    borderWidth: 1,
+    borderColor: TOKENS.ruleStrong,
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  textoBotonVerReporte: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: TOKENS.ink,
+  },
+  botonPedirCorreccion: {
+    flex: 1,
+    backgroundColor: '#0284c7',
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  textoBotonPedirCorreccion: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ffffff',
   },
 });

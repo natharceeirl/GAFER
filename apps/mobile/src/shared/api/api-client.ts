@@ -1,4 +1,12 @@
-import { LoginRequest, LoginResponse, LoginResponseSchema } from '@gafer/contracts';
+import {
+  LoginRequest,
+  LoginResponse,
+  LoginResponseSchema,
+  ResumenServicioTecnico,
+  ResumenServicioTecnicoSchema,
+  SolicitudCorreccion,
+  SolicitudCorreccionSchema,
+} from '@gafer/contracts';
 
 export class ApiError extends Error {
   constructor(
@@ -134,5 +142,165 @@ export class MobileApiClient {
 
     const raw = await response.json();
     return LoginResponseSchema.parse(raw);
+  }
+
+  /**
+   * Consulta el listado de servicios cerrados donde participó el técnico autenticado (GAF-104).
+   * Se consume en modo solo lectura para auditoría y consulta en campo.
+   */
+  async obtenerMisServicios(token?: string): Promise<ResumenServicioTecnico[]> {
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    let response: Response;
+    try {
+      response = await this.fetchFn(
+        `${this.activeBaseUrl}/api/operaciones/inspecciones/mis-servicios`,
+        {
+          method: 'GET',
+          headers,
+          signal: controller.signal as any,
+        },
+      );
+    } catch (err: unknown) {
+      const errorObj = err as { name?: string };
+      if (errorObj?.name === 'AbortError') {
+        throw new ErrorDeConexion(
+          `Tiempo de espera agotado al listar servicios en ${this.activeBaseUrl}.`,
+        );
+      }
+      throw new ErrorDeConexion(
+        `No se pudo conectar para listar servicios en ${this.activeBaseUrl}`,
+      );
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      let errorData: any = null;
+      try {
+        errorData = await response.json();
+      } catch {
+        // Respuesta sin cuerpo JSON
+      }
+      const mensaje =
+        errorData?.message || `Error al consultar mis servicios (${response.status})`;
+      throw new ApiError(mensaje, response.status, errorData);
+    }
+
+    let data: unknown;
+    try {
+      data = await response.json();
+    } catch {
+      throw new ApiError(
+        'Respuesta inválida del servidor al listar servicios',
+        response.status,
+      );
+    }
+
+    if (!Array.isArray(data)) {
+      throw new ApiError(
+        'Respuesta inesperada: se esperaba un listado de servicios',
+        response.status,
+      );
+    }
+
+    return data.map((item, idx) => {
+      const parsed = ResumenServicioTecnicoSchema.safeParse(item);
+      if (!parsed.success) {
+        throw new ApiError(
+          `Formato de servicio inválido recibido del servidor (elemento #${idx + 1})`,
+          response.status,
+          parsed.error.issues,
+        );
+      }
+      return parsed.data;
+    });
+  }
+
+  /**
+   * Envía una solicitud formal de corrección para un servicio cerrado (GAF-104).
+   * Registra el motivo en auditoría para que lo gestione o autorice supervisión.
+   */
+  async solicitarCorreccion(
+    inspeccionId: string,
+    motivo: string,
+    token?: string,
+  ): Promise<{ ok: boolean; mensaje: string; inspeccionId: string; solicitadaEn: string }> {
+    const payload: SolicitudCorreccion = { motivo: motivo.trim() };
+    const validacion = SolicitudCorreccionSchema.safeParse(payload);
+    if (!validacion.success) {
+      const detalle =
+        validacion.error.issues[0]?.message || 'El motivo de la corrección no es válido';
+      throw new ApiError(detalle, 400, validacion.error.issues);
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    let response: Response;
+    try {
+      response = await this.fetchFn(
+        `${this.activeBaseUrl}/api/operaciones/inspecciones/${inspeccionId}/solicitar-correccion`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(validacion.data),
+          signal: controller.signal as any,
+        },
+      );
+    } catch (err: unknown) {
+      const errorObj = err as { name?: string };
+      if (errorObj?.name === 'AbortError') {
+        throw new ErrorDeConexion(
+          `Tiempo de espera agotado al solicitar corrección en ${this.activeBaseUrl}.`,
+        );
+      }
+      throw new ErrorDeConexion(
+        `No se pudo conectar para solicitar corrección en ${this.activeBaseUrl}`,
+      );
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      let errorData: any = null;
+      try {
+        errorData = await response.json();
+      } catch {
+        // Respuesta sin cuerpo JSON
+      }
+      const mensaje = errorData?.message || `Error al solicitar corrección (${response.status})`;
+      throw new ApiError(mensaje, response.status, errorData);
+    }
+
+    try {
+      return (await response.json()) as {
+        ok: boolean;
+        mensaje: string;
+        inspeccionId: string;
+        solicitadaEn: string;
+      };
+    } catch {
+      throw new ApiError(
+        'Respuesta inválida del servidor al solicitar corrección',
+        response.status,
+      );
+    }
   }
 }
