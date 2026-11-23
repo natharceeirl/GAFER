@@ -6,7 +6,7 @@
 import { SqliteDatabasePort } from './database-port';
 import { ejecutarMigraciones } from './migrations';
 import { MemorySqliteAdapter } from './memory-sqlite-adapter';
-import { ExpoSqliteAdapter } from './expo-sqlite-adapter';
+import { ExpoSqliteAdapter, ExpoSQLiteDatabaseLike } from './expo-sqlite-adapter';
 
 export * from './database-port';
 export * from './migrations';
@@ -35,8 +35,11 @@ function esEntornoNativo(): boolean {
 }
 
 async function abrirBaseDeDatosNativa(): Promise<SqliteDatabasePort> {
-  const moduloExpo = 'expo-sqlite';
-  const SQLite = await import(/* @vite-ignore */ moduloExpo);
+  // Referencia estática con literal obligatoria para que Metro incluya expo-sqlite en el bundle nativo.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const SQLite = require('expo-sqlite') as {
+    openDatabaseAsync: (databaseName: string) => Promise<ExpoSQLiteDatabaseLike>;
+  };
   const nativeDb = await SQLite.openDatabaseAsync(NOMBRE_BASE_DATOS);
   return new ExpoSqliteAdapter(nativeDb);
 }
@@ -68,7 +71,17 @@ export async function inicializarBaseDeDatos(
       dbPort = new MemorySqliteAdapter();
     }
 
-    await ejecutarMigraciones(dbPort);
+    try {
+      await ejecutarMigraciones(dbPort);
+    } catch (error) {
+      try {
+        await dbPort.closeAsync();
+      } catch {
+        // No ocultar el error original de migración si el cierre también falla.
+      }
+      throw error;
+    }
+
     instanciaDb = dbPort;
     return dbPort;
   })();

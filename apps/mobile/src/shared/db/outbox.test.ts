@@ -276,4 +276,63 @@ describe('OutboxQueue (Móvil Offline-First con sync.v1 - GAP-05)', () => {
       expect(filas).toHaveLength(1);
     });
   });
+
+  describe('consistencia memoria vs SQLite ante errores de escritura (F5)', () => {
+    it('marcarSincronizadas no muta la cola en memoria si falla la transacción SQLite', async () => {
+      const { MemorySqliteAdapter, ejecutarMigraciones } = await import('./sqlite');
+      const db = new MemorySqliteAdapter();
+      await ejecutarMigraciones(db);
+
+      const queue = new OutboxQueue(db);
+      await queue.encolar(dummyOperacion);
+
+      const spyTx = vi
+        .spyOn(db, 'withExclusiveTransactionAsync')
+        .mockRejectedValueOnce(new Error('SQLITE_FULL'));
+
+      await expect(queue.marcarSincronizadas([dummyOperacion.operationId])).rejects.toThrow(
+        'SQLITE_FULL',
+      );
+      spyTx.mockRestore();
+
+      // La operación sigue pendiente tanto en memoria como en SQLite.
+      expect(queue.obtenerPendientes()).toHaveLength(1);
+      expect(queue.obtenerPendientes()[0].sincronizado).toBe(false);
+      const fila = await db.getFirstAsync<{ status: string }>(
+        'SELECT status FROM sync_outbox WHERE operation_id = ?;',
+        [dummyOperacion.operationId],
+      );
+      expect(fila?.status).toBe('PENDING');
+    });
+
+    it('limpiarSincronizados no descarta la cola en memoria si falla el DELETE en SQLite', async () => {
+      const { MemorySqliteAdapter, ejecutarMigraciones } = await import('./sqlite');
+      const db = new MemorySqliteAdapter();
+      await ejecutarMigraciones(db);
+
+      const queue = new OutboxQueue(db);
+      await queue.encolar(dummyOperacion);
+      await queue.marcarSincronizadas([dummyOperacion.operationId]);
+
+      const spyTx = vi
+        .spyOn(db, 'withExclusiveTransactionAsync')
+        .mockRejectedValueOnce(new Error('SQLITE_IOERR'));
+
+      await expect(queue.limpiarSincronizados()).rejects.toThrow('SQLITE_IOERR');
+      spyTx.mockRestore();
+
+      // La fila sigue en SQLite y en la cola en memoria (encolar devuelve el registro en memoria sin tocar SQLite).
+      const spyEncolarTx = vi.spyOn(db, 'withExclusiveTransactionAsync');
+      const enMemoria = await queue.encolar(dummyOperacion);
+      expect(spyEncolarTx).not.toHaveBeenCalled();
+      expect(enMemoria.sincronizado).toBe(true);
+      spyEncolarTx.mockRestore();
+
+      const fila = await db.getFirstAsync<{ status: string }>(
+        'SELECT status FROM sync_outbox WHERE operation_id = ?;',
+        [dummyOperacion.operationId],
+      );
+      expect(fila?.status).toBe('SYNCED');
+    });
+  });
 });

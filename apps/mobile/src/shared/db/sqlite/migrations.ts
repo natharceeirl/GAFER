@@ -5,7 +5,7 @@
 
 import { SqliteDatabasePort } from './database-port';
 
-export const ESQUEMA_VERSION_ACTUAL = 2;
+export const ESQUEMA_VERSION_ACTUAL = 3;
 
 export interface Migracion {
   version: number;
@@ -129,6 +129,64 @@ export const MIGRACIONES: Migracion[] = [
       // restauran para nadie, pero se conservan en disco para no perder datos de campo.
       await db.execAsync(`
         ALTER TABLE borradores_inspeccion ADD COLUMN usuario_id TEXT;
+
+        CREATE INDEX IF NOT EXISTS idx_borradores_usuario_actualizado
+          ON borradores_inspeccion(usuario_id, actualizado_en);
+      `);
+    },
+  },
+  {
+    version: 3,
+    descripcion:
+      'Aislamiento estricto de borradores por usuario: clave primaria compuesta (servicio_id, usuario_id) en borradores_inspeccion',
+    ejecutar: async (db: SqliteDatabasePort) => {
+      // Las filas heredadas sin usuario_id se migran con '' para conservar datos de campo
+      // sin exponerlos a ningún técnico autenticado ni permitir colisiones por servicio_id.
+      await db.execAsync(`
+        CREATE TABLE borradores_inspeccion_v3 (
+          servicio_id TEXT NOT NULL,
+          usuario_id TEXT NOT NULL DEFAULT '',
+          cliente_razon_social TEXT,
+          sede_nombre TEXT,
+          numero_orden TEXT,
+          servicio_tipo TEXT,
+          observaciones TEXT NOT NULL DEFAULT '',
+          datos_json TEXT,
+          actualizado_en TEXT NOT NULL,
+          server_version INTEGER NOT NULL DEFAULT 0,
+          sync_status TEXT NOT NULL DEFAULT 'PENDING_SYNC',
+          PRIMARY KEY (servicio_id, usuario_id)
+        );
+
+        INSERT INTO borradores_inspeccion_v3 (
+          servicio_id,
+          usuario_id,
+          cliente_razon_social,
+          sede_nombre,
+          numero_orden,
+          servicio_tipo,
+          observaciones,
+          datos_json,
+          actualizado_en,
+          server_version,
+          sync_status
+        )
+        SELECT
+          servicio_id,
+          COALESCE(usuario_id, ''),
+          cliente_razon_social,
+          sede_nombre,
+          numero_orden,
+          servicio_tipo,
+          observaciones,
+          datos_json,
+          actualizado_en,
+          server_version,
+          sync_status
+        FROM borradores_inspeccion;
+
+        DROP TABLE borradores_inspeccion;
+        ALTER TABLE borradores_inspeccion_v3 RENAME TO borradores_inspeccion;
 
         CREATE INDEX IF NOT EXISTS idx_borradores_usuario_actualizado
           ON borradores_inspeccion(usuario_id, actualizado_en);

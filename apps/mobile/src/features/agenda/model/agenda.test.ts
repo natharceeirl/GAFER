@@ -215,8 +215,53 @@ describe('Agenda de Campo (Decisión C12 / Spec §8.1)', () => {
       expect(useBorradorStore.getState().borrador?.observaciones).toBe(
         'Cebadero 4 con consumo total',
       );
-      const enDisco = await new BorradorRepository().obtenerPorServicioId(visita.servicioId);
+      const enDisco = await new BorradorRepository().obtenerPorServicioId(
+        visita.servicioId,
+        tecnicoId,
+      );
       expect(enDisco?.observaciones).toBe('Cebadero 4 con consumo total');
+    });
+
+    it('al reabrir la app cargarAgenda restaura el borrador de SQLite y marca la visita EN_CURSO (F3)', async () => {
+      await useAgendaStore.getState().cargarAgenda(tecnicoId);
+      const visita = useAgendaStore.getState().items[0];
+      await useAgendaStore.getState().iniciarAtencionVisita(visita.id);
+      await useBorradorStore.getState().actualizarObservaciones('Notas previas al cierre');
+
+      // Simular reapertura sin restaurar manualmente useBorradorStore antes de cargarAgenda.
+      useBorradorStore.getState().descargarDeMemoria();
+      useAgendaStore.getState().reiniciarEstado();
+
+      await useAgendaStore.getState().cargarAgenda(tecnicoId);
+
+      const visitaRecargada = useAgendaStore
+        .getState()
+        .items.find((v) => v.servicioId === visita.servicioId);
+      expect(visitaRecargada?.estadoCampo).toBe('EN_CURSO');
+      expect(useBorradorStore.getState().borrador?.servicioId).toBe(visita.servicioId);
+      expect(useBorradorStore.getState().borrador?.observaciones).toBe('Notas previas al cierre');
+    });
+
+    it('en sede de contingencia compartida el técnico B no hereda el borrador del técnico A (F2)', async () => {
+      const sede = useAgendaStore.getState().sedesActivas[0];
+
+      await useAgendaStore.getState().cargarAgenda('tec-A');
+      await useAgendaStore.getState().iniciarAtencionEnSede(sede);
+      await useBorradorStore.getState().actualizarObservaciones('Hallazgo reservado de A');
+
+      // Técnico A cierra sesión; técnico B abre la misma sede de contingencia.
+      useBorradorStore.getState().descargarDeMemoria();
+      useAgendaStore.getState().reiniciarEstado();
+
+      await useAgendaStore.getState().cargarAgenda('tec-B');
+      await useAgendaStore.getState().iniciarAtencionEnSede(sede);
+
+      const borradorB = useBorradorStore.getState().borrador;
+      expect(borradorB?.usuarioId).toBe('tec-B');
+      expect(borradorB?.observaciones).toBe('');
+
+      const borradorAEnDisco = await new BorradorRepository().obtenerActivo('tec-A');
+      expect(borradorAEnDisco?.observaciones).toBe('Hallazgo reservado de A');
     });
 
     it('si el borrador no se guarda en disco la visita no pasa a EN_CURSO', async () => {

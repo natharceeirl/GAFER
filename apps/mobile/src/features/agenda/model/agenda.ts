@@ -242,9 +242,23 @@ export const useAgendaStore = create<AgendaState>((set, get) => ({
         },
       ];
 
-      const borradorActivo = useBorradorStore.getState().borrador;
+      let borradorActivo = useBorradorStore.getState().borrador;
+      if (!borradorActivo || (borradorActivo.usuarioId && borradorActivo.usuarioId !== tecnicoId)) {
+        try {
+          borradorActivo = await useBorradorStore.getState().restaurarActivoDeUsuario(tecnicoId);
+        } catch {
+          borradorActivo = null;
+        }
+      }
+
+      if (get().tecnicoId !== tecnicoId) {
+        return;
+      }
+
       const visitasConEstado = visitasSimuladas.map((v) =>
-        borradorActivo && v.servicioId === borradorActivo.servicioId
+        borradorActivo &&
+        (!borradorActivo.usuarioId || borradorActivo.usuarioId === tecnicoId) &&
+        v.servicioId === borradorActivo.servicioId
           ? { ...v, estadoCampo: 'EN_CURSO' as EstadoCampo }
           : v,
       );
