@@ -29,6 +29,7 @@ import {
   ItemEstacionPlanilla,
   PorcentajeConsumo,
   EstadoFisicoEstacion,
+  FotoEvidenciaDrt,
   OperacionSyncSchema,
 } from '@gafer/contracts';
 import {
@@ -43,6 +44,11 @@ import {
   PORCENTAJES_CON_CONSUMO,
   ESTADOS_FISICOS,
 } from '../model/estaciones-drt';
+import { MAX_TAMANO_FOTO_BYTES } from '../model/fotos-compresion';
+import { ArchivosLocalRepository } from '../model/archivos-local.repository';
+import { CapturadorFotosPort } from '../model/captura-fotos';
+import { FirmaPadModal, ResultadoFirma } from './FirmaPadModal';
+import { GaleriaEvidenciasFotos } from './GaleriaEvidenciasFotos';
 import { useAuthStore } from '../../auth/model/use-auth-store';
 import { useBorradorStore } from '../model/use-borrador-store';
 import { Button, AlertBanner } from '../../../shared/ui';
@@ -50,6 +56,8 @@ import { TOKENS } from '../../../shared/theme/tokens';
 
 interface FormularioDrtScreenProps {
   onVolver: () => void;
+  archivosRepo?: ArchivosLocalRepository;
+  capturadorFotos?: CapturadorFotosPort;
 }
 
 const LABELS_ACTIVIDAD: Record<ActividadDrt, string> = {
@@ -92,6 +100,7 @@ const MAPA_ETIQUETAS_VALIDACION: Record<string, string> = {
   'servicioId': 'El identificador del servicio no es válido (UUID). Vuelva a iniciar la visita desde la agenda.',
   'firmas.clienteConformidadNombre': 'Falta el Nombre del contacto del cliente en la Sección 7 (Firmas y Conformidad).',
   'firmas.clienteConformidadCargo': 'Falta el Cargo del contacto del cliente en la Sección 7 (Firmas y Conformidad).',
+  'firmas.firmaDigitalBase64': 'Debe capturar la firma del cliente en pantalla o marcar "Responsable no disponible" en la Sección 7.',
   'clienteRazonSocial': 'La Razón Social del cliente no puede estar vacía (Sección 1).',
   'sedeDireccion': 'La Dirección o Sede no puede estar vacía (Sección 1).',
   'horaInicio': 'La Hora de Inicio es obligatoria con formato HH:MM (Sección 1).',
@@ -114,11 +123,16 @@ function horaActualIso(): string {
   return `${hours}:${minutes}`;
 }
 
-export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolver }) => {
+export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({
+  onVolver,
+  archivosRepo,
+  capturadorFotos,
+}) => {
   const { usuario } = useAuthStore();
   const borrador = useBorradorStore((state) => state.borrador);
   const actualizarDrt = useBorradorStore((state) => state.actualizarDrt);
   const finalizarServicioDrt = useBorradorStore((state) => state.finalizarServicioDrt);
+  const repoArchivos = useMemo(() => archivosRepo ?? new ArchivosLocalRepository(), [archivosRepo]);
 
   const [guardando, setGuardando] = useState(false);
   const [finalizado, setFinalizado] = useState(false);
@@ -170,10 +184,14 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
         clienteConformidadNombre: '',
         clienteConformidadCargo: '',
         fecha: fechaActualIso(),
+        responsableNoDisponible: false,
       },
       planillaEstaciones: estacionesIniciales,
+      fotos: [],
     };
   });
+
+  const [modalFirmaVisible, setModalFirmaVisible] = useState(false);
 
   // Referencia mutable siempre actualizada para auto-guardado seguro
   const ultimaActaRef = useRef(acta);
@@ -379,7 +397,34 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
       return;
     }
 
-    // 3. Verificar sesión válida con UUID de técnico antes de encolar en sync_outbox
+    // 3. Validar conformidad y firma (§13, GAF-36)
+    if (!acta.firmas.responsableNoDisponible) {
+      if (!acta.firmas.clienteConformidadNombre.trim() || !acta.firmas.clienteConformidadCargo.trim()) {
+        setErrorValidacion('Debe ingresar el nombre y cargo del contacto del cliente o marcar "Responsable no disponible".');
+        Alert.alert('Firma Incompleta', 'Ingrese nombre y cargo del contacto del cliente, o abra el pad de firma y marque "Responsable no disponible".');
+        return;
+      }
+      const tieneFirmaRegistrada = Boolean(
+        (acta.firmas.firmaArchivoId && acta.firmas.firmaRutaLocalRelativa) ||
+          acta.firmas.firmaDigitalBase64,
+      );
+      if (!tieneFirmaRegistrada) {
+        setErrorValidacion('Debe capturar la firma del cliente en pantalla o marcar que el responsable no estuvo disponible.');
+        Alert.alert('Falta Firma en Pantalla', 'Capture la firma manuscrita en pantalla o marque "Responsable no disponible".');
+        return;
+      }
+    }
+
+    // 4. Validar tamaño de fotos (Decisión C15: <= 1 MB por foto)
+    for (const foto of acta.fotos || []) {
+      if (foto.tamanoBytes > MAX_TAMANO_FOTO_BYTES) {
+        setErrorValidacion(`La foto ${foto.nombre} excede 1 MB (${Math.round(foto.tamanoBytes / 1024)} KB). La regla C15 exige <= 1 MB.`);
+        Alert.alert('Foto Excede Límite C15', `La foto ${foto.nombre} supera el tamaño permitido.`);
+        return;
+      }
+    }
+
+    // 5. Verificar sesión válida con UUID de técnico antes de encolar en sync_outbox
     const actorIdCheck = OperacionSyncSchema.shape.actorId.safeParse(usuario?.id);
     if (!actorIdCheck.success) {
       Alert.alert(
@@ -431,6 +476,78 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
         },
       ],
     );
+  };
+
+  // Manejador de firma capturada o ausencia de responsable (§13, GAF-36)
+  // Persiste la firma de forma durable en filesystem + files_local + sync_outbox antes de actualizar UI (§2.4, §13.2).
+  const handleGuardarFirmaModal = async (resultado: ResultadoFirma) => {
+    const actaActual = ultimaActaRef.current;
+    const firmaArchivoPrevioId = actaActual.firmas.firmaArchivoId;
+
+    if (resultado.responsableNoDisponible) {
+      if (firmaArchivoPrevioId) {
+        try {
+          await repoArchivos.eliminar(firmaArchivoPrevioId);
+        } catch {
+          // Mantener el flujo de ausencia si el archivo anterior ya no existía.
+        }
+      }
+      setActa((prev) => ({
+        ...prev,
+        firmas: {
+          ...prev.firmas,
+          firmaDigitalBase64: undefined,
+          firmaArchivoId: undefined,
+          firmaRutaLocalRelativa: undefined,
+          responsableNoDisponible: true,
+          motivoNoDisponible: resultado.motivoNoDisponible,
+          clienteConformidadNombre:
+            prev.firmas.clienteConformidadNombre || 'Responsable No Disponible',
+          clienteConformidadCargo: prev.firmas.clienteConformidadCargo || 'N/A',
+        },
+      }));
+      return;
+    }
+
+    if (!resultado.firmaBase64) {
+      return;
+    }
+
+    try {
+      const firmaGuardada = await repoArchivos.guardarFirma({
+        inspectionId: actaActual.servicioId,
+        firmaBase64: resultado.firmaBase64,
+        firmanteNombre: actaActual.firmas.clienteConformidadNombre,
+        firmanteCargo: actaActual.firmas.clienteConformidadCargo,
+        actorId: usuario?.id,
+      });
+
+      if (firmaArchivoPrevioId && firmaArchivoPrevioId !== firmaGuardada.file_id) {
+        try {
+          await repoArchivos.eliminar(firmaArchivoPrevioId);
+        } catch {
+          // El archivo nuevo ya quedó durable en disco y SQLite.
+        }
+      }
+
+      setActa((prev) => ({
+        ...prev,
+        firmas: {
+          ...prev.firmas,
+          // §13.2: no duplicar Base64 operativo en JSON de SQLite/sync; referenciar el archivo local durable.
+          firmaDigitalBase64: undefined,
+          firmaArchivoId: firmaGuardada.file_id,
+          firmaRutaLocalRelativa: firmaGuardada.local_path_relative,
+          responsableNoDisponible: false,
+          motivoNoDisponible: undefined,
+        },
+      }));
+    } catch (err: unknown) {
+      const mensaje =
+        err instanceof Error ? err.message : 'No se pudo guardar la firma en el dispositivo.';
+      Alert.alert('Error al guardar firma', mensaje);
+      throw err;
+    }
   };
 
   // Mutadores de campos
@@ -911,6 +1028,43 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
                 />
               </View>
             </View>
+
+            {/* Estado y Captura de Firma Digital del Cliente (§13, GAF-36) */}
+            <View style={styles.contenedorEstadoFirma}>
+              {acta.firmas.responsableNoDisponible ? (
+                <View style={styles.bannerFirmaAusente}>
+                  <Text style={styles.textoFirmaAusente}>
+                    ⚠️ Responsable no disponible: {acta.firmas.motivoNoDisponible || 'Sin motivo especificado'}
+                  </Text>
+                </View>
+              ) : acta.firmas.firmaArchivoId || acta.firmas.firmaDigitalBase64 ? (
+                <View style={styles.bannerFirmaExitosa}>
+                  <Text style={styles.textoFirmaExitosa}>
+                    ✓ Firma manuscrita capturada en pantalla (inmutable)
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.bannerFirmaPendiente}>
+                  <Text style={styles.textoFirmaPendiente}>
+                    ⏳ Pendiente de firma manuscrita en pantalla
+                  </Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                testID="boton-abrir-firma"
+                style={styles.botonAbrirFirma}
+                onPress={() => setModalFirmaVisible(true)}
+              >
+                <Text style={styles.textoBotonAbrirFirma}>
+                  {acta.firmas.firmaArchivoId ||
+                  acta.firmas.firmaDigitalBase64 ||
+                  acta.firmas.responsableNoDisponible
+                    ? '✏️ Modificar Firma o Ausencia'
+                    : '✍️ Capturar Firma del Cliente en Pantalla'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* 8. PLANILLA INDIVIDUAL POR ESTACIÓN (§5.1, GAF-35) */}
@@ -1295,6 +1449,18 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
             })}
           </View>
 
+          {/* 9. EVIDENCIAS FOTOGRÁFICAS (§13, C15) */}
+          <GaleriaEvidenciasFotos
+            inspectionId={acta.servicioId}
+            fotos={acta.fotos || []}
+            actorId={usuario?.id}
+            archivosRepo={repoArchivos}
+            capturador={capturadorFotos}
+            onFotosChange={(fotosActualizadas) =>
+              setActa((prev) => ({ ...prev, fotos: fotosActualizadas }))
+            }
+          />
+
           <View style={{ height: 100 }} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -1319,6 +1485,17 @@ export const FormularioDrtScreen: React.FC<FormularioDrtScreenProps> = ({ onVolv
           style={styles.botonBarra}
         />
       </View>
+
+      {/* Modal de Firma en Pantalla (§13, GAF-36) */}
+      <FirmaPadModal
+        visible={modalFirmaVisible}
+        onCerrar={() => setModalFirmaVisible(false)}
+        onGuardar={handleGuardarFirmaModal}
+        nombreContactoInicial={acta.firmas.clienteConformidadNombre}
+        cargoContactoInicial={acta.firmas.clienteConformidadCargo}
+        responsableNoDisponibleInicial={acta.firmas.responsableNoDisponible}
+        motivoNoDisponibleInicial={acta.firmas.motivoNoDisponible}
+      />
     </SafeAreaView>
   );
 };
@@ -1696,5 +1873,57 @@ const styles = StyleSheet.create({
   },
   botonBarra: {
     flex: 1,
+  },
+  contenedorEstadoFirma: {
+    marginTop: 10,
+    gap: 8,
+  },
+  bannerFirmaAusente: {
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#fcd34d',
+    borderRadius: 6,
+    padding: 10,
+  },
+  textoFirmaAusente: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#92400e',
+  },
+  bannerFirmaExitosa: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    borderRadius: 6,
+    padding: 10,
+  },
+  textoFirmaExitosa: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#065f46',
+  },
+  bannerFirmaPendiente: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    padding: 10,
+  },
+  textoFirmaPendiente: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  botonAbrirFirma: {
+    backgroundColor: '#2563eb',
+    borderRadius: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+  },
+  textoBotonAbrirFirma: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
   },
 });

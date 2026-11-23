@@ -115,6 +115,7 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
         clienteConformidadNombre: 'Jorge Ramirez',
         clienteConformidadCargo: 'Supervisor de Planta',
         fecha: '2026-11-03',
+        responsableNoDisponible: false,
       },
       planillaEstaciones: [
         { numero: 1, estado: 'SIN_ACTIVIDAD' },
@@ -122,6 +123,7 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
         { numero: 3, estado: 'SIN_ACCESO', observaciones: 'Almacén cerrado' },
         { numero: 4, estado: 'EXTRAVIADA', observaciones: 'No se ubicó punto de control' },
       ],
+      fotos: [],
     };
 
     await repo.guardarDrt(acta);
@@ -200,10 +202,13 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
         clienteConformidadNombre: 'Luis Mendoza',
         clienteConformidadCargo: 'Encargado de Seguridad',
         fecha: '2026-11-03',
+        responsableNoDisponible: false,
+        firmaDigitalBase64: 'data:image/svg+xml;base64,PHN2Zz48cGF0aCBkPSJNIDAgMCBMIDEwIDEwIi8+PC9zdmc+',
       },
       planillaEstaciones: [
         { numero: 1, estado: 'SIN_ACTIVIDAD' },
       ],
+      fotos: [],
     };
 
     const usuarioUuid = '33333333-3333-4000-8000-000000000001';
@@ -257,8 +262,11 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
         clienteConformidadNombre: 'Luis Mendoza',
         clienteConformidadCargo: 'Encargado de Seguridad',
         fecha: '2026-11-03',
+        responsableNoDisponible: false,
+        firmaDigitalBase64: 'data:image/svg+xml;base64,PHN2Zz48cGF0aCBkPSJNIDAgMCBMIDEwIDEwIi8+PC9zdmc+',
       },
       planillaEstaciones: [{ numero: 1, estado: 'SIN_ACTIVIDAD' }],
+      fotos: [],
     };
 
     await repo.guardarDrt(acta, { usuarioId: 'tecnico-local-01' });
@@ -302,6 +310,8 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
         clienteConformidadNombre: 'Luis Mendoza',
         clienteConformidadCargo: 'Encargado de Seguridad',
         fecha: '2026-11-03',
+        responsableNoDisponible: false,
+        firmaDigitalBase64: 'data:image/svg+xml;base64,PHN2Zz48cGF0aCBkPSJNIDAgMCBMIDEwIDEwIi8+PC9zdmc+',
       },
       planillaEstaciones: [
         // huboConsumo undefined pero estado CON_CONSUMO -> huboConsumo: true y colorIcono: 'ROJO'
@@ -322,6 +332,7 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
           observaciones: 'Tapa fisurada',
         },
       ],
+      fotos: [],
     };
 
     await repo.guardarDrt(acta, { usuarioId: usuarioUuid });
@@ -494,10 +505,13 @@ describe('BorradorRepository & Persistencia SQLite (Criterio GAF-33, GAF-103 & G
         clienteConformidadNombre: 'Luis Vega',
         clienteConformidadCargo: 'Supervisor',
         fecha: '2026-11-03',
+        responsableNoDisponible: false,
+        firmaDigitalBase64: 'data:image/svg+xml;base64,PHN2Zz48cGF0aCBkPSJNIDAgMCBMIDEwIDEwIi8+PC9zdmc+',
       },
       planillaEstaciones: [
         { numero: 1, estado: 'CON_CONSUMO', consumoGramos: 10, repuestoGramos: 10 },
       ],
+      fotos: [],
     };
 
     // 1. Guardar campo primero, luego DRT: ambos deben coexistir

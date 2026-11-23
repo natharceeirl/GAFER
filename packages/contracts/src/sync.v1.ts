@@ -9,8 +9,21 @@ export const TipoOperacionSyncSchema = z.enum([
   'REGISTRO_OBSERVACIONES',
   'REGISTRO_SERVICIO_DRT',
   'REGISTRO_SERVICIO_CAMPO',
+  'REGISTRO_ARCHIVO',
 ]);
 export type TipoOperacionSync = z.infer<typeof TipoOperacionSyncSchema>;
+
+export const PayloadArchivoSyncSchema = z.object({
+  fileId: z.string().uuid(),
+  fileType: z.enum(['PHOTO', 'SIGNATURE', 'PLAN']),
+  localPathRelative: z.string().min(1),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/i, 'SHA-256 inválido'),
+  sizeBytes: z.number().int().positive(),
+  mimeType: z.string().min(1),
+  pinned: z.boolean().default(false),
+  capturedAt: z.string().datetime(),
+});
+export type PayloadArchivoSync = z.infer<typeof PayloadArchivoSyncSchema>;
 
 export const PayloadEstacionSyncSchema = z.object({
   estacionId: z.string().uuid().optional(),

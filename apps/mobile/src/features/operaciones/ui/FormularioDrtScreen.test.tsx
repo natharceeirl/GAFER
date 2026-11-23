@@ -24,8 +24,14 @@ vi.mock('expo-status-bar', () => ({
 
 import { inicializarBaseDeDatos, cerrarBaseDeDatos } from '../../../shared/db/sqlite';
 import { OutboxQueue } from '../../../shared/db/outbox';
+import {
+  MemoryFilesystemAdapter,
+  configurarFilesystem,
+  reiniciarFilesystemPorDefecto,
+} from '../../../shared/storage/filesystem';
 import { useAuthStore } from '../../auth/model/use-auth-store';
 import { useAgendaStore } from '../../agenda/model/agenda';
+import { ArchivosLocalRepository } from '../model/archivos-local.repository';
 import { BorradorRepository } from '../model/borrador-repository';
 import { useBorradorStore } from '../model/use-borrador-store';
 import { FormularioDrtScreen } from './FormularioDrtScreen';
@@ -43,17 +49,34 @@ async function prepararBorradorActivo(servicioId = SERVICIO_UUID) {
   });
 }
 
-function completarConformidadCliente() {
+async function completarConformidadCliente() {
   const inputNombre = testRuntime.getByTestId('input-cliente-conformidad-nombre');
   (inputNombre.props.onChangeText as (t: string) => void)('Carlos Gomez');
   const inputCargo = testRuntime.getByTestId('input-cliente-conformidad-cargo');
   (inputCargo.props.onChangeText as (t: string) => void)('Jefe de Planta');
+
+  // Capturar firma real en FirmaPadModal (F5 / GAF-36)
+  (testRuntime.getByTestId('boton-abrir-firma').props.onPress as () => void)();
+  const lienzo = testRuntime.getByTestId('lienzo-firma');
+  (lienzo.props.onPanResponderGrant as (e: unknown) => void)({
+    nativeEvent: { locationX: 25, locationY: 80 },
+  });
+  (lienzo.props.onPanResponderMove as (e: unknown) => void)({
+    nativeEvent: { locationX: 160, locationY: 45 },
+  });
+  (lienzo.props.onPanResponderRelease as () => void)();
+  await (testRuntime.getByTestId('boton-confirmar-firma').props.onPress as () => Promise<void>)();
+  await flushMicrotasks();
 }
 
 describe('FormularioDrtScreen (F2, F3, F4, F5, F6)', () => {
+  let fsMock: MemoryFilesystemAdapter;
+
   beforeEach(async () => {
     vi.useFakeTimers();
     rnTools.reset();
+    fsMock = new MemoryFilesystemAdapter();
+    configurarFilesystem(fsMock);
     await cerrarBaseDeDatos();
     await inicializarBaseDeDatos();
     useAgendaStore.getState().reiniciarEstado();
@@ -80,6 +103,7 @@ describe('FormularioDrtScreen (F2, F3, F4, F5, F6)', () => {
   afterEach(async () => {
     testRuntime.unmount();
     vi.useRealTimers();
+    reiniciarFilesystemPorDefecto();
     await cerrarBaseDeDatos();
   });
 
@@ -121,7 +145,7 @@ describe('FormularioDrtScreen (F2, F3, F4, F5, F6)', () => {
     testRuntime.render(FormularioDrtScreen, { onVolver });
 
     // Editar campos arma el timer debounced de 2.5s
-    completarConformidadCliente();
+    await completarConformidadCliente();
 
     // Finalizar ANTES de que venza el timer de 2.5s
     const botonFinalizar = testRuntime.getByTestId('boton-finalizar-drt');
@@ -164,11 +188,12 @@ describe('FormularioDrtScreen (F2, F3, F4, F5, F6)', () => {
       await new BorradorRepository().obtenerPorServicioId(SERVICIO_UUID, TECNICO_UUID),
     ).toBeNull();
 
-    // Encola exactamente 5 REGISTRO_ESTACION + 1 REGISTRO_SERVICIO_DRT válidas (sin duplicados)
+    // Encola 1 REGISTRO_ARCHIVO (firma SVG) + 5 REGISTRO_ESTACION + 1 REGISTRO_SERVICIO_DRT válidas
     const outbox = new OutboxQueue();
     await outbox.inicializar();
     const pendientes = outbox.obtenerPendientes();
-    expect(pendientes).toHaveLength(6);
+    expect(pendientes).toHaveLength(7);
+    expect(pendientes.filter((p) => p.operacion.tipo === 'REGISTRO_ARCHIVO')).toHaveLength(1);
     expect(pendientes.filter((p) => p.operacion.tipo === 'REGISTRO_ESTACION')).toHaveLength(5);
     expect(pendientes.filter((p) => p.operacion.tipo === 'REGISTRO_SERVICIO_DRT')).toHaveLength(1);
     for (const p of pendientes) {
@@ -179,13 +204,42 @@ describe('FormularioDrtScreen (F2, F3, F4, F5, F6)', () => {
     }
   });
 
+  it('persiste la firma capturada en FirmaPadModal en files_local (.svg) y filesystem sin duplicar Base64 en el acta (F5)', async () => {
+    await prepararBorradorActivo();
+    testRuntime.render(FormularioDrtScreen, { onVolver: vi.fn() });
+
+    await completarConformidadCliente();
+
+    // Verificar fila SIGNATURE en files_local y archivo SVG real en filesystem
+    const archivosRepo = new ArchivosLocalRepository();
+    const firmas = await archivosRepo.listarPorInspeccion(SERVICIO_UUID, 'SIGNATURE');
+    expect(firmas).toHaveLength(1);
+    expect(firmas[0].mime_type).toBe('image/svg+xml');
+    expect(firmas[0].local_path_relative).toMatch(/\/signatures\/SIG_.*\.svg$/);
+    expect(firmas[0].pinned).toBe(1);
+    expect(await fsMock.existe(firmas[0].local_path_relative)).toBe(true);
+    expect(await fsMock.leer(firmas[0].local_path_relative)).toContain('<svg');
+
+    // Guardar borrador y verificar que referencia el archivo sin duplicar Base64 (§13.2)
+    await (testRuntime.getByTestId('boton-guardar-borrador').props.onPress as () => Promise<void>)();
+    const borradorEnDisco = await new BorradorRepository().obtenerPorServicioId(
+      SERVICIO_UUID,
+      TECNICO_UUID,
+    );
+    expect(borradorEnDisco?.datosDrt?.firmas.firmaArchivoId).toBe(firmas[0].file_id);
+    expect(borradorEnDisco?.datosDrt?.firmas.firmaRutaLocalRelativa).toBe(
+      firmas[0].local_path_relative,
+    );
+    expect(borradorEnDisco?.datosDrt?.firmas.firmaDigitalBase64).toBeUndefined();
+  });
+
   it('impide finalizar si no existe usuario autenticado con UUID válido en vez de usar fallback "tecnico-local-01" (F5)', async () => {
     await prepararBorradorActivo();
     useAuthStore.setState({ usuario: null });
     const onVolver = vi.fn();
 
     testRuntime.render(FormularioDrtScreen, { onVolver });
-    completarConformidadCliente();
+    await completarConformidadCliente();
 
     const botonFinalizar = testRuntime.getByTestId('boton-finalizar-drt');
     await (botonFinalizar.props.onPress as () => Promise<void>)();
@@ -195,7 +249,10 @@ describe('FormularioDrtScreen (F2, F3, F4, F5, F6)', () => {
 
     const outbox = new OutboxQueue();
     await outbox.inicializar();
-    expect(outbox.obtenerPendientes()).toHaveLength(0);
+    // Ninguna operación de cierre de servicio DRT debe haberse encolado
+    expect(
+      outbox.obtenerPendientes().filter((p) => p.operacion.tipo === 'REGISTRO_SERVICIO_DRT'),
+    ).toHaveLength(0);
     expect(useBorradorStore.getState().borrador?.servicioId).toBe(SERVICIO_UUID);
   });
 
@@ -207,7 +264,7 @@ describe('FormularioDrtScreen (F2, F3, F4, F5, F6)', () => {
 
     const onVolver = vi.fn();
     testRuntime.render(FormularioDrtScreen, { onVolver });
-    completarConformidadCliente();
+    await completarConformidadCliente();
 
     const botonFinalizar = testRuntime.getByTestId('boton-finalizar-drt');
     await (botonFinalizar.props.onPress as () => Promise<void>)();
@@ -222,7 +279,8 @@ describe('FormularioDrtScreen (F2, F3, F4, F5, F6)', () => {
     const outbox = new OutboxQueue();
     await outbox.inicializar();
     const pendientes = outbox.obtenerPendientes();
-    expect(pendientes).toHaveLength(6);
+    expect(pendientes).toHaveLength(7);
+    expect(pendientes.filter((p) => p.operacion.tipo === 'REGISTRO_ARCHIVO')).toHaveLength(1);
     expect(pendientes.filter((p) => p.operacion.tipo === 'REGISTRO_ESTACION')).toHaveLength(5);
     expect(pendientes.filter((p) => p.operacion.tipo === 'REGISTRO_SERVICIO_DRT')).toHaveLength(1);
     for (const p of pendientes) {
@@ -240,7 +298,7 @@ describe('FormularioDrtScreen (F2, F3, F4, F5, F6)', () => {
     const onVolver = vi.fn();
 
     testRuntime.render(FormularioDrtScreen, { onVolver });
-    completarConformidadCliente();
+    await completarConformidadCliente();
 
     // Estación #1: marcar CON_CONSUMO y seleccionar 50% (base 20g -> consumo 10g, reposición 10g)
     (testRuntime.getByTestId('chip-estacion-1-CON_CONSUMO').props.onPress as () => void)();

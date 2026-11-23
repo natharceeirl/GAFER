@@ -133,11 +133,13 @@ describe('useBorradorStore (Mobile)', () => {
         clienteConformidadNombre: 'Ana Rivas',
         clienteConformidadCargo: 'Jefa de Calidad',
         fecha: '2026-11-03',
+        responsableNoDisponible: false,
       },
       planillaEstaciones: [
         { numero: 1, estado: 'SIN_ACTIVIDAD' },
         { numero: 2, estado: 'CON_CONSUMO', consumoGramos: 5, repuestoGramos: 5 },
       ],
+      fotos: [],
     };
 
     await useBorradorStore.getState().iniciarBorrador(acta.servicioId, { usuarioId: 'tec-drt' });
@@ -278,10 +280,13 @@ describe('useBorradorStore (Mobile)', () => {
         clienteConformidadNombre: 'Maria Lopez',
         clienteConformidadCargo: 'Jefa de Planta',
         fecha: '2026-11-03',
+        responsableNoDisponible: false,
+        firmaDigitalBase64: 'data:image/svg+xml;base64,PHN2Zz48cGF0aCBkPSJNIDAgMCBMIDEwIDEwIi8+PC9zdmc+',
       },
       planillaEstaciones: [
         { numero: 1, estado: 'CON_CONSUMO', consumoGramos: 10, repuestoGramos: 20 },
       ],
+      fotos: [],
     };
 
     it('finaliza el servicio DRT, encola OperacionSync válida y limpia el borrador en memoria y disco', async () => {
