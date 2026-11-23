@@ -106,10 +106,12 @@ describe('SolicitudCorreccionSchema (GAF-104)', () => {
     expect(res.success).toBe(true);
   });
 
-  it('rechaza motivos vacíos, con solo espacios o menores a 5 caracteres', () => {
+  it('rechaza motivos vacíos, con solo espacios, menores a 5 o mayores a 500 caracteres', () => {
     esperarFallaEn(SolicitudCorreccionSchema, { motivo: '' }, 'motivo');
     esperarFallaEn(SolicitudCorreccionSchema, { motivo: '   ' }, 'motivo');
     esperarFallaEn(SolicitudCorreccionSchema, { motivo: 'hola' }, 'motivo');
+    esperarFallaEn(SolicitudCorreccionSchema, { motivo: 'a'.repeat(501) }, 'motivo');
+    expect(SolicitudCorreccionSchema.safeParse({ motivo: 'a'.repeat(500) }).success).toBe(true);
   });
 });
 
@@ -131,5 +133,21 @@ describe('ResumenServicioTecnicoSchema (GAF-104)', () => {
       servicioTipo: 'DESINSECTACION Y DESRATIZACION',
     };
     expect(ResumenServicioTecnicoSchema.safeParse(resumen).success).toBe(true);
+  });
+
+  it('rechaza horas con segundos (HH:mm:ss) y exige HH:mm o null', () => {
+    const base = {
+      id,
+      servicioId: '22222222-2222-2222-2222-222222222222',
+      codigoInspeccion: 'GAFER-2026-KALLPA-001',
+      estado: 'CERRADO',
+      versionSync: 2,
+      fechaEjecucion: '2026-09-28',
+      tecnicosParticipantes: [],
+      puedeSolicitarCorreccion: true,
+    };
+    esperarFallaEn(ResumenServicioTecnicoSchema, { ...base, horaInicio: '08:30:00' }, 'horaInicio');
+    esperarFallaEn(ResumenServicioTecnicoSchema, { ...base, horaFin: '10:15:00' }, 'horaFin');
+    expect(ResumenServicioTecnicoSchema.safeParse({ ...base, horaInicio: null, horaFin: null }).success).toBe(true);
   });
 });

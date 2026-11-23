@@ -55,6 +55,10 @@ export class AuditoriaInterceptor implements NestInterceptor {
   // 1. Implementar decorador declarativo @Auditable({ entidad: 'INSPECCION', accion: 'CREACION' | 'CIERRE' }) o EventEmitter de dominio.
   // 2. Extraer los metadatos de auditoría limpiamente sin acoplarse al nombre del método del controlador.
   private async manejarAuditoriaInspeccion(handler: string, req: any, res: any): Promise<void> {
+    if (handler === 'solicitarCorreccion') {
+      return;
+    }
+
     // Solo se audita si la persona de la sesión existe en personal (la tabla exige esa referencia).
     const actorId = await this.auditoriaService.resolverActorId(req?.user?.id);
 
