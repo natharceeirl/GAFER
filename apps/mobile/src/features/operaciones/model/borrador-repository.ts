@@ -4,7 +4,12 @@
  * Cumple con la regla 2.4: "Durable before visible" (Guía Rev 2 §2.4, §5.1).
  */
 
-import { ActaServicioDrt, ActaServicioDrtSchema, OperacionSync } from '@gafer/contracts';
+import {
+  ActaServicioDrt,
+  ActaServicioDrtSchema,
+  OperacionSync,
+  OperacionSyncSchema,
+} from '@gafer/contracts';
 import { SqliteDatabasePort, obtenerBaseDeDatos } from '../../../shared/db/sqlite';
 import { OutboxQueue } from '../../../shared/db/outbox';
 import { generarUuid } from '../../../shared/utils/uuid';
@@ -43,7 +48,7 @@ export class BorradorRepository {
 
     return {
       servicioId: fila.servicio_id,
-      usuarioId: fila.usuario_id ?? undefined,
+      usuarioId: fila.usuario_id || undefined,
       clienteRazonSocial: fila.cliente_razon_social ?? undefined,
       sedeNombre: fila.sede_nombre ?? undefined,
       numeroOrden: fila.numero_orden ?? undefined,
@@ -54,12 +59,15 @@ export class BorradorRepository {
   }
 
   /**
-   * Abre el borrador de un servicio de forma idempotente y devuelve lo que quedó en disco.
+   * Abre el borrador de un servicio para un técnico de forma idempotente y devuelve lo que quedó en disco.
    *
-   * - Si no existe, lo crea con `observacionesIniciales`.
-   * - Si ya existe (la visita se reabre), solo refresca la cabecera (cliente, sede, orden,
-   *   tipo y usuario). Las observaciones y los datos del formulario NO se tocan: así
-   *   reabrir una visita nunca borra las notas que el técnico ya escribió.
+   * La clave primaria compuesta `(servicio_id, usuario_id)` aísla por completo a cada técnico
+   * en un celular compartido: abrir la misma visita o sede de contingencia nunca roba ni expone
+   * observaciones ni `datos_json` de otro técnico.
+   *
+   * - Si no existe para `(servicioId, usuarioId)`, lo crea con `observacionesIniciales`.
+   * - Si ya existe para el mismo técnico, solo refresca la cabecera (cliente, sede, orden y tipo).
+   *   Las observaciones y los datos del formulario NO se tocan.
    *
    * La metadata vacía no pisa la cabecera guardada (COALESCE).
    */
@@ -70,6 +78,7 @@ export class BorradorRepository {
   ): Promise<BorradorInspeccion> {
     const db = this.getDb();
     const ahora = new Date().toISOString();
+    const usuarioId = metadata?.usuarioId ?? '';
 
     return db.withExclusiveTransactionAsync(async (tx) => {
       await tx.runAsync(
@@ -85,8 +94,7 @@ export class BorradorRepository {
           server_version,
           sync_status
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'PENDING_SYNC')
-        ON CONFLICT(servicio_id) DO UPDATE SET
-          usuario_id = COALESCE(excluded.usuario_id, borradores_inspeccion.usuario_id),
+        ON CONFLICT(servicio_id, usuario_id) DO UPDATE SET
           cliente_razon_social = COALESCE(excluded.cliente_razon_social, borradores_inspeccion.cliente_razon_social),
           sede_nombre = COALESCE(excluded.sede_nombre, borradores_inspeccion.sede_nombre),
           numero_orden = COALESCE(excluded.numero_orden, borradores_inspeccion.numero_orden),
@@ -94,7 +102,7 @@ export class BorradorRepository {
           actualizado_en = excluded.actualizado_en;`,
         [
           servicioId,
-          metadata?.usuarioId ?? null,
+          usuarioId,
           metadata?.clienteRazonSocial ?? null,
           metadata?.sedeNombre ?? null,
           metadata?.numeroOrden ?? null,
@@ -105,8 +113,8 @@ export class BorradorRepository {
       );
 
       const fila = await tx.getFirstAsync<FilaBorradorDb>(
-        `SELECT * FROM borradores_inspeccion WHERE servicio_id = ?;`,
-        [servicioId],
+        `SELECT * FROM borradores_inspeccion WHERE servicio_id = ? AND usuario_id = ?;`,
+        [servicioId, usuarioId],
       );
       if (!fila) {
         throw new Error(`No se pudo guardar el borrador del servicio ${servicioId}`);
@@ -125,6 +133,7 @@ export class BorradorRepository {
     const db = this.getDb();
     const ahora = new Date().toISOString();
     const datosJson = JSON.stringify(acta);
+    const propietario = metadata?.usuarioId ?? '';
 
     // Upsert (no INSERT OR REPLACE): conserva usuario_id, server_version y la cabecera
     // que la metadata no traiga. El acta es la fuente de las observaciones del DRT.
@@ -143,8 +152,7 @@ export class BorradorRepository {
           server_version,
           sync_status
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'PENDING_SYNC')
-        ON CONFLICT(servicio_id) DO UPDATE SET
-          usuario_id = COALESCE(excluded.usuario_id, borradores_inspeccion.usuario_id),
+        ON CONFLICT(servicio_id, usuario_id) DO UPDATE SET
           cliente_razon_social = COALESCE(excluded.cliente_razon_social, borradores_inspeccion.cliente_razon_social),
           sede_nombre = COALESCE(excluded.sede_nombre, borradores_inspeccion.sede_nombre),
           numero_orden = COALESCE(excluded.numero_orden, borradores_inspeccion.numero_orden),
@@ -155,7 +163,7 @@ export class BorradorRepository {
           sync_status = 'PENDING_SYNC';`,
         [
           acta.servicioId,
-          metadata?.usuarioId ?? null,
+          propietario,
           metadata?.clienteRazonSocial ?? acta.clienteRazonSocial ?? null,
           metadata?.sedeNombre ?? acta.sedeDireccion ?? null,
           metadata?.numeroOrden ?? null,
@@ -167,8 +175,8 @@ export class BorradorRepository {
       );
 
       const fila = await tx.getFirstAsync<FilaBorradorDb>(
-        `SELECT * FROM borradores_inspeccion WHERE servicio_id = ?;`,
-        [acta.servicioId],
+        `SELECT * FROM borradores_inspeccion WHERE servicio_id = ? AND usuario_id = ?;`,
+        [acta.servicioId, propietario],
       );
       if (!fila) {
         throw new Error(`No se pudo guardar el acta DRT del servicio ${acta.servicioId}`);
@@ -191,14 +199,14 @@ export class BorradorRepository {
     const ahora = new Date().toISOString();
     const db = this.getDb();
 
-    const operacion: OperacionSync = {
+    const operacion: OperacionSync = OperacionSyncSchema.parse({
       operationId,
       tipo: 'REGISTRO_SERVICIO_DRT',
       agregadoId: parsed.servicioId,
       actorId: usuarioId,
       clienteTimestamp: ahora,
       payload: parsed as unknown as Record<string, unknown>,
-    };
+    });
 
     // Encolar y quitar el borrador en UNA transacción: si la app se cierra a mitad,
     // o quedan ambos cambios o ninguno (no hay envío duplicado ni borrador huérfano).
@@ -208,27 +216,33 @@ export class BorradorRepository {
         aggregateType: 'SERVICIO_DRT',
         priority: 'HIGH',
       });
-      await tx.runAsync(`DELETE FROM borradores_inspeccion WHERE servicio_id = ?;`, [
-        parsed.servicioId,
-      ]);
+      await tx.runAsync(
+        `DELETE FROM borradores_inspeccion WHERE servicio_id = ? AND usuario_id = ?;`,
+        [parsed.servicioId, usuarioId],
+      );
     });
 
     return { operationId };
   }
 
   /**
-   * Actualiza las observaciones del borrador de manera atómica y durable.
+   * Actualiza las observaciones del borrador de manera atómica y durable para el técnico dueño.
    */
-  async actualizarObservaciones(servicioId: string, observaciones: string): Promise<void> {
+  async actualizarObservaciones(
+    servicioId: string,
+    observaciones: string,
+    usuarioId?: string,
+  ): Promise<void> {
     const db = this.getDb();
     const ahora = new Date().toISOString();
+    const propietario = usuarioId ?? '';
 
     const resultado = await db.withExclusiveTransactionAsync((tx) =>
       tx.runAsync(
         `UPDATE borradores_inspeccion
          SET observaciones = ?, actualizado_en = ?
-         WHERE servicio_id = ?;`,
-        [observaciones, ahora, servicioId],
+         WHERE servicio_id = ? AND usuario_id = ?;`,
+        [observaciones, ahora, servicioId, propietario],
       ),
     );
 
@@ -241,13 +255,17 @@ export class BorradorRepository {
   }
 
   /**
-   * Obtiene el borrador por ID de servicio.
+   * Obtiene el borrador por ID de servicio y técnico dueño.
    */
-  async obtenerPorServicioId(servicioId: string): Promise<BorradorInspeccion | null> {
+  async obtenerPorServicioId(
+    servicioId: string,
+    usuarioId?: string,
+  ): Promise<BorradorInspeccion | null> {
     const db = this.getDb();
+    const propietario = usuarioId ?? '';
     const fila = await db.getFirstAsync<FilaBorradorDb>(
-      `SELECT * FROM borradores_inspeccion WHERE servicio_id = ?;`,
-      [servicioId],
+      `SELECT * FROM borradores_inspeccion WHERE servicio_id = ? AND usuario_id = ?;`,
+      [servicioId, propietario],
     );
 
     return fila ? this.mapearFilaABorrador(fila) : null;
@@ -276,14 +294,15 @@ export class BorradorRepository {
   }
 
   /**
-   * Elimina un borrador (al concluir o descartar la inspección).
+   * Elimina el borrador del técnico indicado (al concluir o descartar la inspección).
    */
-  async eliminar(servicioId: string): Promise<void> {
+  async eliminar(servicioId: string, usuarioId?: string): Promise<void> {
     const db = this.getDb();
+    const propietario = usuarioId ?? '';
     await db.withExclusiveTransactionAsync(async (tx) => {
       await tx.runAsync(
-        `DELETE FROM borradores_inspeccion WHERE servicio_id = ?;`,
-        [servicioId],
+        `DELETE FROM borradores_inspeccion WHERE servicio_id = ? AND usuario_id = ?;`,
+        [servicioId, propietario],
       );
     });
   }

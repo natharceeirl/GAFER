@@ -310,14 +310,9 @@ export class OutboxQueue {
   }
 
   async marcarSincronizadas(ids: string[]): Promise<void> {
-    const idSet = new Set(ids);
-    for (const record of this.cola) {
-      if (idSet.has(record.operacion.operationId)) {
-        record.sincronizado = true;
-      }
-    }
+    if (ids.length === 0) return;
 
-    if (this.db && ids.length > 0) {
+    if (this.db) {
       await this.db.withExclusiveTransactionAsync(async (tx) => {
         for (const id of ids) {
           await tx.runAsync(
@@ -328,19 +323,32 @@ export class OutboxQueue {
       });
     }
 
-    await this.persistir();
+    const idSet = new Set(ids);
+    const siguienteCola = this.cola.map((record) =>
+      idSet.has(record.operacion.operationId) ? { ...record, sincronizado: true } : record,
+    );
+
+    if (this.storage) {
+      await this.storage.setItem(this.storageKey, JSON.stringify(siguienteCola));
+    }
+
+    this.cola = siguienteCola;
   }
 
   async limpiarSincronizados(): Promise<void> {
-    this.cola = this.cola.filter((op) => !op.sincronizado);
-
     if (this.db) {
       await this.db.withExclusiveTransactionAsync(async (tx) => {
         await tx.runAsync(`DELETE FROM sync_outbox WHERE status = 'SYNCED';`);
       });
     }
 
-    await this.persistir();
+    const siguienteCola = this.cola.filter((op) => !op.sincronizado);
+
+    if (this.storage) {
+      await this.storage.setItem(this.storageKey, JSON.stringify(siguienteCola));
+    }
+
+    this.cola = siguienteCola;
   }
 
   async enviarLote(

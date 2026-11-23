@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -34,6 +34,7 @@ export const AgendaScreen: React.FC = () => {
   const {
     items,
     sedesActivas,
+    sedeSeleccionada,
     cargando,
     error,
     cargarAgenda,
@@ -51,6 +52,7 @@ export const AgendaScreen: React.FC = () => {
   const [vistaActiva, setVistaActiva] = useState<VistaAgenda>('MIS_VISITAS');
   const [busquedaSede, setBusquedaSede] = useState('');
   const [modoFormularioDrt, setModoFormularioDrt] = useState(false);
+  const iniciandoAtencionRef = useRef(false);
 
   // GAF-104: Estado de servicios cerrados en solo lectura
   const [serviciosCerrados, setServiciosCerrados] = useState<ResumenServicioTecnico[]>([]);
@@ -148,14 +150,30 @@ export const AgendaScreen: React.FC = () => {
     ]);
   };
 
-  const handleIniciarVisita = (visita: ItemAgenda) => {
-    iniciarAtencionVisita(visita.id);
-    setModoFormularioDrt(true);
+  const handleIniciarVisita = async (visita: ItemAgenda) => {
+    if (iniciandoAtencionRef.current) return;
+    iniciandoAtencionRef.current = true;
+    try {
+      const iniciado = await iniciarAtencionVisita(visita.id);
+      if (iniciado) {
+        setModoFormularioDrt(true);
+      }
+    } finally {
+      iniciandoAtencionRef.current = false;
+    }
   };
 
-  const handleIniciarSede = (sede: SedeActiva) => {
-    iniciarAtencionEnSede(sede);
-    setModoFormularioDrt(true);
+  const handleIniciarSede = async (sede: SedeActiva) => {
+    if (iniciandoAtencionRef.current) return;
+    iniciandoAtencionRef.current = true;
+    try {
+      const iniciado = await iniciarAtencionEnSede(sede);
+      if (iniciado) {
+        setModoFormularioDrt(true);
+      }
+    } finally {
+      iniciandoAtencionRef.current = false;
+    }
   };
 
   const handleConcluirInspeccion = () => {
@@ -244,7 +262,9 @@ export const AgendaScreen: React.FC = () => {
   };
 
   const renderItemSede = ({ item }: { item: SedeActiva }) => {
-    const estaSeleccionada = borrador?.sedeNombre === item.nombre;
+    const estaSeleccionada =
+      borrador?.numeroOrden === 'CONTINGENCIA' &&
+      (borrador?.sedeNombre === item.nombre || sedeSeleccionada?.id === item.id);
 
     return (
       <View style={styles.fichaOrden}>

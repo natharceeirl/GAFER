@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   inicializarBaseDeDatos,
   cerrarBaseDeDatos,
@@ -8,6 +10,7 @@ import {
   ejecutarMigraciones,
   obtenerVersionEsquema,
   ESQUEMA_VERSION_ACTUAL,
+  SqliteDatabasePort,
 } from './index';
 
 describe('SQLite Port & Migraciones', () => {
@@ -108,7 +111,7 @@ describe('SQLite Port & Migraciones', () => {
     expect(filas.every((f) => f.value.endsWith('-ok'))).toBe(true);
   });
 
-  it('migra de v1 a v2 agregando usuario_id sin perder borradores existentes', async () => {
+  it('migra de v1 a v3 agregando usuario_id y PK compuesta sin perder borradores existentes', async () => {
     const { MIGRACIONES } = await import('./migrations');
     const adapter = new MemorySqliteAdapter();
     await MIGRACIONES[0].ejecutar(adapter);
@@ -120,13 +123,85 @@ describe('SQLite Port & Migraciones', () => {
 
     const version = await ejecutarMigraciones(adapter);
 
-    expect(version).toBe(2);
-    const fila = await adapter.getFirstAsync<{ observaciones: string; usuario_id: string | null }>(
+    expect(version).toBe(ESQUEMA_VERSION_ACTUAL);
+    const fila = await adapter.getFirstAsync<{ observaciones: string; usuario_id: string }>(
       'SELECT observaciones, usuario_id FROM borradores_inspeccion WHERE servicio_id = ?;',
       ['srv-v1'],
     );
     expect(fila?.observaciones).toBe('Notas previas');
-    expect(fila?.usuario_id).toBeNull();
+    expect(fila?.usuario_id).toBe('');
+
+    // En v3 dos técnicos pueden mantener borradores independientes para el mismo servicio_id.
+    const ahora = new Date().toISOString();
+    await adapter.runAsync(
+      `INSERT INTO borradores_inspeccion (servicio_id, usuario_id, observaciones, actualizado_en) VALUES (?, ?, ?, ?);`,
+      ['srv-v1', 'tec-A', 'Notas A', ahora],
+    );
+    await adapter.runAsync(
+      `INSERT INTO borradores_inspeccion (servicio_id, usuario_id, observaciones, actualizado_en) VALUES (?, ?, ?, ?);`,
+      ['srv-v1', 'tec-B', 'Notas B', ahora],
+    );
+
+    const filas = await adapter.getAllAsync<{ usuario_id: string; observaciones: string }>(
+      'SELECT usuario_id, observaciones FROM borradores_inspeccion WHERE servicio_id = ? ORDER BY usuario_id ASC;',
+      ['srv-v1'],
+    );
+    expect(filas).toEqual([
+      { usuario_id: '', observaciones: 'Notas previas' },
+      { usuario_id: 'tec-A', observaciones: 'Notas A' },
+      { usuario_id: 'tec-B', observaciones: 'Notas B' },
+    ]);
+  });
+
+  it('carga expo-sqlite con literal estático compatible con Metro (F1)', () => {
+    const contenido = readFileSync(join(__dirname, 'index.ts'), 'utf8');
+    expect(contenido).toMatch(/(?:require|import)\(\s*['"]expo-sqlite['"]\s*\)/);
+    expect(contenido).not.toMatch(/import\(\s*\/\*[^*]*\*\/\s*[a-zA-Z_$]/);
+  });
+
+  it('cierra la conexión si fallan las migraciones y permite reintentar sin fuga (F4)', async () => {
+    const closeAsync = vi.fn(async () => undefined);
+    const puertoFallido: SqliteDatabasePort = {
+      execAsync: vi.fn(async () => {
+        throw new Error('Error simulado en PRAGMA/migración');
+      }),
+      runAsync: vi.fn(async () => ({ changes: 0, lastInsertRowId: 0 })),
+      getAllAsync: vi.fn(async () => []),
+      getFirstAsync: vi.fn(async () => null),
+      withExclusiveTransactionAsync: vi.fn(async (action) => action(puertoFallido)),
+      closeAsync,
+    };
+
+    await expect(inicializarBaseDeDatos(puertoFallido)).rejects.toThrow(
+      'Error simulado en PRAGMA/migración',
+    );
+    expect(closeAsync).toHaveBeenCalledTimes(1);
+    expect(() => obtenerBaseDeDatos()).toThrow(/no ha sido inicializada/);
+
+    // Reintentar después de un fallo debe inicializar correctamente
+    const db = await inicializarBaseDeDatos();
+    expect(obtenerBaseDeDatos()).toBe(db);
+  });
+
+  it('preserva el error original de migración aunque closeAsync también falle (F4)', async () => {
+    const closeAsync = vi.fn(async () => {
+      throw new Error('Fallo secundario al cerrar');
+    });
+    const puertoFallido: SqliteDatabasePort = {
+      execAsync: vi.fn(async () => {
+        throw new Error('Error principal de migración');
+      }),
+      runAsync: vi.fn(async () => ({ changes: 0, lastInsertRowId: 0 })),
+      getAllAsync: vi.fn(async () => []),
+      getFirstAsync: vi.fn(async () => null),
+      withExclusiveTransactionAsync: vi.fn(async (action) => action(puertoFallido)),
+      closeAsync,
+    };
+
+    await expect(inicializarBaseDeDatos(puertoFallido)).rejects.toThrow(
+      'Error principal de migración',
+    );
+    expect(closeAsync).toHaveBeenCalledTimes(1);
   });
 
   describe('ExpoSqliteAdapter', () => {
