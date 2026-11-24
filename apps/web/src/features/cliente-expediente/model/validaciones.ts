@@ -87,10 +87,15 @@ export interface DatosProyecto {
   contactoCargo: string;
   contactoTelefono: string;
   observaciones: string;
+  montoPresupuestado?: string;
+  moneda?: string;
 }
 
 /** Id de cliente de relleno: el esquema de alta lo exige, pero el cliente ya está elegido y no se valida aquí. */
 const CLIENTE_DE_RELLENO = '00000000-0000-4000-8000-000000000000';
+
+const MENSAJE_MONTO = 'Ingrese un monto numérico válido mayor o igual a 0.';
+const MENSAJE_MONEDA = 'Seleccione una moneda válida (PEN o USD).';
 
 /**
  * Valida la sede con los esquemas de `@gafer/contracts`. En edición el nombre admite de 3 a 50 caracteres,
@@ -111,7 +116,13 @@ export function validarProyecto(
     for (const incidencia of resultado.error.issues) {
       const campo = campoDeRutaProyecto(String(incidencia.path[0]));
       if (!campo || e[campo]) continue;
-      e[campo] = vacio(d[campo]) ? OBLIGATORIO : incidencia.message;
+      if (campo === 'montoPresupuestado') {
+        e[campo] = incidencia.code === 'too_big' || incidencia.code === 'custom' ? incidencia.message : MENSAJE_MONTO;
+      } else if (campo === 'moneda') {
+        e[campo] = incidencia.code === 'custom' ? incidencia.message : MENSAJE_MONEDA;
+      } else {
+        e[campo] = vacio(d[campo] ?? '') ? OBLIGATORIO : incidencia.message;
+      }
     }
   }
 
@@ -132,6 +143,8 @@ export interface DatosServicio {
   requiereCertificado: boolean | null;
   /** Vigencia del certificado en días; solo aplica si el servicio lo requiere. */
   vigenciaDias: string;
+  monto?: string;
+  moneda?: string;
 }
 
 const MENSAJE_SUPERFICIE = 'Ingrese una superficie mayor a 0 m².';
@@ -157,6 +170,10 @@ export function validarServicio(d: DatosServicio): Errores<keyof DatosServicio> 
         e[campo] = vacio(d.vigenciaDias) ? OBLIGATORIO : MENSAJE_VIGENCIA;
       } else if (campo === 'frecuencia') {
         e[campo] = OBLIGATORIO;
+      } else if (campo === 'monto') {
+        e[campo] = incidencia.code === 'too_big' || incidencia.code === 'custom' ? incidencia.message : MENSAJE_MONTO;
+      } else if (campo === 'moneda') {
+        e[campo] = incidencia.code === 'custom' ? incidencia.message : MENSAJE_MONEDA;
       }
     }
   }

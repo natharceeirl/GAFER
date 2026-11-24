@@ -251,6 +251,29 @@ describe('expediente: sedes y servicios conectados al API', () => {
       expect(within(sede).getByText(/certificado de 180 días/)).toBeInTheDocument();
     });
 
+    it('muestra presupuesto de la sede y monto del servicio con su moneda, sin inventar PEN si falta (GAF-105)', async () => {
+      const sedeConMonto: Sede = { ...sedeEjemplo(), montoPresupuestado: 25000.5, moneda: 'USD' };
+      const servicioConMonto: Sede = { ...servicioEjemplo(sedeConMonto), monto: 450, moneda: 'PEN' };
+      const sedeSinMoneda: Sede = {
+        ...sedeEjemplo(),
+        id: '7b1c6d5e-0d1a-4f43-9d0e-2f3a8f6f9a99',
+        nombre: 'PLANTA_SUR',
+        montoPresupuestado: 800,
+        moneda: null,
+      };
+      simularApi({ sedes: [sedeConMonto, sedeSinMoneda], servicios: [servicioConMonto], catalogosProhibidos: false });
+      montar();
+      await abrirExpediente();
+
+      const itemNorte = (await screen.findByText('PLANTA_NORTE')).closest('li') as HTMLElement;
+      expect(within(itemNorte).getByText(/USD 25000\.50/)).toBeInTheDocument();
+      expect(within(itemNorte).getByText(/PEN 450\.00/)).toBeInTheDocument();
+
+      const itemSur = (await screen.findByText('PLANTA_SUR')).closest('li') as HTMLElement;
+      expect(within(itemSur).getByText(/· 800\.00/)).toBeInTheDocument();
+      expect(within(itemSur).queryByText(/PEN 800\.00/)).not.toBeInTheDocument();
+    });
+
     it('muestra cargando y, si falla, el error con reintento', async () => {
       const estado = estadoConSede();
       simularApi(estado);

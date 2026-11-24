@@ -6,6 +6,7 @@ import type {
   EstadoInspeccion,
   EstadoOperativoEquipo,
   FrecuenciaServicio,
+  Moneda,
   PresentacionInsumo,
   TipoEquipo,
   TipoServicio,
@@ -17,6 +18,7 @@ export type {
   EstadoInspeccion,
   EstadoOperativoEquipo,
   FrecuenciaServicio,
+  Moneda,
   PresentacionInsumo,
   TipoEquipo,
   TipoServicio,
@@ -54,6 +56,8 @@ export interface ProyectosTable {
   contacto_telefono: string;
   estado: Generated<EstadoGeneral>;
   observaciones: string | null;
+  monto_presupuestado: ColumnType<number | null, string | number | null, string | number | null>;
+  moneda: ColumnType<Moneda | null, Moneda | null, Moneda | null>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -71,6 +75,8 @@ export interface ServiciosContratadosTable {
   requiere_certificado: Generated<boolean>;
   vigencia_dias: number | null;
   estado: Generated<EstadoGeneral>;
+  monto: ColumnType<number | null, string | number | null, string | number | null>;
+  moneda: ColumnType<Moneda | null, Moneda | null, Moneda | null>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

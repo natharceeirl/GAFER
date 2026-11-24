@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MONTO_MAXIMO } from './comun';
 import {
   FrecuenciaServicioSchema,
   ServicioContratadoActualizacionSchema,
@@ -92,5 +93,121 @@ describe('ServicioContratadoActualizacionSchema', () => {
       { requiereCertificado: true },
       'vigenciaDias',
     );
+  });
+});
+
+describe('Montos y pagos opcionales en servicio contratado (GAF-105)', () => {
+  it('acepta monto positivo o cero con moneda PEN o USD', () => {
+    expect(
+      ServicioContratadoRegistroSchema.safeParse({
+        ...registro,
+        monto: 1500.5,
+        moneda: 'PEN',
+      }).success,
+    ).toBe(true);
+
+    expect(
+      ServicioContratadoActualizacionSchema.safeParse({
+        monto: 500,
+        moneda: 'USD',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('permite registrar o actualizar dejando el monto y moneda vacíos o nulos', () => {
+    expect(
+      ServicioContratadoRegistroSchema.safeParse({
+        ...registro,
+        monto: null,
+        moneda: null,
+      }).success,
+    ).toBe(true);
+
+    expect(
+      ServicioContratadoActualizacionSchema.safeParse({
+        monto: undefined,
+        moneda: undefined,
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rechaza montos negativos o monedas no soportadas', () => {
+    esperarFallaEn(
+      ServicioContratadoRegistroSchema,
+      { ...registro, monto: -10, moneda: 'PEN' },
+      'monto',
+    );
+    esperarFallaEn(
+      ServicioContratadoRegistroSchema,
+      { ...registro, moneda: 'EUR' },
+      'moneda',
+    );
+  });
+
+  it('acota el monto al máximo de NUMERIC(12, 2) y rechaza valores no finitos (F1)', () => {
+    expect(
+      ServicioContratadoRegistroSchema.safeParse({
+        ...registro,
+        monto: MONTO_MAXIMO,
+        moneda: 'PEN',
+      }).success,
+    ).toBe(true);
+
+    esperarFallaEn(
+      ServicioContratadoRegistroSchema,
+      { ...registro, monto: 10_000_000_000, moneda: 'PEN' },
+      'monto',
+    );
+    esperarFallaEn(
+      ServicioContratadoRegistroSchema,
+      { ...registro, monto: Number.POSITIVE_INFINITY, moneda: 'USD' },
+      'monto',
+    );
+    esperarFallaEn(
+      ServicioContratadoActualizacionSchema,
+      { monto: 10_000_000_000, moneda: 'PEN' },
+      'monto',
+    );
+  });
+
+  it('valida la consistencia cruzada entre monto y moneda (F2)', () => {
+    esperarFallaEn(
+      ServicioContratadoRegistroSchema,
+      { ...registro, monto: 500 },
+      'moneda',
+    );
+    esperarFallaEn(
+      ServicioContratadoRegistroSchema,
+      { ...registro, monto: 500, moneda: null },
+      'moneda',
+    );
+    esperarFallaEn(
+      ServicioContratadoRegistroSchema,
+      { ...registro, moneda: 'USD' },
+      'moneda',
+    );
+    esperarFallaEn(
+      ServicioContratadoRegistroSchema,
+      { ...registro, monto: null, moneda: 'PEN' },
+      'moneda',
+    );
+    esperarFallaEn(
+      ServicioContratadoDetalleSchema,
+      { ...registro, id: '44444444-4444-4444-4444-444444444444', estado: 'ACTIVO', monto: 500 },
+      'moneda',
+    );
+    esperarFallaEn(
+      ServicioContratadoActualizacionSchema,
+      { monto: 500, moneda: null },
+      'moneda',
+    );
+    esperarFallaEn(
+      ServicioContratadoActualizacionSchema,
+      { monto: null, moneda: 'USD' },
+      'moneda',
+    );
+    expect(
+      ServicioContratadoActualizacionSchema.safeParse({ monto: null, moneda: null }).success,
+    ).toBe(true);
   });
 });

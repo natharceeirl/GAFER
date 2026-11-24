@@ -228,6 +228,7 @@ export function ClienteExpedientePage({
                         <span className="expediente-proyecto__direccion">
                           {p.direccion}
                           {p.distrito ? `, ${p.distrito}` : ''}
+                          {p.montoPresupuestado != null ? ` · ${p.moneda ? `${p.moneda} ` : ''}${p.montoPresupuestado.toFixed(2)}` : ''}
                         </span>
                         {puedeDarDeAlta ? (
                           <span className="expediente-proyecto__acciones">
@@ -261,6 +262,7 @@ export function ClienteExpedientePage({
                                   · {etiquetaFrecuencia(s.frecuencia)} · {s.areaTratarM2} de {s.areaTotalM2} m²
                                   {s.requiereCertificado && s.vigenciaDias !== null ? ` · certificado de ${s.vigenciaDias} días` : ' · sin certificado'}
                                   {` · ${s.insumosAutorizados.length} ${s.insumosAutorizados.length === 1 ? 'insumo' : 'insumos'} · ${s.equiposAutorizados.length} ${s.equiposAutorizados.length === 1 ? 'equipo' : 'equipos'}`}
+                                  {s.monto != null ? ` · ${s.moneda ? `${s.moneda} ` : ''}${s.monto.toFixed(2)}` : ''}
                                   {s.estado === 'INACTIVO' ? ` · ${ETIQUETA_ESTADO.INACTIVO.toLowerCase()}` : ''}
                                 </span>
                               </span>

@@ -101,4 +101,19 @@ describe('DomainExceptionFilter', () => {
       }),
     );
   });
+
+  it('debe mapear overflow numérico de PostgreSQL (22003) a HTTP 400 Bad Request', () => {
+    const pgError = Object.assign(new Error('numeric field overflow'), { code: '22003' });
+
+    filter.catch(pgError, mockHost);
+
+    expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+    expect(mockResponse.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: HttpStatus.BAD_REQUEST,
+        error: 'Bad Request',
+        message: 'El valor numérico excede el rango permitido',
+      }),
+    );
+  });
 });

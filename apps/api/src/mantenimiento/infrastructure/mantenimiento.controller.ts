@@ -79,7 +79,7 @@ import {
   PERSONAL_REPOSITORY,
   PersonalRepository,
 } from '../domain/ports/personal.repository';
-import { ServicioContratado } from '../domain/servicio-contratado';
+import { Moneda, ServicioContratado } from '../domain/servicio-contratado';
 
 // S3 Storage
 import { S3StorageService } from '../../shared/infrastructure/storage/s3-storage.service';
@@ -450,6 +450,8 @@ export class MantenimientoController {
     contactoTelefono: string;
     getEstado: () => 'ACTIVO' | 'INACTIVO';
     observaciones: string | null;
+    montoPresupuestado?: number | null;
+    moneda?: Moneda | null;
   }): ProyectoResponseDto {
     return {
       id: p.id,
@@ -464,6 +466,8 @@ export class MantenimientoController {
       contactoTelefono: p.contactoTelefono,
       estado: p.getEstado(),
       observaciones: p.observaciones,
+      montoPresupuestado: p.montoPresupuestado ?? null,
+      moneda: p.moneda ?? null,
     };
   }
 
@@ -551,6 +555,8 @@ export class MantenimientoController {
       dosisReferencial: s.dosisReferencial,
       requiereCertificado: s.requiereCertificado,
       vigenciaDias: s.vigenciaDias,
+      monto: s.monto ?? null,
+      moneda: s.moneda ?? null,
       estado: s.getEstado(),
     };
   }

@@ -1,6 +1,6 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PROYECTO_REPOSITORY, ProyectoRepository } from '../domain/ports/proyecto.repository';
-import { Proyecto } from '../domain/proyecto';
+import { Moneda, Proyecto } from '../domain/proyecto';
 
 export interface ActualizarProyectoCommand {
   id: string;
@@ -13,6 +13,8 @@ export interface ActualizarProyectoCommand {
   contactoCargo?: string;
   contactoTelefono?: string;
   observaciones?: string | null;
+  montoPresupuestado?: number | null;
+  moneda?: Moneda | null;
 }
 
 @Injectable()

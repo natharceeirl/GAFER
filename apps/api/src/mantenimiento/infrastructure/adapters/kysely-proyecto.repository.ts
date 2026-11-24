@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Kysely } from 'kysely';
 import { GaferDatabase } from '../../../database/types';
-import { Proyecto } from '../../domain/proyecto';
+import { Moneda, Proyecto } from '../../domain/proyecto';
 import { EstadoGeneral } from '../../domain/cliente';
 import { ProyectoRepository } from '../../domain/ports/proyecto.repository';
 
@@ -25,6 +25,8 @@ export class KyselyProyectoRepository implements ProyectoRepository {
         contacto_telefono: proyecto.contactoTelefono,
         estado: proyecto.getEstado(),
         observaciones: proyecto.observaciones,
+        monto_presupuestado: proyecto.montoPresupuestado,
+        moneda: proyecto.moneda,
       })
       .onConflict((oc) =>
         oc.column('id').doUpdateSet({
@@ -38,6 +40,8 @@ export class KyselyProyectoRepository implements ProyectoRepository {
           contacto_telefono: proyecto.contactoTelefono,
           estado: proyecto.getEstado(),
           observaciones: proyecto.observaciones,
+          monto_presupuestado: proyecto.montoPresupuestado,
+          moneda: proyecto.moneda,
         }),
       )
       .execute();
@@ -89,6 +93,8 @@ export class KyselyProyectoRepository implements ProyectoRepository {
       contactoTelefono: row.contacto_telefono,
       estado: row.estado as EstadoGeneral,
       observaciones: row.observaciones,
+      montoPresupuestado: row.monto_presupuestado !== null && row.monto_presupuestado !== undefined ? Number(row.monto_presupuestado) : null,
+      moneda: (row.moneda as Moneda | null) ?? null,
     });
   }
 }

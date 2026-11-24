@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import type { Moneda } from '@gafer/contracts';
 export * from '../../../shared/infrastructure/dto/error-response.dto';
 import { BadRequestErrorDto } from '../../../shared/infrastructure/dto/error-response.dto';
 
@@ -94,6 +95,12 @@ export class ProyectoResponseDto {
 
   @ApiProperty({ example: 'Requerido pase médico y EPP', nullable: true })
   observaciones!: string | null;
+
+  @ApiProperty({ example: 15000.5, nullable: true, required: false })
+  montoPresupuestado?: number | null;
+
+  @ApiProperty({ example: 'PEN', enum: ['PEN', 'USD'], nullable: true, required: false })
+  moneda?: Moneda | null;
 }
 
 export class ServicioContratadoResponseDto {
@@ -129,6 +136,12 @@ export class ServicioContratadoResponseDto {
 
   @ApiProperty({ example: 30, nullable: true })
   vigenciaDias!: number | null;
+
+  @ApiProperty({ example: 450.0, nullable: true, required: false })
+  monto?: number | null;
+
+  @ApiProperty({ example: 'PEN', enum: ['PEN', 'USD'], nullable: true, required: false })
+  moneda?: Moneda | null;
 
   @ApiProperty({ example: 'ACTIVO', enum: ['ACTIVO', 'INACTIVO'] })
   estado!: 'ACTIVO' | 'INACTIVO';

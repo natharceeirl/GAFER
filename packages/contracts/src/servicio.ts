@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { EstadoActivoInactivoSchema } from './cliente';
+import { MonedaSchema, MontoSchema, type Moneda } from './comun';
 
 export const TipoServicioSchema = z.enum(['DSF', 'DSS', 'DRT', 'LRA', 'LTG', 'LTS', 'LAM']);
 export type TipoServicio = z.infer<typeof TipoServicioSchema>;
@@ -38,6 +39,8 @@ const ServicioContratadoBaseSchema = z.object({
   dosisReferencial: z.record(z.string()).optional().describe('Dosis referencial por insumo, indexada por id de insumo'),
   requiereCertificado: z.boolean().optional().describe('Si emite certificado de saneamiento'),
   vigenciaDias: z.number().int().positive().nullish().describe('Vigencia del certificado en días (obligatoria si requiere certificado)'),
+  monto: MontoSchema.nullish().describe('Monto pactado del servicio (opcional, GAF-105)'),
+  moneda: MonedaSchema.nullish().describe('Moneda del monto pactado (PEN o USD, opcional, GAF-105)'),
 });
 
 interface ReglasServicio {
@@ -45,15 +48,24 @@ interface ReglasServicio {
   areaTratarM2: number;
   requiereCertificado?: boolean;
   vigenciaDias?: number | null;
+  monto?: number | null;
+  moneda?: Moneda | null;
 }
 
-/** Reglas cruzadas del servicio: el área a tratar cabe en el local y el certificado exige vigencia (un valor no positivo ya lo rechaza el campo). */
+/** Reglas cruzadas del servicio: el área a tratar cabe en el local, el certificado exige vigencia y monto/moneda van en par. */
 function aplicarReglasServicio(servicio: ReglasServicio, ctx: z.RefinementCtx): void {
   if (servicio.areaTratarM2 > servicio.areaTotalM2) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['areaTratarM2'], message: 'No puede superar el área total del local' });
   }
   if (servicio.requiereCertificado && servicio.vigenciaDias == null) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['vigenciaDias'], message: 'Un servicio con certificado requiere vigencia en días' });
+  }
+  const tieneMonto = servicio.monto != null;
+  const tieneMoneda = servicio.moneda != null;
+  if (tieneMonto && !tieneMoneda) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['moneda'], message: 'Debe indicar la moneda cuando ingresa un monto' });
+  } else if (!tieneMonto && tieneMoneda) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['moneda'], message: 'No se puede especificar moneda sin un monto' });
   }
 }
 
@@ -77,6 +89,8 @@ export const ServicioContratadoActualizacionSchema = z
     dosisReferencial: z.record(z.string()).optional().describe('Dosis referencial por insumo'),
     requiereCertificado: z.boolean().optional().describe('Si emite certificado de saneamiento'),
     vigenciaDias: z.number().int().positive().nullish().describe('Vigencia del certificado en días'),
+    monto: MontoSchema.nullish().describe('Monto pactado del servicio (opcional, GAF-105)'),
+    moneda: MonedaSchema.nullish().describe('Moneda del monto pactado (PEN o USD, opcional, GAF-105)'),
   })
   .superRefine((servicio, ctx) => {
     if (
@@ -95,6 +109,19 @@ export const ServicioContratadoActualizacionSchema = z
         code: z.ZodIssueCode.custom,
         path: ['vigenciaDias'],
         message: 'Un servicio con certificado requiere vigencia en días',
+      });
+    }
+    if (servicio.monto != null && servicio.moneda === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['moneda'],
+        message: 'Debe indicar la moneda cuando ingresa un monto',
+      });
+    } else if (servicio.monto === null && servicio.moneda != null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['moneda'],
+        message: 'No se puede especificar moneda sin un monto',
       });
     }
   });

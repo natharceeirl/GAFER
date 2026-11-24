@@ -1,6 +1,7 @@
 import type {
   EstadoActivoInactivo,
   FrecuenciaServicio,
+  Moneda,
   ServicioContratadoActualizacion,
   ServicioContratadoDetalle,
   ServicioContratadoRegistro,
@@ -33,6 +34,8 @@ export interface ServicioContratado {
   requiereCertificado: boolean;
   vigenciaDias: number | null;
   estado: EstadoActivoInactivo;
+  monto?: number | null;
+  moneda?: Moneda | null;
 }
 
 export function servicioDeApi(api: ServicioContratadoDetalle): ServicioContratado {
@@ -49,6 +52,8 @@ export function servicioDeApi(api: ServicioContratadoDetalle): ServicioContratad
     requiereCertificado: api.requiereCertificado ?? false,
     vigenciaDias: api.vigenciaDias ?? null,
     estado: api.estado,
+    ...(api.monto !== undefined ? { monto: api.monto } : {}),
+    ...(api.moneda !== undefined ? { moneda: api.moneda } : {}),
   };
 }
 
@@ -63,6 +68,8 @@ export function datosDeServicio(s: ServicioContratado): DatosServicio {
     equipos: s.equiposAutorizados,
     requiereCertificado: s.requiereCertificado,
     vigenciaDias: s.vigenciaDias === null ? '' : String(s.vigenciaDias),
+    monto: s.monto !== null && s.monto !== undefined ? String(s.monto) : '',
+    moneda: s.moneda ?? 'PEN',
   };
 }
 
@@ -71,7 +78,13 @@ function vigenciaDe(d: DatosServicio): number | null {
   return d.requiereCertificado === true && d.vigenciaDias.trim() !== '' ? Number(d.vigenciaDias) : null;
 }
 
+function montoDe(d: DatosServicio): number | null {
+  if (!d.monto || d.monto.trim() === '') return null;
+  return Number(d.monto);
+}
+
 function ficha(d: DatosServicio) {
+  const monto = montoDe(d);
   return {
     areaTotalM2: Number(d.areaTotal),
     areaTratarM2: Number(d.areaTratar),
@@ -81,12 +94,23 @@ function ficha(d: DatosServicio) {
     dosisReferencial: Object.fromEntries(d.insumos.map((id) => [id, (d.dosis[id] ?? '').trim()])),
     requiereCertificado: d.requiereCertificado === true,
     vigenciaDias: vigenciaDe(d),
+    monto,
+    moneda: monto !== null ? ((d.moneda as 'PEN' | 'USD') || 'PEN') : null,
   };
 }
 
 /** Cuerpo de `POST /mantenimiento/servicios-contratados`; quien llama garantiza tipo y frecuencia ya validados. */
 export function registroDeServicio(proyectoId: string, d: DatosServicio): ServicioContratadoRegistro {
-  return { proyectoId, tipoServicio: d.tipo as TipoServicio, frecuencia: d.frecuencia as FrecuenciaServicio, ...ficha(d) };
+  const { monto, moneda, ...resto } = ficha(d);
+  // Al registrar, un monto vacío se omite del cuerpo (no se envía null).
+  const montos = monto === null ? {} : { monto, moneda };
+  return {
+    proyectoId,
+    tipoServicio: d.tipo as TipoServicio,
+    frecuencia: d.frecuencia as FrecuenciaServicio,
+    ...resto,
+    ...montos,
+  };
 }
 
 /** Cuerpo de `PATCH /mantenimiento/servicios-contratados/:id`: el tipo y la sede no cambian. */
@@ -106,6 +130,8 @@ export function campoDeRutaServicio(ruta: string): keyof DatosServicio | null {
     dosisReferencial: 'dosis',
     requiereCertificado: 'requiereCertificado',
     vigenciaDias: 'vigenciaDias',
+    monto: 'monto',
+    moneda: 'moneda',
   };
   return campos[ruta.split('.')[0]] ?? null;
 }

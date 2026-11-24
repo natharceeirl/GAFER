@@ -57,6 +57,8 @@ describe('proyecto-mapper', () => {
       contactoCargo: 'Jefe de Planta',
       contactoTelefono: '054 223344',
       observaciones: '',
+      montoPresupuestado: '',
+      moneda: 'PEN',
     });
   });
 
@@ -75,6 +77,31 @@ describe('proyecto-mapper', () => {
       observaciones: 'Ingreso con casco',
     });
     expect(ProyectoRegistroSchema.safeParse(cuerpo).success).toBe(true);
+  });
+
+  it('mapea montoPresupuestado y moneda cuando están presentes (GAF-105)', () => {
+    const conMonto: ProyectoDetalle = {
+      ...detalle,
+      montoPresupuestado: 15000,
+      moneda: 'USD',
+    };
+    const sede = proyectoDeApi(conMonto, []);
+    expect(sede.montoPresupuestado).toBe(15000);
+    expect(sede.moneda).toBe('USD');
+
+    const datosForm = datosDeProyecto(sede);
+    expect(datosForm.montoPresupuestado).toBe('15000');
+    expect(datosForm.moneda).toBe('USD');
+
+    const reg = registroDeProyecto(CLIENTE, { ...datosForm, montoPresupuestado: '20000', moneda: 'PEN' });
+    expect(reg.montoPresupuestado).toBe(20000);
+    expect(reg.moneda).toBe('PEN');
+    expect(ProyectoRegistroSchema.safeParse(reg).success).toBe(true);
+
+    const act = actualizacionDeProyecto({ ...datosForm, montoPresupuestado: '', moneda: 'PEN' });
+    expect(act.montoPresupuestado).toBeNull();
+    expect(act.moneda).toBeNull();
+    expect(ProyectoActualizacionSchema.safeParse(act).success).toBe(true);
   });
 
   it('las observaciones vacías viajan como null (para poder borrarlas en la edición)', () => {

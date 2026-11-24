@@ -124,6 +124,17 @@ export class DomainExceptionFilter implements ExceptionFilter {
           path: request.url,
         });
       }
+      if (pgCode === '22003') {
+        // numeric_value_out_of_range (ej. overflow NUMERIC(12, 2))
+        return response.status(HttpStatus.BAD_REQUEST).json({
+          statusCode: HttpStatus.BAD_REQUEST,
+          error: 'Bad Request',
+          message: 'El valor numérico excede el rango permitido',
+          detail: (exception as any).detail,
+          timestamp: new Date().toISOString(),
+          path: request.url,
+        });
+      }
 
       this.logger.error(`Unhandled Exception: ${message}`, exception.stack);
       return response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({

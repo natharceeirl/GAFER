@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Kysely } from 'kysely';
 import { GaferDatabase } from '../../../database/types';
-import { ServicioContratado, TipoServicio, FrecuenciaServicio } from '../../domain/servicio-contratado';
+import { ServicioContratado, TipoServicio, FrecuenciaServicio, Moneda } from '../../domain/servicio-contratado';
 import { EstadoGeneral } from '../../domain/cliente';
 import { ServicioContratadoRepository } from '../../domain/ports/servicio-contratado.repository';
 
@@ -24,6 +24,8 @@ export class KyselyServicioContratadoRepository implements ServicioContratadoRep
         dosis_referencial: JSON.stringify(servicio.dosisReferencial),
         requiere_certificado: servicio.requiereCertificado,
         vigencia_dias: servicio.vigenciaDias,
+        monto: servicio.monto,
+        moneda: servicio.moneda,
         estado: servicio.getEstado(),
       })
       .onConflict((oc) =>
@@ -37,6 +39,8 @@ export class KyselyServicioContratadoRepository implements ServicioContratadoRep
           dosis_referencial: JSON.stringify(servicio.dosisReferencial),
           requiere_certificado: servicio.requiereCertificado,
           vigencia_dias: servicio.vigenciaDias,
+          monto: servicio.monto,
+          moneda: servicio.moneda,
           estado: servicio.getEstado(),
         }),
       )
@@ -91,6 +95,8 @@ export class KyselyServicioContratadoRepository implements ServicioContratadoRep
       dosisReferencial,
       requiereCertificado: Boolean(row.requiere_certificado),
       vigenciaDias: row.vigencia_dias ? Number(row.vigencia_dias) : null,
+      monto: row.monto !== null && row.monto !== undefined ? Number(row.monto) : null,
+      moneda: (row.moneda as Moneda | null) ?? null,
       estado: row.estado as EstadoGeneral,
     });
   }

@@ -57,6 +57,8 @@ export class CrearProyectoDto extends createZodDtoDocumentado(ProyectoRegistroSc
   contactoCargo: 'Supervisor de Planta',
   contactoTelefono: '954987654',
   observaciones: 'Requerido pase médico y EPP',
+  montoPresupuestado: 15000.5,
+  moneda: 'PEN',
 }) {}
 
 export class ActualizarProyectoDto extends createZodDtoDocumentado(ProyectoActualizacionSchema, {
@@ -69,6 +71,8 @@ export class ActualizarProyectoDto extends createZodDtoDocumentado(ProyectoActua
   contactoCargo: 'Jefe de Planta',
   contactoTelefono: '954999888',
   observaciones: 'Acceso por garita 2',
+  montoPresupuestado: 18000,
+  moneda: 'USD',
 }) {}
 
 export class CrearServicioContratadoDto extends createZodDtoDocumentado(ServicioContratadoRegistroSchema, {
@@ -82,6 +86,8 @@ export class CrearServicioContratadoDto extends createZodDtoDocumentado(Servicio
   dosisReferencial: { 'i1111111-1111-4111-8111-111111111111': '5 ml / Litro de agua' },
   requiereCertificado: true,
   vigenciaDias: 30,
+  monto: 450.0,
+  moneda: 'PEN',
 }) {}
 
 export class ActualizarServicioContratadoDto extends createZodDtoDocumentado(ServicioContratadoActualizacionSchema, {
@@ -93,6 +99,8 @@ export class ActualizarServicioContratadoDto extends createZodDtoDocumentado(Ser
   dosisReferencial: { 'i1111111-1111-4111-8111-111111111111': '10 ml / Litro de agua' },
   requiereCertificado: true,
   vigenciaDias: 60,
+  monto: 500,
+  moneda: 'USD',
 }) {}
 
 export class CrearInsumoDto extends createZodDtoDocumentado(InsumoRegistroSchema, {
