@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MONTO_MAXIMO } from './comun';
 import {
   ProyectoActualizacionSchema,
   ProyectoDetalleSchema,
@@ -104,7 +105,7 @@ describe('Montos y presupuestos opcionales en proyectos/sedes (GAF-105)', () => 
   it('rechaza presupuestos negativos o monedas inválidas', () => {
     esperarFallaEn(
       ProyectoRegistroSchema,
-      { ...registro, montoPresupuestado: -50 },
+      { ...registro, montoPresupuestado: -50, moneda: 'PEN' },
       'montoPresupuestado',
     );
     esperarFallaEn(
@@ -112,5 +113,72 @@ describe('Montos y presupuestos opcionales en proyectos/sedes (GAF-105)', () => 
       { ...registro, moneda: 'ARS' },
       'moneda',
     );
+  });
+
+  it('acota el presupuesto al máximo de NUMERIC(12, 2) y rechaza valores no finitos (F1)', () => {
+    expect(
+      ProyectoRegistroSchema.safeParse({
+        ...registro,
+        montoPresupuestado: MONTO_MAXIMO,
+        moneda: 'PEN',
+      }).success,
+    ).toBe(true);
+
+    esperarFallaEn(
+      ProyectoRegistroSchema,
+      { ...registro, montoPresupuestado: 10_000_000_000, moneda: 'PEN' },
+      'montoPresupuestado',
+    );
+    esperarFallaEn(
+      ProyectoRegistroSchema,
+      { ...registro, montoPresupuestado: Number.POSITIVE_INFINITY, moneda: 'PEN' },
+      'montoPresupuestado',
+    );
+    esperarFallaEn(
+      ProyectoActualizacionSchema,
+      { montoPresupuestado: 10_000_000_000, moneda: 'USD' },
+      'montoPresupuestado',
+    );
+  });
+
+  it('valida la consistencia cruzada entre montoPresupuestado y moneda (F2)', () => {
+    esperarFallaEn(
+      ProyectoRegistroSchema,
+      { ...registro, montoPresupuestado: 1000 },
+      'moneda',
+    );
+    esperarFallaEn(
+      ProyectoRegistroSchema,
+      { ...registro, montoPresupuestado: 1000, moneda: null },
+      'moneda',
+    );
+    esperarFallaEn(
+      ProyectoRegistroSchema,
+      { ...registro, moneda: 'PEN' },
+      'moneda',
+    );
+    esperarFallaEn(
+      ProyectoRegistroSchema,
+      { ...registro, montoPresupuestado: null, moneda: 'USD' },
+      'moneda',
+    );
+    esperarFallaEn(
+      ProyectoDetalleSchema,
+      { ...registro, id: '22222222-2222-2222-2222-222222222222', estado: 'ACTIVO', montoPresupuestado: 500 },
+      'moneda',
+    );
+    esperarFallaEn(
+      ProyectoActualizacionSchema,
+      { montoPresupuestado: 500, moneda: null },
+      'moneda',
+    );
+    esperarFallaEn(
+      ProyectoActualizacionSchema,
+      { montoPresupuestado: null, moneda: 'PEN' },
+      'moneda',
+    );
+    expect(
+      ProyectoActualizacionSchema.safeParse({ montoPresupuestado: null, moneda: null }).success,
+    ).toBe(true);
   });
 });

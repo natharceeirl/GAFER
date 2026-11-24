@@ -94,8 +94,57 @@ describe('Mantenimiento Domain Entities — Business Rules (T2.2)', () => {
       expect(p2.montoPresupuestado).toBe(15000);
       expect(p2.moneda).toBe('PEN');
 
-      expect(() => new Proyecto({ ...validProps, montoPresupuestado: -10 })).toThrow(
+      // Actualización parcial de monto conserva la moneda existente
+      p2.actualizarDatos({ montoPresupuestado: 18000 });
+      expect(p2.montoPresupuestado).toBe(18000);
+      expect(p2.moneda).toBe('PEN');
+
+      // Limpiar montoPresupuestado a null limpia también la moneda para no dejarla huérfana
+      p2.actualizarDatos({ montoPresupuestado: null });
+      expect(p2.montoPresupuestado).toBeNull();
+      expect(p2.moneda).toBeNull();
+
+      p2.actualizarDatos({ montoPresupuestado: 9_999_999_999.99, moneda: 'USD' });
+      expect(p2.montoPresupuestado).toBe(9_999_999_999.99);
+      p2.actualizarDatos({ montoPresupuestado: null, moneda: null });
+      expect(p2.montoPresupuestado).toBeNull();
+      expect(p2.moneda).toBeNull();
+
+      expect(() => new Proyecto({ ...validProps, montoPresupuestado: -10, moneda: 'PEN' })).toThrow(
         'El presupuesto no puede ser negativo',
+      );
+      expect(() => p2.actualizarDatos({ montoPresupuestado: -1, moneda: 'PEN' })).toThrow(
+        'El presupuesto no puede ser negativo',
+      );
+      expect(() => new Proyecto({ ...validProps, montoPresupuestado: 10_000_000_000, moneda: 'PEN' })).toThrow(
+        'El presupuesto no puede superar 9999999999.99',
+      );
+      expect(() => p2.actualizarDatos({ montoPresupuestado: 10_000_000_000, moneda: 'PEN' })).toThrow(
+        'El presupuesto no puede superar 9999999999.99',
+      );
+      expect(() => new Proyecto({ ...validProps, montoPresupuestado: Number.NaN, moneda: 'PEN' })).toThrow(
+        'El presupuesto debe ser un número válido',
+      );
+      expect(() => new Proyecto({ ...validProps, montoPresupuestado: Number.POSITIVE_INFINITY, moneda: 'PEN' })).toThrow(
+        'El presupuesto debe ser un número válido',
+      );
+      expect(() => new Proyecto({ ...validProps, montoPresupuestado: 100, moneda: 'EUR' as never })).toThrow(
+        'Moneda no válida',
+      );
+      expect(() => new Proyecto({ ...validProps, montoPresupuestado: 100 })).toThrow(
+        'Si especifica un presupuesto, debe indicar la moneda',
+      );
+      expect(() => new Proyecto({ ...validProps, moneda: 'PEN' })).toThrow(
+        'No se puede especificar una moneda sin un presupuesto',
+      );
+      expect(() => p2.actualizarDatos({ montoPresupuestado: 500 })).toThrow(
+        'Si especifica un presupuesto, debe indicar la moneda',
+      );
+      expect(() => p2.actualizarDatos({ moneda: 'USD' })).toThrow(
+        'No se puede especificar una moneda sin un presupuesto',
+      );
+      expect(() => p2.actualizarDatos({ montoPresupuestado: null, moneda: 'PEN' })).toThrow(
+        'No se puede especificar una moneda sin un presupuesto',
       );
     });
   });
@@ -149,8 +198,57 @@ describe('Mantenimiento Domain Entities — Business Rules (T2.2)', () => {
       expect(s2.monto).toBe(600);
       expect(s2.moneda).toBe('USD');
 
-      expect(() => new ServicioContratado({ ...validProps, monto: -50 })).toThrow(
+      // Actualización parcial de monto conserva la moneda existente
+      s2.actualizarDatos({ monto: 750 });
+      expect(s2.monto).toBe(750);
+      expect(s2.moneda).toBe('USD');
+
+      // Limpiar monto a null limpia también la moneda para no dejarla huérfana
+      s2.actualizarDatos({ monto: null });
+      expect(s2.monto).toBeNull();
+      expect(s2.moneda).toBeNull();
+
+      s2.actualizarDatos({ monto: 9_999_999_999.99, moneda: 'PEN' });
+      expect(s2.monto).toBe(9_999_999_999.99);
+      s2.actualizarDatos({ monto: null, moneda: null });
+      expect(s2.monto).toBeNull();
+      expect(s2.moneda).toBeNull();
+
+      expect(() => new ServicioContratado({ ...validProps, monto: -50, moneda: 'PEN' })).toThrow(
         'El monto no puede ser negativo',
+      );
+      expect(() => s2.actualizarDatos({ monto: -10, moneda: 'USD' })).toThrow(
+        'El monto no puede ser negativo',
+      );
+      expect(() => new ServicioContratado({ ...validProps, monto: 10_000_000_000, moneda: 'PEN' })).toThrow(
+        'El monto no puede superar 9999999999.99',
+      );
+      expect(() => s2.actualizarDatos({ monto: 10_000_000_000, moneda: 'PEN' })).toThrow(
+        'El monto no puede superar 9999999999.99',
+      );
+      expect(() => new ServicioContratado({ ...validProps, monto: Number.NaN, moneda: 'PEN' })).toThrow(
+        'El monto debe ser un número válido',
+      );
+      expect(() => new ServicioContratado({ ...validProps, monto: Number.POSITIVE_INFINITY, moneda: 'PEN' })).toThrow(
+        'El monto debe ser un número válido',
+      );
+      expect(() => new ServicioContratado({ ...validProps, monto: 100, moneda: 'EUR' as never })).toThrow(
+        'Moneda no válida',
+      );
+      expect(() => new ServicioContratado({ ...validProps, monto: 100 })).toThrow(
+        'Si especifica un monto, debe indicar la moneda',
+      );
+      expect(() => new ServicioContratado({ ...validProps, moneda: 'PEN' })).toThrow(
+        'No se puede especificar una moneda sin un monto',
+      );
+      expect(() => s2.actualizarDatos({ monto: 500 })).toThrow(
+        'Si especifica un monto, debe indicar la moneda',
+      );
+      expect(() => s2.actualizarDatos({ moneda: 'USD' })).toThrow(
+        'No se puede especificar una moneda sin un monto',
+      );
+      expect(() => s2.actualizarDatos({ monto: null, moneda: 'USD' })).toThrow(
+        'No se puede especificar una moneda sin un monto',
       );
     });
   });

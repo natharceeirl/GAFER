@@ -1,6 +1,7 @@
 import type {
   EstadoActivoInactivo,
   FrecuenciaServicio,
+  Moneda,
   ServicioContratadoActualizacion,
   ServicioContratadoDetalle,
   ServicioContratadoRegistro,
@@ -34,7 +35,7 @@ export interface ServicioContratado {
   vigenciaDias: number | null;
   estado: EstadoActivoInactivo;
   monto?: number | null;
-  moneda?: string | null;
+  moneda?: Moneda | null;
 }
 
 export function servicioDeApi(api: ServicioContratadoDetalle): ServicioContratado {

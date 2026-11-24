@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import type { Moneda } from '@gafer/contracts';
 export * from '../../../shared/infrastructure/dto/error-response.dto';
 import { BadRequestErrorDto } from '../../../shared/infrastructure/dto/error-response.dto';
 
@@ -99,7 +100,7 @@ export class ProyectoResponseDto {
   montoPresupuestado?: number | null;
 
   @ApiProperty({ example: 'PEN', enum: ['PEN', 'USD'], nullable: true, required: false })
-  moneda?: string | null;
+  moneda?: Moneda | null;
 }
 
 export class ServicioContratadoResponseDto {
@@ -140,7 +141,7 @@ export class ServicioContratadoResponseDto {
   monto?: number | null;
 
   @ApiProperty({ example: 'PEN', enum: ['PEN', 'USD'], nullable: true, required: false })
-  moneda?: string | null;
+  moneda?: Moneda | null;
 
   @ApiProperty({ example: 'ACTIVO', enum: ['ACTIVO', 'INACTIVO'] })
   estado!: 'ACTIVO' | 'INACTIVO';

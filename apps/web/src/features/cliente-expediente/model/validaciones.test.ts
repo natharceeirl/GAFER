@@ -135,12 +135,18 @@ describe('validarProyecto (§7.2)', () => {
     expect(validarProyecto({ ...proyectoValido, nombre: 'AB' }, [], { edicion: true }).nombre).toBeDefined();
   });
 
-  it('acepta montoPresupuestado opcional o vacío y valida números no negativos (GAF-105)', () => {
+  it('acepta montoPresupuestado opcional o vacío y valida números no negativos, tope y moneda (GAF-105)', () => {
     expect(validarProyecto({ ...proyectoValido, montoPresupuestado: '' }, [])).toEqual({});
     expect(validarProyecto({ ...proyectoValido, montoPresupuestado: '15000', moneda: 'PEN' }, [])).toEqual({});
     expect(validarProyecto({ ...proyectoValido, montoPresupuestado: '0', moneda: 'USD' }, [])).toEqual({});
     expect(validarProyecto({ ...proyectoValido, montoPresupuestado: '-10' }, []).montoPresupuestado).toBeDefined();
     expect(validarProyecto({ ...proyectoValido, montoPresupuestado: 'abc' }, []).montoPresupuestado).toBeDefined();
+    expect(validarProyecto({ ...proyectoValido, montoPresupuestado: '10000000000', moneda: 'PEN' }, []).montoPresupuestado).toMatch(
+      /9999999999\.99/,
+    );
+    expect(validarProyecto({ ...proyectoValido, montoPresupuestado: '100', moneda: 'EUR' }, []).moneda).toBe(
+      'Seleccione una moneda válida (PEN o USD).',
+    );
   });
 });
 
@@ -202,11 +208,15 @@ describe('validarServicio (§7.3)', () => {
     expect(validarServicio({ ...servicioValido, requiereCertificado: false, vigenciaDias: '' })).toEqual({});
   });
 
-  it('acepta monto opcional o vacío y valida números no negativos (GAF-105)', () => {
+  it('acepta monto opcional o vacío y valida números no negativos, tope y moneda (GAF-105)', () => {
     expect(validarServicio({ ...servicioValido, monto: '' })).toEqual({});
     expect(validarServicio({ ...servicioValido, monto: '450.50', moneda: 'PEN' })).toEqual({});
     expect(validarServicio({ ...servicioValido, monto: '0', moneda: 'USD' })).toEqual({});
     expect(validarServicio({ ...servicioValido, monto: '-20' }).monto).toBeDefined();
     expect(validarServicio({ ...servicioValido, monto: 'invalido' }).monto).toBeDefined();
+    expect(validarServicio({ ...servicioValido, monto: '10000000000', moneda: 'PEN' }).monto).toMatch(/9999999999\.99/);
+    expect(validarServicio({ ...servicioValido, monto: '100', moneda: 'EUR' }).moneda).toBe(
+      'Seleccione una moneda válida (PEN o USD).',
+    );
   });
 });

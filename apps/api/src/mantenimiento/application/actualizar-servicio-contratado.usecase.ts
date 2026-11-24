@@ -3,7 +3,7 @@ import {
   SERVICIO_CONTRATADO_REPOSITORY,
   ServicioContratadoRepository,
 } from '../domain/ports/servicio-contratado.repository';
-import { FrecuenciaServicio, ServicioContratado } from '../domain/servicio-contratado';
+import { FrecuenciaServicio, Moneda, ServicioContratado } from '../domain/servicio-contratado';
 
 export interface ActualizarServicioContratadoCommand {
   id: string;
@@ -16,7 +16,7 @@ export interface ActualizarServicioContratadoCommand {
   requiereCertificado?: boolean;
   vigenciaDias?: number | null;
   monto?: number | null;
-  moneda?: string | null;
+  moneda?: Moneda | null;
 }
 
 @Injectable()

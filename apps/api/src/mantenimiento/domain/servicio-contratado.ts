@@ -1,9 +1,10 @@
 import { randomUUID } from 'crypto';
 import { EstadoGeneral } from './cliente';
+import { validarMontoYMoneda } from './monto-moneda';
 
-import type { FrecuenciaServicio, TipoServicio } from '@gafer/contracts';
+import type { FrecuenciaServicio, Moneda, TipoServicio } from '@gafer/contracts';
 
-export type { FrecuenciaServicio, TipoServicio };
+export type { FrecuenciaServicio, Moneda, TipoServicio };
 
 export interface ServicioContratadoProps {
   id?: string;
@@ -18,7 +19,7 @@ export interface ServicioContratadoProps {
   requiereCertificado?: boolean;
   vigenciaDias?: number | null;
   monto?: number | null;
-  moneda?: string | null;
+  moneda?: Moneda | null;
   estado?: EstadoGeneral;
 }
 
@@ -35,7 +36,7 @@ export class ServicioContratado {
   public requiereCertificado: boolean;
   public vigenciaDias: number | null;
   public monto: number | null;
-  public moneda: string | null;
+  public moneda: Moneda | null;
   private estado: EstadoGeneral;
 
   constructor(props: ServicioContratadoProps) {
@@ -60,9 +61,9 @@ export class ServicioContratado {
       throw new Error('Si el servicio requiere certificado ambiental, debe especificarse una vigencia en días mayor a 0');
     }
 
-    if (props.monto !== undefined && props.monto !== null && props.monto < 0) {
-      throw new Error('El monto no puede ser negativo');
-    }
+    const monto = props.monto ?? null;
+    const moneda = props.moneda ?? null;
+    validarMontoYMoneda(monto, moneda, 'monto');
 
     this.id = props.id ?? randomUUID();
     this.proyectoId = props.proyectoId;
@@ -75,8 +76,8 @@ export class ServicioContratado {
     this.dosisReferencial = props.dosisReferencial ?? {};
     this.requiereCertificado = props.requiereCertificado ?? false;
     this.vigenciaDias = props.vigenciaDias ?? null;
-    this.monto = props.monto ?? null;
-    this.moneda = props.moneda ?? null;
+    this.monto = monto;
+    this.moneda = moneda;
     this.estado = props.estado ?? 'ACTIVO';
   }
 
@@ -90,12 +91,15 @@ export class ServicioContratado {
     requiereCertificado?: boolean;
     vigenciaDias?: number | null;
     monto?: number | null;
-    moneda?: string | null;
+    moneda?: Moneda | null;
   }): void {
     const nuevaAreaTotal = props.areaTotalM2 !== undefined ? props.areaTotalM2 : this.areaTotalM2;
     const nuevaAreaTratar = props.areaTratarM2 !== undefined ? props.areaTratarM2 : this.areaTratarM2;
     const nuevoReqCert = props.requiereCertificado !== undefined ? props.requiereCertificado : this.requiereCertificado;
     const nuevaVigencia = props.vigenciaDias !== undefined ? props.vigenciaDias : this.vigenciaDias;
+    const nuevoMonto = props.monto !== undefined ? props.monto : this.monto;
+    const nuevaMoneda =
+      props.moneda !== undefined ? props.moneda : props.monto === null ? null : this.moneda;
 
     if (nuevaAreaTotal <= 0) {
       throw new Error('El área total debe ser mayor a 0 m²');
@@ -109,9 +113,7 @@ export class ServicioContratado {
     if (nuevoReqCert && (!nuevaVigencia || nuevaVigencia <= 0)) {
       throw new Error('Si el servicio requiere certificado ambiental, debe especificarse una vigencia en días mayor a 0');
     }
-    if (props.monto !== undefined && props.monto !== null && props.monto < 0) {
-      throw new Error('El monto no puede ser negativo');
-    }
+    validarMontoYMoneda(nuevoMonto, nuevaMoneda, 'monto');
 
     if (props.frecuencia !== undefined) this.frecuencia = props.frecuencia;
     if (props.areaTotalM2 !== undefined) this.areaTotalM2 = props.areaTotalM2;
@@ -121,8 +123,8 @@ export class ServicioContratado {
     if (props.dosisReferencial !== undefined) this.dosisReferencial = props.dosisReferencial;
     if (props.requiereCertificado !== undefined) this.requiereCertificado = props.requiereCertificado;
     if (props.vigenciaDias !== undefined) this.vigenciaDias = props.vigenciaDias;
-    if (props.monto !== undefined) this.monto = props.monto;
-    if (props.moneda !== undefined) this.moneda = props.moneda;
+    this.monto = nuevoMonto;
+    this.moneda = nuevaMoneda;
   }
 
   desactivar(): void {

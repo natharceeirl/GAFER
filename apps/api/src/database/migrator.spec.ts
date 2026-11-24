@@ -102,6 +102,12 @@ describe('Database Migration and Schema Configuration (T2.1)', () => {
     expect(up[1].sql).toContain('ADD COLUMN IF NOT EXISTS clave_hash');
     expect(down[1].sql).toContain('DROP COLUMN IF EXISTS clave_hash');
     expect(up[2].sql).toContain('monto');
+    expect(up[2].sql).toContain('CHECK (monto IS NULL OR monto >= 0)');
+    expect(up[2].sql).toContain('CHECK (monto_presupuestado IS NULL OR monto_presupuestado >= 0)');
+    expect(up[2].sql).toContain('CHECK ((monto IS NULL) = (moneda IS NULL))');
+    expect(up[2].sql).toContain('CHECK ((monto_presupuestado IS NULL) = (moneda IS NULL))');
     expect(down[0].sql).toContain('DROP COLUMN IF EXISTS monto');
+    expect(down[0].sql).toContain('DROP CONSTRAINT IF EXISTS chk_servicios_contratados_monto_no_negativo');
+    expect(down[0].sql).toContain('DROP CONSTRAINT IF EXISTS chk_proyectos_monto_presupuestado_no_negativo');
   });
 });

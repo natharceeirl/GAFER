@@ -94,6 +94,9 @@ export interface DatosProyecto {
 /** Id de cliente de relleno: el esquema de alta lo exige, pero el cliente ya está elegido y no se valida aquí. */
 const CLIENTE_DE_RELLENO = '00000000-0000-4000-8000-000000000000';
 
+const MENSAJE_MONTO = 'Ingrese un monto numérico válido mayor o igual a 0.';
+const MENSAJE_MONEDA = 'Seleccione una moneda válida (PEN o USD).';
+
 /**
  * Valida la sede con los esquemas de `@gafer/contracts`. En edición el nombre admite de 3 a 50 caracteres,
  * como lo guarda la base. La unicidad del nombre dentro del cliente se revisa aquí contra las sedes ya cargadas
@@ -114,7 +117,9 @@ export function validarProyecto(
       const campo = campoDeRutaProyecto(String(incidencia.path[0]));
       if (!campo || e[campo]) continue;
       if (campo === 'montoPresupuestado') {
-        e[campo] = 'Ingrese un monto numérico válido mayor o igual a 0.';
+        e[campo] = incidencia.code === 'too_big' || incidencia.code === 'custom' ? incidencia.message : MENSAJE_MONTO;
+      } else if (campo === 'moneda') {
+        e[campo] = incidencia.code === 'custom' ? incidencia.message : MENSAJE_MONEDA;
       } else {
         e[campo] = vacio(d[campo] ?? '') ? OBLIGATORIO : incidencia.message;
       }
@@ -166,7 +171,9 @@ export function validarServicio(d: DatosServicio): Errores<keyof DatosServicio> 
       } else if (campo === 'frecuencia') {
         e[campo] = OBLIGATORIO;
       } else if (campo === 'monto') {
-        e[campo] = 'Ingrese un monto numérico válido mayor o igual a 0.';
+        e[campo] = incidencia.code === 'too_big' || incidencia.code === 'custom' ? incidencia.message : MENSAJE_MONTO;
+      } else if (campo === 'moneda') {
+        e[campo] = incidencia.code === 'custom' ? incidencia.message : MENSAJE_MONEDA;
       }
     }
   }

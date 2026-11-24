@@ -1,4 +1,4 @@
-import type { EstadoActivoInactivo, ProyectoActualizacion, ProyectoDetalle, ProyectoRegistro } from '@gafer/contracts';
+import type { EstadoActivoInactivo, Moneda, ProyectoActualizacion, ProyectoDetalle, ProyectoRegistro } from '@gafer/contracts';
 import { repartirError, type ErroresDeServidor } from './errores-servidor';
 import type { ServicioContratado } from './servicio-mapper';
 import type { DatosProyecto } from './validaciones';
@@ -26,7 +26,7 @@ export interface ProyectoExpediente {
   estado: EstadoActivoInactivo;
   servicios: ServicioContratado[];
   montoPresupuestado?: number | null;
-  moneda?: string | null;
+  moneda?: Moneda | null;
 }
 
 export function proyectoDeApi(api: ProyectoDetalle, servicios: ServicioContratado[]): ProyectoExpediente {

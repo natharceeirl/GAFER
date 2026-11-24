@@ -374,7 +374,7 @@ describe('MantenimientoController', () => {
       });
       mockProyectoUseCase.execute.mockResolvedValue(mockProyecto);
 
-      const res = await controller.crearProyecto({
+      const payload = {
         clienteId: 'c-1',
         nombre: 'PLANTA_SUR',
         direccionSede: 'Carretera Costanera Km 12',
@@ -385,11 +385,71 @@ describe('MantenimientoController', () => {
         contactoCargo: 'Supervisor de Planta',
         contactoTelefono: '954987654',
         montoPresupuestado: 25000,
-        moneda: 'PEN',
-      });
+        moneda: 'PEN' as const,
+      };
+      const res = await controller.crearProyecto(payload);
 
+      expect(mockProyectoUseCase.execute).toHaveBeenCalledWith(payload);
       expect(res.montoPresupuestado).toBe(25000);
       expect(res.moneda).toBe('PEN');
+    });
+
+    it('debe actualizar y limpiar montoPresupuestado y moneda en actualizarProyecto (GAF-105)', async () => {
+      const proyectoConMonto = new Proyecto({
+        id: 'p-1',
+        clienteId: 'c-1',
+        nombre: 'PLANTA_SUR',
+        direccionSede: 'Carretera Costanera Km 12',
+        distrito: 'Mollendo',
+        provincia: 'Islay',
+        departamento: 'Arequipa',
+        contactoNombre: 'Mario Vargas',
+        contactoCargo: 'Supervisor de Planta',
+        contactoTelefono: '954987654',
+        montoPresupuestado: 30000,
+        moneda: 'USD',
+      });
+      mockActualizarProyectoUseCase.execute.mockResolvedValueOnce(proyectoConMonto);
+
+      const actualizado = await controller.actualizarProyecto('p-1', {
+        montoPresupuestado: 30000,
+        moneda: 'USD',
+      });
+      expect(mockActualizarProyectoUseCase.execute).toHaveBeenCalledWith({
+        id: 'p-1',
+        montoPresupuestado: 30000,
+        moneda: 'USD',
+      });
+      expect(actualizado.montoPresupuestado).toBe(30000);
+      expect(actualizado.moneda).toBe('USD');
+
+      const proyectoSinMonto = new Proyecto({
+        id: 'p-1',
+        clienteId: 'c-1',
+        nombre: 'PLANTA_SUR',
+        direccionSede: 'Carretera Costanera Km 12',
+        distrito: 'Mollendo',
+        provincia: 'Islay',
+        departamento: 'Arequipa',
+        contactoNombre: 'Mario Vargas',
+        contactoCargo: 'Supervisor de Planta',
+        contactoTelefono: '954987654',
+        montoPresupuestado: null,
+        moneda: null,
+      });
+      mockActualizarProyectoUseCase.execute.mockResolvedValueOnce(proyectoSinMonto);
+
+      const limpiado = await controller.actualizarProyecto('p-1', {
+        montoPresupuestado: null,
+        moneda: null,
+      });
+      expect(mockActualizarProyectoUseCase.execute).toHaveBeenCalledWith({
+        id: 'p-1',
+        montoPresupuestado: null,
+        moneda: null,
+      });
+      expect(limpiado.montoPresupuestado).toBeNull();
+      expect(limpiado.moneda).toBeNull();
     });
   });
 
@@ -466,18 +526,71 @@ describe('MantenimientoController', () => {
       });
       mockServicioUseCase.execute.mockResolvedValue(mockServicio);
 
-      const res = await controller.crearServicioContratado({
+      const payload = {
+        proyectoId: 'p-1',
+        tipoServicio: 'DSF' as const,
+        frecuencia: 'MENSUAL' as const,
+        areaTotalM2: 5000,
+        areaTratarM2: 3500,
+        monto: 1200.5,
+        moneda: 'USD' as const,
+      };
+      const res = await controller.crearServicioContratado(payload);
+
+      expect(mockServicioUseCase.execute).toHaveBeenCalledWith(payload);
+      expect(res.monto).toBe(1200.5);
+      expect(res.moneda).toBe('USD');
+    });
+
+    it('debe actualizar y limpiar monto y moneda en actualizarServicioContratado (GAF-105)', async () => {
+      const { ServicioContratado } = await import('../domain/servicio-contratado');
+      const servicioConMonto = new ServicioContratado({
+        id: 's-1',
         proyectoId: 'p-1',
         tipoServicio: 'DSF',
         frecuencia: 'MENSUAL',
         areaTotalM2: 5000,
         areaTratarM2: 3500,
-        monto: 1200.5,
-        moneda: 'USD',
+        monto: 1500,
+        moneda: 'PEN',
       });
+      mockActualizarServicioUseCase.execute.mockResolvedValueOnce(servicioConMonto);
 
-      expect(res.monto).toBe(1200.5);
-      expect(res.moneda).toBe('USD');
+      const actualizado = await controller.actualizarServicioContratado('s-1', {
+        monto: 1500,
+        moneda: 'PEN',
+      });
+      expect(mockActualizarServicioUseCase.execute).toHaveBeenCalledWith({
+        id: 's-1',
+        monto: 1500,
+        moneda: 'PEN',
+      });
+      expect(actualizado.monto).toBe(1500);
+      expect(actualizado.moneda).toBe('PEN');
+
+      const servicioSinMonto = new ServicioContratado({
+        id: 's-1',
+        proyectoId: 'p-1',
+        tipoServicio: 'DSF',
+        frecuencia: 'MENSUAL',
+        areaTotalM2: 5000,
+        areaTratarM2: 3500,
+        monto: null,
+        moneda: null,
+      });
+      mockActualizarServicioUseCase.execute.mockResolvedValueOnce(servicioSinMonto);
+
+      const limpiado = await controller.actualizarServicioContratado('s-1', {
+        monto: null,
+        moneda: null,
+      });
+      expect(mockActualizarServicioUseCase.execute).toHaveBeenCalledWith({
+        id: 's-1',
+        monto: null,
+        moneda: null,
+      });
+      expect(limpiado.monto).toBeNull();
+      expect(limpiado.moneda).toBeNull();
     });
   });
 

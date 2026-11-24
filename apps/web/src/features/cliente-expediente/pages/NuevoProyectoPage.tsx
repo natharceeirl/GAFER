@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { MONTO_MAXIMO } from '@gafer/contracts';
 import { AltaFormLayout } from '../components/AltaForm';
 import { Bloque, Campo, ariaError } from '../../../shared/ui/molecules/FormFields';
 import { validarProyecto, type DatosProyecto, type Errores } from '../model/validaciones';
@@ -207,6 +208,7 @@ export function NuevoProyectoPage({
             {...ariaError('pro-monto-presupuestado', visibles.montoPresupuestado)}
             type="number"
             min={0}
+            max={MONTO_MAXIMO}
             step="0.01"
             inputMode="decimal"
             value={datos.montoPresupuestado ?? ''}

@@ -1,5 +1,9 @@
 import { randomUUID } from 'crypto';
+import type { Moneda } from '@gafer/contracts';
 import { EstadoGeneral } from './cliente';
+import { validarMontoYMoneda } from './monto-moneda';
+
+export type { Moneda };
 
 export interface ProyectoProps {
   id?: string;
@@ -15,7 +19,7 @@ export interface ProyectoProps {
   estado?: EstadoGeneral;
   observaciones?: string | null;
   montoPresupuestado?: number | null;
-  moneda?: string | null;
+  moneda?: Moneda | null;
 }
 
 export class Proyecto {
@@ -30,7 +34,7 @@ export class Proyecto {
   public contactoCargo: string;
   public contactoTelefono: string;
   public montoPresupuestado: number | null;
-  public moneda: string | null;
+  public moneda: Moneda | null;
   private estado: EstadoGeneral;
   public observaciones: string | null;
 
@@ -47,9 +51,9 @@ export class Proyecto {
       throw new Error('La dirección física de la sede es obligatoria');
     }
 
-    if (props.montoPresupuestado !== undefined && props.montoPresupuestado !== null && props.montoPresupuestado < 0) {
-      throw new Error('El presupuesto no puede ser negativo');
-    }
+    const montoPresupuestado = props.montoPresupuestado ?? null;
+    const moneda = props.moneda ?? null;
+    validarMontoYMoneda(montoPresupuestado, moneda, 'presupuesto');
 
     this.id = props.id ?? randomUUID();
     this.clienteId = props.clienteId;
@@ -63,8 +67,8 @@ export class Proyecto {
     this.contactoTelefono = props.contactoTelefono.trim();
     this.estado = props.estado ?? 'ACTIVO';
     this.observaciones = props.observaciones ?? null;
-    this.montoPresupuestado = props.montoPresupuestado ?? null;
-    this.moneda = props.moneda ?? null;
+    this.montoPresupuestado = montoPresupuestado;
+    this.moneda = moneda;
   }
 
   actualizarDatos(props: {
@@ -78,18 +82,29 @@ export class Proyecto {
     contactoTelefono?: string;
     observaciones?: string | null;
     montoPresupuestado?: number | null;
-    moneda?: string | null;
+    moneda?: Moneda | null;
   }): void {
+    if (props.nombre !== undefined && !/^[A-Z0-9_]{3,50}$/.test(props.nombre)) {
+      throw new Error('El nombre de la sede/proyecto debe tener entre 3 y 50 caracteres alfanuméricos en mayúsculas sin espacios (ej. PLANTA_SUR)');
+    }
+    if (props.direccionSede !== undefined && (!props.direccionSede || props.direccionSede.trim().length === 0)) {
+      throw new Error('La dirección física de la sede es obligatoria');
+    }
+
+    const nuevoMonto =
+      props.montoPresupuestado !== undefined ? props.montoPresupuestado : this.montoPresupuestado;
+    const nuevaMoneda =
+      props.moneda !== undefined
+        ? props.moneda
+        : props.montoPresupuestado === null
+          ? null
+          : this.moneda;
+    validarMontoYMoneda(nuevoMonto, nuevaMoneda, 'presupuesto');
+
     if (props.nombre !== undefined) {
-      if (!/^[A-Z0-9_]{3,50}$/.test(props.nombre)) {
-        throw new Error('El nombre de la sede/proyecto debe tener entre 3 y 50 caracteres alfanuméricos en mayúsculas sin espacios (ej. PLANTA_SUR)');
-      }
       this.nombre = props.nombre;
     }
     if (props.direccionSede !== undefined) {
-      if (!props.direccionSede || props.direccionSede.trim().length === 0) {
-        throw new Error('La dirección física de la sede es obligatoria');
-      }
       this.direccionSede = props.direccionSede.trim();
     }
     if (props.distrito !== undefined) {
@@ -113,15 +128,8 @@ export class Proyecto {
     if (props.observaciones !== undefined) {
       this.observaciones = props.observaciones;
     }
-    if (props.montoPresupuestado !== undefined) {
-      if (props.montoPresupuestado !== null && props.montoPresupuestado < 0) {
-        throw new Error('El presupuesto no puede ser negativo');
-      }
-      this.montoPresupuestado = props.montoPresupuestado;
-    }
-    if (props.moneda !== undefined) {
-      this.moneda = props.moneda;
-    }
+    this.montoPresupuestado = nuevoMonto;
+    this.moneda = nuevaMoneda;
   }
 
   desactivar(): void {

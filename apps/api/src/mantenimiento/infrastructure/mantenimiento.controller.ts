@@ -79,7 +79,7 @@ import {
   PERSONAL_REPOSITORY,
   PersonalRepository,
 } from '../domain/ports/personal.repository';
-import { ServicioContratado } from '../domain/servicio-contratado';
+import { Moneda, ServicioContratado } from '../domain/servicio-contratado';
 
 // S3 Storage
 import { S3StorageService } from '../../shared/infrastructure/storage/s3-storage.service';
@@ -451,7 +451,7 @@ export class MantenimientoController {
     getEstado: () => 'ACTIVO' | 'INACTIVO';
     observaciones: string | null;
     montoPresupuestado?: number | null;
-    moneda?: string | null;
+    moneda?: Moneda | null;
   }): ProyectoResponseDto {
     return {
       id: p.id,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Equipo, FrecuenciaServicio, Insumo, TipoServicio } from '@gafer/contracts';
+import { MONTO_MAXIMO, type Equipo, type FrecuenciaServicio, type Insumo, type TipoServicio } from '@gafer/contracts';
 import { AltaFormLayout } from '../components/AltaForm';
 import { EstadoCargando, EstadoError } from '../components/EstadoConsulta';
 import { Bloque, Campo, Opciones, ariaError } from '../../../shared/ui/molecules/FormFields';
@@ -350,6 +350,7 @@ export function NuevoServicioPage({
             {...ariaError('ser-monto', visibles.monto)}
             type="number"
             min={0}
+            max={MONTO_MAXIMO}
             step="0.01"
             inputMode="decimal"
             value={datos.monto ?? ''}
