@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { RegistrarClienteUseCase } from './registrar-cliente.usecase';
 import { RegistrarProyectoUseCase } from './registrar-proyecto.usecase';
 import { RegistrarPersonalUseCase } from './registrar-personal.usecase';
@@ -277,6 +278,64 @@ describe('Mantenimiento Use Cases (T2.2)', () => {
         useCase.execute({ id: 'p1', nombre: 'SEDE_EXISTENTE' }),
       ).rejects.toThrow('El cliente ya posee una sede registrada con el nombre: SEDE_EXISTENTE');
     });
+
+    describe('coherencia de montoPresupuestado y moneda en actualización parcial (GAF-105)', () => {
+      const crearProyecto = (extra: { montoPresupuestado?: number; moneda?: 'PEN' | 'USD' } = {}) =>
+        new Proyecto({
+          id: 'p1',
+          clienteId: 'c1',
+          nombre: 'SEDE_ORIGINAL',
+          direccionSede: 'Calle 1',
+          distrito: 'Distrito 1',
+          provincia: 'Provincia 1',
+          departamento: 'Dept 1',
+          contactoNombre: 'Juan',
+          contactoCargo: 'Jefe',
+          contactoTelefono: '958123456',
+          ...extra,
+        });
+
+      async function ejecutar(almacenado: Proyecto, cambios: { montoPresupuestado?: number | null; moneda?: 'PEN' | 'USD' | null }) {
+        const { ActualizarProyectoUseCase } = await import('./actualizar-proyecto.usecase');
+        mockProyectoRepo.buscarPorId.mockResolvedValue(almacenado);
+        return new ActualizarProyectoUseCase(mockProyectoRepo).execute({ id: 'p1', ...cambios });
+      }
+
+      async function errorDe(promesa: Promise<unknown>) {
+        const error = await promesa.then(
+          () => null,
+          (e: unknown) => e,
+        );
+        expect(error).toBeInstanceOf(BadRequestException);
+        return (error as BadRequestException).getResponse() as { message: string[]; errors: { path: string; message: string }[] };
+      }
+
+      it('nombra el campo moneda cuando solo llega moneda y la sede no tiene presupuesto', async () => {
+        const cuerpo = await errorDe(ejecutar(crearProyecto(), { moneda: 'USD' }));
+        expect(cuerpo.errors).toEqual([{ path: 'moneda', message: 'No se puede especificar una moneda sin un presupuesto' }]);
+        expect(cuerpo.message).toEqual(['moneda: No se puede especificar una moneda sin un presupuesto']);
+        expect(mockProyectoRepo.guardar).not.toHaveBeenCalled();
+      });
+
+      it('nombra el campo moneda cuando solo llega el presupuesto y la sede no tiene moneda', async () => {
+        const cuerpo = await errorDe(ejecutar(crearProyecto(), { montoPresupuestado: 100 }));
+        expect(cuerpo.errors[0].path).toBe('moneda');
+      });
+
+      it('nombra montoPresupuestado cuando el valor es negativo', async () => {
+        const cuerpo = await errorDe(ejecutar(crearProyecto(), { montoPresupuestado: -1, moneda: 'PEN' }));
+        expect(cuerpo.errors[0].path).toBe('montoPresupuestado');
+      });
+
+      it('acepta solo moneda si la sede ya tiene presupuesto, y solo presupuesto si ya tiene moneda', async () => {
+        const soloMoneda = await ejecutar(crearProyecto({ montoPresupuestado: 100, moneda: 'PEN' }), { moneda: 'USD' });
+        expect(soloMoneda.moneda).toBe('USD');
+        expect(soloMoneda.montoPresupuestado).toBe(100);
+        const soloMonto = await ejecutar(crearProyecto({ montoPresupuestado: 100, moneda: 'PEN' }), { montoPresupuestado: 250 });
+        expect(soloMonto.montoPresupuestado).toBe(250);
+        expect(soloMonto.moneda).toBe('PEN');
+      });
+    });
   });
 
   describe('RegistrarServicioContratadoUseCase', () => {
@@ -417,6 +476,63 @@ describe('Mantenimiento Use Cases (T2.2)', () => {
       expect(res.areaTratarM2).toBe(800);
       expect(res.insumosAutorizados).toEqual(['i1']);
       expect(mockServicioRepo.guardar).toHaveBeenCalled();
+    });
+
+    describe('coherencia de monto y moneda en actualización parcial (GAF-105)', () => {
+      async function ejecutar(
+        almacenado: { monto?: number; moneda?: 'PEN' | 'USD' },
+        cambios: { monto?: number | null; moneda?: 'PEN' | 'USD' | null },
+      ) {
+        const { ActualizarServicioContratadoUseCase } = await import('./actualizar-servicio-contratado.usecase');
+        const { ServicioContratado } = await import('../domain/servicio-contratado');
+        const servicio = new ServicioContratado({
+          id: 's1',
+          proyectoId: 'p1',
+          tipoServicio: 'DSF',
+          frecuencia: 'MENSUAL',
+          areaTotalM2: 1000,
+          areaTratarM2: 500,
+          ...almacenado,
+        });
+        const repo = {
+          guardar: jest.fn().mockResolvedValue(undefined),
+          buscarPorId: jest.fn().mockResolvedValue(servicio),
+          buscarPorProyectoId: jest.fn(),
+        };
+        const resultado = await new ActualizarServicioContratadoUseCase(repo).execute({ id: 's1', ...cambios }).then(
+          (r) => ({ r, error: null as unknown }),
+          (error: unknown) => ({ r: null, error }),
+        );
+        return { ...resultado, repo };
+      }
+
+      it('nombra el campo moneda cuando solo llega moneda y el servicio no tiene monto', async () => {
+        const { error, repo } = await ejecutar({}, { moneda: 'USD' });
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect((error as BadRequestException).getResponse()).toMatchObject({
+          message: ['moneda: No se puede especificar una moneda sin un monto'],
+          errors: [{ path: 'moneda', message: 'No se puede especificar una moneda sin un monto' }],
+        });
+        expect(repo.guardar).not.toHaveBeenCalled();
+      });
+
+      it('nombra el campo moneda cuando solo llega monto y el servicio no tiene moneda', async () => {
+        const { error } = await ejecutar({}, { monto: 100 });
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect((error as BadRequestException).getResponse()).toMatchObject({ errors: [{ path: 'moneda' }] });
+      });
+
+      it('nombra monto cuando el valor es negativo', async () => {
+        const { error } = await ejecutar({}, { monto: -5, moneda: 'PEN' });
+        expect((error as BadRequestException).getResponse()).toMatchObject({ errors: [{ path: 'monto' }] });
+      });
+
+      it('acepta solo moneda si el servicio ya tiene monto, y solo monto si ya tiene moneda', async () => {
+        const soloMoneda = await ejecutar({ monto: 100, moneda: 'PEN' }, { moneda: 'USD' });
+        expect(soloMoneda.r).toMatchObject({ monto: 100, moneda: 'USD' });
+        const soloMonto = await ejecutar({ monto: 100, moneda: 'PEN' }, { monto: 250 });
+        expect(soloMonto.r).toMatchObject({ monto: 250, moneda: 'PEN' });
+      });
     });
   });
 

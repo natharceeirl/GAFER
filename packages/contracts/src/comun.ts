@@ -32,11 +32,25 @@ export type Moneda = z.infer<typeof MonedaSchema>;
 /** Tope numérico compatible con columnas NUMERIC(12, 2) en PostgreSQL (< 10^10). */
 export const MONTO_MAXIMO = 9_999_999_999.99;
 
-/** Monto monetario no negativo acotado a NUMERIC(12, 2). */
+/**
+ * Indica si un número tiene como máximo 2 decimales, como exige NUMERIC(12, 2).
+ * Compara el valor con su redondeo a 2 decimales (`toFixed`) en lugar de multiplicar por 100,
+ * porque `x * 100` arrastra error de coma flotante (p. ej. 1.15 * 100 = 114.99999999999999).
+ */
+export function tieneComoMuchoDosDecimales(valor: number): boolean {
+  return Number.isFinite(valor) && Number(valor.toFixed(2)) === valor;
+}
+
+/** Monto monetario no negativo, con hasta 2 decimales y acotado a NUMERIC(12, 2). */
 export const MontoSchema = z
   .number()
   .nonnegative('El monto no puede ser negativo')
-  .max(MONTO_MAXIMO, `El monto no puede superar ${MONTO_MAXIMO}`);
+  .max(MONTO_MAXIMO, `El monto no puede superar ${MONTO_MAXIMO}`)
+  .refine(
+    // Los valores no finitos ya los rechazan las otras reglas; así no se duplica la incidencia.
+    (valor) => !Number.isFinite(valor) || tieneComoMuchoDosDecimales(valor),
+    'El monto admite como máximo 2 decimales',
+  );
 
 /** Consulta paginada de los listados: 20 registros por defecto, hasta 100; los números llegan como texto en la URL. */
 export const PaginacionQuerySchema = z.object({

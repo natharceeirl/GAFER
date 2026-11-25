@@ -1,6 +1,7 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PROYECTO_REPOSITORY, ProyectoRepository } from '../domain/ports/proyecto.repository';
 import { Moneda, Proyecto } from '../domain/proyecto';
+import { actualizarConCamposMonto } from './actualizar-con-campos-monto';
 
 export interface ActualizarProyectoCommand {
   id: string;
@@ -42,7 +43,7 @@ export class ActualizarProyectoUseCase {
       }
     }
 
-    proyecto.actualizarDatos(command);
+    actualizarConCamposMonto(() => proyecto.actualizarDatos(command));
     await this.proyectoRepository.guardar(proyecto);
     return proyecto;
   }

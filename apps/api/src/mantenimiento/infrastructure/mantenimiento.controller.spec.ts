@@ -28,6 +28,10 @@ import { Insumo } from '../domain/insumo';
 import { Equipo } from '../domain/equipo';
 import { Personal } from '../domain/personal';
 
+function usuarioConCargo(cargo: CargoPersonal): TokenPayload {
+  return { id: 'u-1', usuario: 'USUARIO', cargo, tokenVersion: 1 };
+}
+
 describe('MantenimientoController', () => {
   let controller: MantenimientoController;
 
@@ -331,9 +335,54 @@ describe('MantenimientoController', () => {
       });
       mockProyectoRepo.buscarPorId.mockResolvedValue(mockProyecto);
 
-      const res = await controller.obtenerProyecto('p-1');
+      const res = await controller.obtenerProyecto('p-1', usuarioConCargo('ADMINISTRADOR'));
       expect(res.id).toBe('p-1');
       expect(res.nombre).toBe('PLANTA_SUR');
+    });
+
+    describe('visibilidad de montos por cargo (GAF-105)', () => {
+      const proyectoConMonto = () =>
+        new Proyecto({
+          id: 'p-1',
+          clienteId: 'c-1',
+          nombre: 'PLANTA_SUR',
+          direccionSede: 'Carretera Costanera Km 12',
+          distrito: 'Mollendo',
+          provincia: 'Islay',
+          departamento: 'Arequipa',
+          contactoNombre: 'Mario Vargas',
+          contactoCargo: 'Supervisor de Planta',
+          contactoTelefono: '954987654',
+          montoPresupuestado: 25000,
+          moneda: 'PEN',
+        });
+
+      it.each(['ADMINISTRADOR', 'SUPERVISOR'] as const)('%s ve el monto en obtenerProyecto y en el listado por cliente', async (cargo) => {
+        mockProyectoRepo.buscarPorId.mockResolvedValue(proyectoConMonto());
+        mockProyectoRepo.buscarPorClienteId.mockResolvedValue([proyectoConMonto()]);
+
+        const uno = await controller.obtenerProyecto('p-1', usuarioConCargo(cargo));
+        const lista = await controller.listarProyectosPorCliente('c-1', usuarioConCargo(cargo));
+
+        expect(uno.montoPresupuestado).toBe(25000);
+        expect(uno.moneda).toBe('PEN');
+        expect(lista[0].montoPresupuestado).toBe(25000);
+        expect(lista[0].moneda).toBe('PEN');
+      });
+
+      it('TECNICO_OPERADOR no recibe monto ni moneda en obtenerProyecto ni en el listado por cliente', async () => {
+        mockProyectoRepo.buscarPorId.mockResolvedValue(proyectoConMonto());
+        mockProyectoRepo.buscarPorClienteId.mockResolvedValue([proyectoConMonto()]);
+
+        const uno = await controller.obtenerProyecto('p-1', usuarioConCargo('TECNICO_OPERADOR'));
+        const lista = await controller.listarProyectosPorCliente('c-1', usuarioConCargo('TECNICO_OPERADOR'));
+
+        for (const proyecto of [uno, lista[0]]) {
+          expect(proyecto).not.toHaveProperty('montoPresupuestado');
+          expect(proyecto).not.toHaveProperty('moneda');
+          expect(proyecto.nombre).toBe('PLANTA_SUR');
+        }
+      });
     });
 
     it('debe actualizar un proyecto', async () => {
@@ -505,11 +554,55 @@ describe('MantenimientoController', () => {
       });
       mockServicioRepo.buscarPorId.mockResolvedValue(mockServicio);
 
-      const res = await controller.obtenerServicioContratado('s-1');
+      const res = await controller.obtenerServicioContratado('s-1', usuarioConCargo('ADMINISTRADOR'));
       expect(res.id).toBe('s-1');
       expect(res.tipoServicio).toBe('DRT');
       expect(res.insumosAutorizados).toEqual(['i-2']);
       expect(res.dosisReferencial).toEqual({ 'i-2': '1 bloque' });
+    });
+
+    describe('visibilidad de montos por cargo (GAF-105)', () => {
+      const servicioConMonto = () =>
+        new ServicioContratado({
+          id: 's-1',
+          proyectoId: 'p-1',
+          tipoServicio: 'DRT',
+          frecuencia: 'QUINCENAL',
+          areaTotalM2: 1000,
+          areaTratarM2: 500,
+          insumosAutorizados: ['i-2'],
+          equiposAutorizados: ['e-2'],
+          dosisReferencial: { 'i-2': '1 bloque' },
+          monto: 1200.5,
+          moneda: 'USD',
+        });
+
+      it.each(['ADMINISTRADOR', 'SUPERVISOR'] as const)('%s ve el monto en obtenerServicioContratado y en el listado por sede', async (cargo) => {
+        mockServicioRepo.buscarPorId.mockResolvedValue(servicioConMonto());
+        mockServicioRepo.buscarPorProyectoId.mockResolvedValue([servicioConMonto()]);
+
+        const uno = await controller.obtenerServicioContratado('s-1', usuarioConCargo(cargo));
+        const lista = await controller.listarServiciosPorProyecto('p-1', usuarioConCargo(cargo));
+
+        expect(uno.monto).toBe(1200.5);
+        expect(uno.moneda).toBe('USD');
+        expect(lista[0].monto).toBe(1200.5);
+        expect(lista[0].moneda).toBe('USD');
+      });
+
+      it('TECNICO_OPERADOR no recibe monto ni moneda en obtenerServicioContratado ni en el listado por sede', async () => {
+        mockServicioRepo.buscarPorId.mockResolvedValue(servicioConMonto());
+        mockServicioRepo.buscarPorProyectoId.mockResolvedValue([servicioConMonto()]);
+
+        const uno = await controller.obtenerServicioContratado('s-1', usuarioConCargo('TECNICO_OPERADOR'));
+        const lista = await controller.listarServiciosPorProyecto('p-1', usuarioConCargo('TECNICO_OPERADOR'));
+
+        for (const servicio of [uno, lista[0]]) {
+          expect(servicio).not.toHaveProperty('monto');
+          expect(servicio).not.toHaveProperty('moneda');
+          expect(servicio.tipoServicio).toBe('DRT');
+        }
+      });
     });
 
     it('debe registrar y retornar monto y moneda opcionales (GAF-105)', async () => {
