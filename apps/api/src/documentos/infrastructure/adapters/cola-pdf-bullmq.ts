@@ -28,13 +28,42 @@ export const OPCIONES_TRABAJO_PDF: JobsOptions = {
 export class ColaPdfBullmq implements ColaPdfPort, OnModuleDestroy {
   private cola: Queue<TrabajoGenerarPdf> | null = null;
 
+  private get tiempoMaximoMs(): number {
+    return Number(process.env.REDIS_ENCOLAR_TIEMPO_MS ?? 5_000);
+  }
+
   async encolar(documentoId: string): Promise<void> {
-    // Sin cola offline: si Redis no responde, falla al instante y la solicitud deja constancia del error.
+    const cola = this.abrir();
+    let temporizador: NodeJS.Timeout | undefined;
+    try {
+      // Con Redis caído BullMQ reintenta conectar sin rendirse: sin este límite la petición HTTP quedaría colgada.
+      await Promise.race([
+        cola.add('generar', { documentoId }),
+        new Promise<never>((_, rechazar) => {
+          temporizador = setTimeout(
+            () => rechazar(new Error(`Redis no respondió en ${this.tiempoMaximoMs} ms`)),
+            this.tiempoMaximoMs,
+          );
+        }),
+      ]);
+    } catch (error) {
+      // Se descarta la conexión rota: el próximo intento abre una nueva.
+      this.cola = null;
+      void cola.close().catch(() => undefined);
+      throw error;
+    } finally {
+      clearTimeout(temporizador);
+    }
+  }
+
+  private abrir(): Queue<TrabajoGenerarPdf> {
     this.cola ??= new Queue<TrabajoGenerarPdf>(COLA_GENERAR_PDF, {
-      connection: { ...conexionRedis(), enableOfflineQueue: false, connectTimeout: 3_000 },
+      connection: { ...conexionRedis(), connectTimeout: 3_000, maxRetriesPerRequest: null },
       defaultJobOptions: OPCIONES_TRABAJO_PDF,
     });
-    await this.cola.add('generar', { documentoId });
+    // Sin este oyente un Redis caído sería una excepción sin capturar del proceso.
+    this.cola.on('error', () => undefined);
+    return this.cola;
   }
 
   async onModuleDestroy(): Promise<void> {

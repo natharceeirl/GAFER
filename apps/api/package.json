@@ -28,6 +28,7 @@
     "@scalar/nestjs-api-reference": "^1.2.19",
     "bullmq": "^6.7.8",
     "dotenv": "^18.0.0",
+    "ioredis": "^6.1.0",
     "kysely": "^0.29.6",
     "nestjs-zod": "^5.5.0",
     "pg": "^8.23.0",
