@@ -335,4 +335,13 @@ describe('OutboxQueue (Móvil Offline-First con sync.v1 - GAP-05)', () => {
       expect(fila?.status).toBe('SYNCED');
     });
   });
+
+  describe('construcción sin destino explícito', () => {
+    it('lanza un error claro si la base de datos no fue inicializada, en vez de operar solo en memoria', async () => {
+      const { cerrarBaseDeDatos } = await import('./sqlite');
+      await cerrarBaseDeDatos();
+
+      expect(() => new OutboxQueue()).toThrow(/inicializarBaseDeDatos/);
+    });
+  });
 });

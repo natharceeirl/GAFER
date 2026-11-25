@@ -84,10 +84,15 @@ export class OutboxQueue {
     } else if (target && 'getItem' in target) {
       this.storage = target;
     } else {
+      // Sin destino explícito exigimos la base real: degradar a memoria perdería operaciones al cerrar la app.
+      // El modo sin SQLite solo existe pasando un OutboxStorage de forma explícita.
       try {
         this.db = obtenerBaseDeDatos();
-      } catch {
-        // DB no inicializada aún, operará en memoria
+      } catch (causa) {
+        throw new Error(
+          'OutboxQueue requiere la base de datos SQLite inicializada. Llama primero a inicializarBaseDeDatos() o pasa un OutboxStorage explícito.',
+          { cause: causa },
+        );
       }
     }
   }
