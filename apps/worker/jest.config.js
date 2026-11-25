@@ -5,9 +5,8 @@ module.exports = {
   transform: {
     '^.+\\.(t|j)s$': 'ts-jest',
   },
-  // Workspace packages resuelven a su dist/*.js compilado (apps/api,
-  // packages/contracts) vía symlinks de pnpm: no necesitan pasar por
-  // ts-jest, Jest los puede requerir directamente como CommonJS.
+  // El worker importa el código fuente de @gafer/api, que usa kysely (paquete ESM): se transforma solo
+  // kysely; el resto de node_modules y los dist/ se requieren tal cual.
   transformIgnorePatterns: ['/node_modules/(?!(\\.pnpm/kysely@|kysely/))'],
   testEnvironment: 'node',
 };

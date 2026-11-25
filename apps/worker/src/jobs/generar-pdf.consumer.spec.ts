@@ -1,5 +1,13 @@
 import { Test } from '@nestjs/testing';
-import { GenerarPdfDocumentoUseCase, PDF_RENDERER } from '@gafer/api';
+import {
+  DOCUMENTO_REPOSITORY,
+  DocumentoRepositoryMemory,
+  GenerarPdfDocumentoUseCase,
+  KYSELY_DATABASE,
+  PDF_RENDERER,
+  TRANSACCION,
+  TransaccionMemory,
+} from '@gafer/api';
 import { WorkerModule } from '../worker.module';
 import { PdfkitInformeRenderer } from '../pdf/pdfkit-informe.renderer';
 import { GenerarPdfConsumer } from './generar-pdf.consumer';
@@ -19,7 +27,15 @@ describe('GenerarPdfConsumer', () => {
   });
 
   it('el módulo del worker arma el caso de uso con el motor pdfkit detrás del puerto', async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [WorkerModule] }).compile();
+    // Sin PostgreSQL: la conexión y el repositorio se sustituyen por dobles en memoria.
+    const moduleRef = await Test.createTestingModule({ imports: [WorkerModule] })
+      .overrideProvider(KYSELY_DATABASE)
+      .useValue({})
+      .overrideProvider(DOCUMENTO_REPOSITORY)
+      .useValue(new DocumentoRepositoryMemory())
+      .overrideProvider(TRANSACCION)
+      .useValue(new TransaccionMemory())
+      .compile();
     expect(moduleRef.get(GenerarPdfConsumer)).toBeInstanceOf(GenerarPdfConsumer);
     expect(moduleRef.get(GenerarPdfDocumentoUseCase)).toBeInstanceOf(GenerarPdfDocumentoUseCase);
     expect(moduleRef.get(PDF_RENDERER)).toBeInstanceOf(PdfkitInformeRenderer);
