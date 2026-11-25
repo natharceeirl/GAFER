@@ -1,9 +1,12 @@
-import { Body, Controller, Get, Optional, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Optional, Param, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiCreatedResponse, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CrearDocumentoUseCase } from '../application/crear-documento.usecase';
 import { TransicionarDocumentoUseCase } from '../application/transicionar-documento.usecase';
 import { ListarDocumentosUseCase } from '../application/listar-documentos.usecase';
 import { ObtenerDocumentoUseCase } from '../application/obtener-documento.usecase';
+import { SolicitarPdfDocumentoUseCase } from '../application/solicitar-pdf-documento.usecase';
+import { ObtenerPdfDocumentoUseCase } from '../application/obtener-pdf-documento.usecase';
 import { ActorDocumento } from '../domain/documento';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator';
 import { UsuarioActual } from '../../auth/infrastructure/decorators/usuario-actual.decorator';
@@ -16,6 +19,7 @@ import {
   DocumentoDetalleResponseDto,
   DocumentoResumenResponseDto,
   DocumentoTransicionadoResponseDto,
+  PdfSolicitadoResponseDto,
 } from './dto/documentos-response.dto';
 
 function actorDe(usuario: TokenPayload): ActorDocumento {
@@ -31,7 +35,9 @@ export class DocumentosController {
     private readonly transicionarDocumento: TransicionarDocumentoUseCase,
     private readonly listarDocumentos: ListarDocumentosUseCase,
     private readonly obtenerDocumento: ObtenerDocumentoUseCase,
-    @Optional() private readonly auditoria?: AuditoriaService,
+    @Optional() private readonly auditoria: AuditoriaService | undefined,
+    private readonly solicitarPdf: SolicitarPdfDocumentoUseCase,
+    private readonly obtenerPdf: ObtenerPdfDocumentoUseCase,
   ) {}
 
   @Get()
@@ -59,6 +65,60 @@ export class DocumentosController {
   @ApiResponse({ status: 404, description: 'Documento no encontrado', type: NotFoundErrorDto })
   async obtener(@Param('id', new ParseUUIDPipe()) id: string): Promise<DocumentoDetalleResponseDto> {
     return this.obtenerDocumento.ejecutar(id);
+  }
+
+  @Get(':id/pdf')
+  @Roles('ADMINISTRADOR', 'SUPERVISOR')
+  @ApiOperation({
+    summary: 'Descargar el PDF del documento',
+    description:
+      'Entrega el PDF ya generado (`application/pdf`). Responde 409 mientras no esté generado (o si la generación falló, ' +
+      'con el motivo) y 404 si el documento no existe.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID del documento' })
+  @ApiOkResponse({ description: 'Archivo PDF', content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } } })
+  @ApiResponse({ status: 404, description: 'Documento no encontrado', type: NotFoundErrorDto })
+  @ApiResponse({ status: 409, description: 'El PDF todavía no está generado' })
+  async descargarPdf(@Param('id', new ParseUUIDPipe()) id: string, @Res() res: Response): Promise<void> {
+    const pdf = await this.obtenerPdf.ejecutar(id);
+    res
+      .status(200)
+      .set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="${pdf.nombreArchivo}"`,
+        'Content-Length': String(pdf.contenido.length),
+        'Cache-Control': 'private, no-store',
+      })
+      .end(pdf.contenido);
+  }
+
+  @Post(':id/pdf')
+  @HttpCode(202)
+  @Roles('ADMINISTRADOR', 'SUPERVISOR')
+  @ApiOperation({
+    summary: 'Generar (o reintentar) el PDF del documento',
+    description:
+      'No renderiza en la petición: deja el PDF en PENDIENTE y encola el trabajo para el worker. Solo para documentos ' +
+      'aprobados. Sirve también para reintentar tras un error. Consulte el estado en `GET /documentos/:id` (campo `pdf`).',
+  })
+  @ApiParam({ name: 'id', description: 'UUID del documento' })
+  @ApiResponse({ status: 202, description: 'Trabajo encolado', type: PdfSolicitadoResponseDto })
+  @ApiResponse({ status: 404, description: 'Documento no encontrado', type: NotFoundErrorDto })
+  @ApiResponse({ status: 409, description: 'El documento aún no está aprobado' })
+  @ApiResponse({ status: 503, description: 'No se pudo encolar el trabajo (cola no disponible)' })
+  async generarPdf(@Param('id', new ParseUUIDPipe()) id: string, @UsuarioActual() usuario: TokenPayload): Promise<PdfSolicitadoResponseDto> {
+    await this.solicitarPdf.ejecutar(id);
+    await this.auditoria?.registrarEvento({
+      actorId: usuario.id,
+      actorUsuario: usuario.usuario,
+      actorRol: usuario.cargo,
+      modulo: 'DOCUMENTOS',
+      accion: 'GENERAR_PDF',
+      entidad: 'documento',
+      entidadId: id,
+      payloadNuevo: { pdfEstado: 'PENDIENTE' },
+    });
+    return { id, pdfEstado: 'PENDIENTE' };
   }
 
   @Post()

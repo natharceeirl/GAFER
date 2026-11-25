@@ -77,7 +77,8 @@ describe('Estado del PDF en PostgreSQL (GAF-54)', () => {
 
   it('guarda y lee el estado del PDF con clave, fecha, error e intentos', async () => {
     const id = await aprobado();
-    expect((await repo.buscarPorId(id))!.getPdf().estado).toBeNull();
+    // Aprobar ya encoló el PDF: el documento queda PENDIENTE.
+    expect((await repo.buscarPorId(id))!.getPdf().estado).toBe('PENDIENTE');
 
     const doc = (await repo.buscarPorId(id))!;
     doc.solicitarPdf();

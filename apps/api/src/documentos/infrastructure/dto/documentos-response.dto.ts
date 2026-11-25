@@ -81,7 +81,35 @@ export class TransicionDocumentoResponseDto {
   fecha!: string;
 }
 
+export class PdfDocumentoResponseDto {
+  @ApiProperty({
+    enum: ['PENDIENTE', 'GENERANDO', 'GENERADO', 'ERROR'],
+    nullable: true,
+    type: String,
+    example: 'GENERADO',
+    description: 'Estado de la generación asíncrona del PDF; nulo si nadie lo ha pedido',
+  })
+  estado!: string | null;
+
+  @ApiProperty({ nullable: true, type: String, example: '2026-11-24T15:00:00.000Z', description: 'Última generación correcta' })
+  generadoAt!: string | null;
+
+  @ApiProperty({ nullable: true, type: String, example: null, description: 'Motivo del último fallo; visible hasta que un reintento termine bien' })
+  error!: string | null;
+}
+
+export class PdfSolicitadoResponseDto {
+  @ApiProperty({ example: 'd1111111-1111-4111-8111-111111111111' })
+  id!: string;
+
+  @ApiProperty({ enum: ['PENDIENTE'], example: 'PENDIENTE' })
+  pdfEstado!: string;
+}
+
 export class DocumentoDetalleResponseDto extends DocumentoResumenResponseDto {
   @ApiProperty({ type: [TransicionDocumentoResponseDto], description: 'Historial en orden cronológico' })
   transiciones!: TransicionDocumentoResponseDto[];
+
+  @ApiProperty({ type: PdfDocumentoResponseDto })
+  pdf!: PdfDocumentoResponseDto;
 }

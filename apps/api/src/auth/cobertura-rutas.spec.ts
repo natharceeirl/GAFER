@@ -77,6 +77,8 @@ const MATRIZ_ESPERADA: Array<[string, string]> = [
   ['GET /api/documentos/:id', 'AS'],
   ['POST /api/documentos', 'AS'],
   ['POST /api/documentos/:id/transicion', 'AS'],
+  ['POST /api/documentos/:id/pdf', 'AS'],
+  ['GET /api/documentos/:id/pdf', 'AS'],
   ['POST /api/cliente-expediente/clientes', 'A'],
   ['POST /api/mapa-murino/estaciones/:id/inspeccion', 'AST'],
   ['GET /api/estadisticas/clientes/:id/resumen', 'AS'],

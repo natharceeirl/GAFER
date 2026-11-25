@@ -108,8 +108,9 @@ export class Documento {
     this.pdf = { ...this.pdf, estado: 'GENERADO', storageKey, generadoAt: fecha, error: null };
   }
 
+  /** Falla mientras se genera, o antes de empezar (p. ej. no se pudo encolar el trabajo). */
   marcarPdfFallido(motivo: string): void {
-    this.exigirGenerando();
+    if (this.pdf.estado !== 'PENDIENTE') this.exigirGenerando();
     this.pdf = { ...this.pdf, estado: 'ERROR', error: motivo };
   }
 
