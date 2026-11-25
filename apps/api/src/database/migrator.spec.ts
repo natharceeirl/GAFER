@@ -89,9 +89,28 @@ describe('Database Migration and Schema Configuration (T2.1)', () => {
   it('el repositorio trae 002 con la columna clave_hash de personal y su reversa', async () => {
     const up = await leerMigraciones('up');
     const down = await leerMigraciones('down');
-    expect(up.map((m) => m.nombre)).toEqual(['001_initial_schema.up.sql', '002_personal_clave_hash.up.sql']);
-    expect(down.map((m) => m.nombre)).toEqual(['002_personal_clave_hash.down.sql', '001_initial_schema.down.sql']);
+    expect(up.map((m) => m.nombre)).toEqual([
+      '001_initial_schema.up.sql',
+      '002_personal_clave_hash.up.sql',
+      '005_documentos.up.sql',
+    ]);
+    expect(down.map((m) => m.nombre)).toEqual([
+      '005_documentos.down.sql',
+      '002_personal_clave_hash.down.sql',
+      '001_initial_schema.down.sql',
+    ]);
     expect(up[1].sql).toContain('ADD COLUMN IF NOT EXISTS clave_hash');
-    expect(down[0].sql).toContain('DROP COLUMN IF EXISTS clave_hash');
+    expect(down[1].sql).toContain('DROP COLUMN IF EXISTS clave_hash');
+  });
+
+  it('005 crea el historial de transiciones y el contador global de certificados de forma idempotente', async () => {
+    const up = (await leerMigraciones('up')).find((m) => m.nombre === '005_documentos.up.sql')!;
+    const down = (await leerMigraciones('down')).find((m) => m.nombre === '005_documentos.down.sql')!;
+    expect(up.sql).toContain('CREATE TABLE IF NOT EXISTS documentos_transiciones');
+    expect(up.sql).toContain('CREATE TABLE IF NOT EXISTS correlativos_globales');
+    expect(up.sql).toContain('CREATE OR REPLACE FUNCTION fn_siguiente_correlativo_global');
+    expect(up.sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS uq_documentos_certificado_correlativo');
+    expect(down.sql).toContain('DROP TABLE IF EXISTS documentos_transiciones');
+    expect(down.sql).toContain('DROP TABLE IF EXISTS correlativos_globales');
   });
 });
