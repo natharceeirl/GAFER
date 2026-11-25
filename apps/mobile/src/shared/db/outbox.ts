@@ -1,9 +1,16 @@
+/**
+ * GAFER Mobile — OutboxQueue (Offline-First)
+ * Cola de operaciones durable respaldada por la tabla sync_outbox en SQLite (Guía Rev 2 §6.1).
+ * Soporta también OutboxStorage para retrocompatibilidad con suites de pruebas unitarias.
+ */
+
 import {
   OperacionSync,
   LoteSyncRequest,
   LoteSyncResponse,
   LoteSyncResponseSchema,
 } from '@gafer/contracts';
+import { SqliteDatabasePort, obtenerBaseDeDatos } from './sqlite';
 
 export interface OutboxStorage {
   getItem(key: string): Promise<string | null>;
@@ -24,20 +31,108 @@ export class MemoryOutboxStorage implements OutboxStorage {
   }
 }
 
+export interface OpcionesEncolarOutbox {
+  deviceId?: string;
+  aggregateType?: string;
+  aggregateSeq?: number;
+  priority?: 'CRITICAL' | 'HIGH' | 'NORMAL' | 'LOW';
+  baseVersion?: number;
+}
+
 export interface OutboxRecord {
   operacion: OperacionSync;
   intentos: number;
   sincronizado: boolean;
   ultimoError?: string;
+  aggregateSeq?: number;
+  priority?: string;
+}
+
+interface FilaSyncOutboxDb {
+  operation_id: string;
+  device_id: string;
+  user_id: string;
+  aggregate_type: string;
+  aggregate_id: string;
+  operation_type: string;
+  base_version: number;
+  payload_kind: string;
+  changed_fields_json: string | null;
+  payload_json: string;
+  aggregate_seq: number;
+  priority: string;
+  depends_on_operation_id: string | null;
+  created_at_local: string;
+  attempt_count: number;
+  last_attempt_at: string | null;
+  next_retry_at: string | null;
+  status: string;
+  last_error_code: string | null;
+  last_error_message_sanitized: string | null;
 }
 
 export class OutboxQueue {
   private cola: OutboxRecord[] = [];
+  private readonly contadoresEnMemoria = new Map<string, number>();
   private readonly storageKey = 'gafer_outbox_queue_v1';
+  private db?: SqliteDatabasePort;
+  private storage?: OutboxStorage;
 
-  constructor(private readonly storage?: OutboxStorage) {}
+  constructor(target?: SqliteDatabasePort | OutboxStorage) {
+    if (target && 'execAsync' in target) {
+      this.db = target;
+    } else if (target && 'getItem' in target) {
+      this.storage = target;
+    } else {
+      try {
+        this.db = obtenerBaseDeDatos();
+      } catch {
+        // DB no inicializada aún, operará en memoria
+      }
+    }
+  }
 
+  /**
+   * Carga las operaciones pendientes desde SQLite (o storage de fallback).
+   */
   async inicializar(): Promise<void> {
+    if (this.db) {
+      const filas = await this.db.getAllAsync<FilaSyncOutboxDb>(
+        `SELECT * FROM sync_outbox 
+         WHERE status = 'PENDING'
+         ORDER BY 
+           CASE priority WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'NORMAL' THEN 3 ELSE 4 END ASC,
+           aggregate_seq ASC,
+           created_at_local ASC;`,
+      );
+
+      this.cola = filas.map((fila) => {
+        let payload: Record<string, unknown> = {};
+        try {
+          payload = JSON.parse(fila.payload_json);
+        } catch {
+          payload = {};
+        }
+
+        return {
+          operacion: {
+            operationId: fila.operation_id,
+            tipo: fila.operation_type as any,
+            agregadoId: fila.aggregate_id,
+            actorId: fila.user_id,
+            clienteTimestamp: fila.created_at_local,
+            payload,
+          },
+          intentos: fila.attempt_count,
+          sincronizado: fila.status === 'SYNCED',
+          ultimoError: fila.last_error_message_sanitized ?? undefined,
+          aggregateSeq: fila.aggregate_seq,
+          priority: fila.priority,
+        };
+      });
+      return;
+    }
+
     if (this.storage) {
       const raw = await this.storage.getItem(this.storageKey);
       if (raw) {
@@ -50,18 +145,161 @@ export class OutboxQueue {
     }
   }
 
-  async persistir(): Promise<void> {
+  private async persistir(): Promise<void> {
     if (this.storage) {
       await this.storage.setItem(this.storageKey, JSON.stringify(this.cola));
     }
   }
 
-  async encolar(operacion: OperacionSync): Promise<OutboxRecord> {
+  /**
+   * Siguiente número de secuencia del agregado, calculado dentro de la transacción del INSERT.
+   *
+   * La secuencia se cuenta por `aggregate_id` (sin importar el `aggregate_type`), porque
+   * el lote que se envía al servidor agrupa por `agregadoId`: así las operaciones de
+   * distinto tipo sobre la misma inspección conservan el orden en que se registraron.
+   *
+   * Usa el mayor entre el contador persistido en `sync_metadata` y el MAX(aggregate_seq)
+   * de la tabla, así que nunca retrocede: ni al limpiar las operaciones sincronizadas
+   * ni al reiniciar la app. Un `aggregateSeq` explícito se respeta y adelanta el contador.
+   */
+  private async reservarSecuencia(
+    tx: SqliteDatabasePort,
+    aggregateId: string,
+    seqExplicita?: number,
+  ): Promise<number> {
+    const clave = `outbox_seq:${aggregateId}`;
+    const contador = await tx.getFirstAsync<{ value: string }>(
+      `SELECT value FROM sync_metadata WHERE key = ?;`,
+      [clave],
+    );
+    const maximo = await tx.getFirstAsync<{ max_seq: number | null }>(
+      `SELECT MAX(aggregate_seq) AS max_seq FROM sync_outbox WHERE aggregate_id = ?;`,
+      [aggregateId],
+    );
+
+    const ultima = Math.max(Number(contador?.value ?? 0), Number(maximo?.max_seq ?? 0));
+    const seq = seqExplicita ?? ultima + 1;
+
+    await tx.runAsync(
+      `INSERT INTO sync_metadata (key, value, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at;`,
+      [clave, String(Math.max(seq, ultima)), new Date().toISOString()],
+    );
+    return seq;
+  }
+
+  /** Versión en memoria de reservarSecuencia para el modo OutboxStorage (sin SQLite). */
+  private siguienteSecuenciaEnMemoria(aggregateId: string): number {
+    const usadas = this.cola
+      .filter((r) => r.operacion.agregadoId === aggregateId)
+      .map((r) => r.aggregateSeq ?? 0);
+    const ultima = Math.max(this.contadoresEnMemoria.get(aggregateId) ?? 0, 0, ...usadas);
+    this.contadoresEnMemoria.set(aggregateId, ultima + 1);
+    return ultima + 1;
+  }
+
+  /**
+   * Encola una operación en la base de datos local SQLite bajo una transacción exclusiva.
+   * Es idempotente por `operationId`: encolar dos veces la misma operación no la duplica
+   * ni le cambia la secuencia o el estado.
+   */
+  async encolar(
+    operacion: OperacionSync,
+    opciones?: OpcionesEncolarOutbox,
+  ): Promise<OutboxRecord> {
+    const enMemoria = this.cola.find((r) => r.operacion.operationId === operacion.operationId);
+    if (enMemoria) {
+      return enMemoria;
+    }
+
+    const prioridad = opciones?.priority ?? 'HIGH';
+    const aggregateType = opciones?.aggregateType ?? 'INSPECCION';
     const record: OutboxRecord = {
       operacion,
       intentos: 0,
       sincronizado: false,
+      aggregateSeq: undefined,
+      priority: prioridad,
     };
+
+    if (this.db) {
+      const existente = await this.db.withExclusiveTransactionAsync(async (tx) => {
+        const previa = await tx.getFirstAsync<{ aggregate_seq: number; status: string }>(
+          `SELECT aggregate_seq, status FROM sync_outbox WHERE operation_id = ?;`,
+          [operacion.operationId],
+        );
+        if (previa) {
+          return previa;
+        }
+
+        const seq = await this.reservarSecuencia(
+          tx,
+          operacion.agregadoId,
+          opciones?.aggregateSeq,
+        );
+        record.aggregateSeq = seq;
+
+        await tx.runAsync(
+          `INSERT INTO sync_outbox (
+            operation_id,
+            device_id,
+            user_id,
+            aggregate_type,
+            aggregate_id,
+            operation_type,
+            base_version,
+            payload_kind,
+            changed_fields_json,
+            payload_json,
+            aggregate_seq,
+            priority,
+            depends_on_operation_id,
+            created_at_local,
+            attempt_count,
+            last_attempt_at,
+            next_retry_at,
+            status,
+            last_error_code,
+            last_error_message_sanitized
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+          [
+            operacion.operationId,
+            opciones?.deviceId ?? 'device-local-id',
+            operacion.actorId,
+            aggregateType,
+            operacion.agregadoId,
+            operacion.tipo,
+            opciones?.baseVersion ?? 0,
+            'FULL',
+            null,
+            JSON.stringify(operacion.payload),
+            seq,
+            prioridad,
+            null,
+            operacion.clienteTimestamp,
+            0,
+            null,
+            null,
+            'PENDING',
+            null,
+            null,
+          ],
+        );
+        return null;
+      });
+
+      if (existente) {
+        // Ya estaba en disco (por ejemplo, otra instancia de la cola la encoló).
+        return {
+          ...record,
+          aggregateSeq: existente.aggregate_seq,
+          sincronizado: existente.status === 'SYNCED',
+        };
+      }
+    } else {
+      record.aggregateSeq = opciones?.aggregateSeq ?? this.siguienteSecuenciaEnMemoria(operacion.agregadoId);
+    }
+
     this.cola.push(record);
     await this.persistir();
     return record;
@@ -72,18 +310,45 @@ export class OutboxQueue {
   }
 
   async marcarSincronizadas(ids: string[]): Promise<void> {
-    const idSet = new Set(ids);
-    for (const record of this.cola) {
-      if (idSet.has(record.operacion.operationId)) {
-        record.sincronizado = true;
-      }
+    if (ids.length === 0) return;
+
+    if (this.db) {
+      await this.db.withExclusiveTransactionAsync(async (tx) => {
+        for (const id of ids) {
+          await tx.runAsync(
+            `UPDATE sync_outbox SET status = 'SYNCED' WHERE operation_id = ?;`,
+            [id],
+          );
+        }
+      });
     }
-    await this.persistir();
+
+    const idSet = new Set(ids);
+    const siguienteCola = this.cola.map((record) =>
+      idSet.has(record.operacion.operationId) ? { ...record, sincronizado: true } : record,
+    );
+
+    if (this.storage) {
+      await this.storage.setItem(this.storageKey, JSON.stringify(siguienteCola));
+    }
+
+    this.cola = siguienteCola;
   }
 
   async limpiarSincronizados(): Promise<void> {
-    this.cola = this.cola.filter((op) => !op.sincronizado);
-    await this.persistir();
+    if (this.db) {
+      await this.db.withExclusiveTransactionAsync(async (tx) => {
+        await tx.runAsync(`DELETE FROM sync_outbox WHERE status = 'SYNCED';`);
+      });
+    }
+
+    const siguienteCola = this.cola.filter((op) => !op.sincronizado);
+
+    if (this.storage) {
+      await this.storage.setItem(this.storageKey, JSON.stringify(siguienteCola));
+    }
+
+    this.cola = siguienteCola;
   }
 
   async enviarLote(
@@ -91,9 +356,10 @@ export class OutboxQueue {
     inspeccionId: string,
     fetchFn: typeof fetch = fetch,
   ): Promise<LoteSyncResponse | null> {
-    const pendientes = this.obtenerPendientes().filter(
-      (r) => r.operacion.agregadoId === inspeccionId,
-    );
+    // Dentro de una inspección el orden lo da la secuencia, no la prioridad.
+    const pendientes = this.obtenerPendientes()
+      .filter((r) => r.operacion.agregadoId === inspeccionId)
+      .sort((a, b) => (a.aggregateSeq ?? 0) - (b.aggregateSeq ?? 0));
     if (pendientes.length === 0) return null;
 
     const loteRequest: LoteSyncRequest = {
@@ -112,10 +378,28 @@ export class OutboxQueue {
       );
 
       if (!response.ok) {
+        const errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+        const ahora = new Date().toISOString();
         for (const item of pendientes) {
           item.intentos += 1;
-          item.ultimoError = `HTTP ${response.status}: ${response.statusText}`;
+          item.ultimoError = errorMsg;
         }
+
+        if (this.db) {
+          await this.db.withExclusiveTransactionAsync(async (tx) => {
+            for (const item of pendientes) {
+              await tx.runAsync(
+                `UPDATE sync_outbox 
+                 SET attempt_count = attempt_count + 1,
+                     last_attempt_at = ?,
+                     last_error_message_sanitized = ?
+                 WHERE operation_id = ?;`,
+                [ahora, errorMsg, item.operacion.operationId],
+              );
+            }
+          });
+        }
+
         await this.persistir();
         return null;
       }
@@ -126,10 +410,28 @@ export class OutboxQueue {
       await this.limpiarSincronizados();
       return resBody;
     } catch (err: any) {
+      const errorMsg = err.message || 'Error de red';
+      const ahora = new Date().toISOString();
       for (const item of pendientes) {
         item.intentos += 1;
-        item.ultimoError = err.message;
+        item.ultimoError = errorMsg;
       }
+
+      if (this.db) {
+        await this.db.withExclusiveTransactionAsync(async (tx) => {
+          for (const item of pendientes) {
+            await tx.runAsync(
+              `UPDATE sync_outbox 
+               SET attempt_count = attempt_count + 1,
+                   last_attempt_at = ?,
+                   last_error_message_sanitized = ?
+               WHERE operation_id = ?;`,
+              [ahora, errorMsg, item.operacion.operationId],
+            );
+          }
+        });
+      }
+
       await this.persistir();
       return null;
     }

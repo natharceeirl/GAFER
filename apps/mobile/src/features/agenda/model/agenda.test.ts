@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { inicializarBaseDeDatos, cerrarBaseDeDatos } from '../../../shared/db/sqlite';
+import { BorradorRepository } from '../../operaciones/model/borrador-repository';
 import {
   clasificarPrioridadVisita,
   ordenarAgendaPorHora,
@@ -63,9 +65,15 @@ describe('Agenda de Campo (Decisión C12 / Spec §8.1)', () => {
 
   const listaVisitas: ItemAgenda[] = [visitaTitular, visitaAbierta, visitaOtroTecnico];
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await cerrarBaseDeDatos();
+    await inicializarBaseDeDatos();
     useAgendaStore.getState().reiniciarEstado();
-    useBorradorStore.getState().limpiar();
+    useBorradorStore.setState({ borrador: null, colaEnvioPendiente: false, errorPersistencia: null });
+  });
+
+  afterEach(async () => {
+    await cerrarBaseDeDatos();
   });
 
   describe('clasificarPrioridadVisita', () => {
@@ -175,7 +183,7 @@ describe('Agenda de Campo (Decisión C12 / Spec §8.1)', () => {
       await store.cargarAgenda(tecnicoId);
 
       const primeraVisita = useAgendaStore.getState().items[0];
-      const exito = store.iniciarAtencionVisita(primeraVisita.id);
+      const exito = await store.iniciarAtencionVisita(primeraVisita.id);
 
       expect(exito).toBe(true);
       expect(useAgendaStore.getState().visitaSeleccionada?.estadoCampo).toBe('EN_CURSO');
@@ -183,14 +191,98 @@ describe('Agenda de Campo (Decisión C12 / Spec §8.1)', () => {
       const borrador = useBorradorStore.getState().borrador;
       expect(borrador).not.toBeNull();
       expect(borrador?.servicioId).toBe(primeraVisita.servicioId);
+      expect(borrador?.usuarioId).toBe(tecnicoId);
+      expect(borrador?.observaciones).toBe(primeraVisita.observaciones);
     });
 
-    it('iniciarAtencionEnSede activa una sede y genera borrador para contingencia', () => {
+    it('reabrir una visita tras cerrar la app conserva las notas del técnico (hallazgos 1 y 2 del PR #29)', async () => {
+      await useAgendaStore.getState().cargarAgenda(tecnicoId);
+      const visita = useAgendaStore.getState().items[0];
+
+      await useAgendaStore.getState().iniciarAtencionVisita(visita.id);
+      await useBorradorStore.getState().actualizarObservaciones('Cebadero 4 con consumo total');
+
+      // Cierre de la app: se pierde la memoria, queda SQLite.
+      useBorradorStore.setState({ borrador: null });
+      useAgendaStore.getState().reiniciarEstado();
+      const restaurado = await new BorradorRepository().obtenerActivo(tecnicoId);
+      useBorradorStore.getState().restaurarBorrador(restaurado);
+      await useAgendaStore.getState().cargarAgenda(tecnicoId);
+
+      // El técnico vuelve a tocar la visita para seguir.
+      await useAgendaStore.getState().iniciarAtencionVisita(visita.id);
+
+      expect(useBorradorStore.getState().borrador?.observaciones).toBe(
+        'Cebadero 4 con consumo total',
+      );
+      const enDisco = await new BorradorRepository().obtenerPorServicioId(
+        visita.servicioId,
+        tecnicoId,
+      );
+      expect(enDisco?.observaciones).toBe('Cebadero 4 con consumo total');
+    });
+
+    it('al reabrir la app cargarAgenda restaura el borrador de SQLite y marca la visita EN_CURSO (F3)', async () => {
+      await useAgendaStore.getState().cargarAgenda(tecnicoId);
+      const visita = useAgendaStore.getState().items[0];
+      await useAgendaStore.getState().iniciarAtencionVisita(visita.id);
+      await useBorradorStore.getState().actualizarObservaciones('Notas previas al cierre');
+
+      // Simular reapertura sin restaurar manualmente useBorradorStore antes de cargarAgenda.
+      useBorradorStore.getState().descargarDeMemoria();
+      useAgendaStore.getState().reiniciarEstado();
+
+      await useAgendaStore.getState().cargarAgenda(tecnicoId);
+
+      const visitaRecargada = useAgendaStore
+        .getState()
+        .items.find((v) => v.servicioId === visita.servicioId);
+      expect(visitaRecargada?.estadoCampo).toBe('EN_CURSO');
+      expect(useBorradorStore.getState().borrador?.servicioId).toBe(visita.servicioId);
+      expect(useBorradorStore.getState().borrador?.observaciones).toBe('Notas previas al cierre');
+    });
+
+    it('en sede de contingencia compartida el técnico B no hereda el borrador del técnico A (F2)', async () => {
+      const sede = useAgendaStore.getState().sedesActivas[0];
+
+      await useAgendaStore.getState().cargarAgenda('tec-A');
+      await useAgendaStore.getState().iniciarAtencionEnSede(sede);
+      await useBorradorStore.getState().actualizarObservaciones('Hallazgo reservado de A');
+
+      // Técnico A cierra sesión; técnico B abre la misma sede de contingencia.
+      useBorradorStore.getState().descargarDeMemoria();
+      useAgendaStore.getState().reiniciarEstado();
+
+      await useAgendaStore.getState().cargarAgenda('tec-B');
+      await useAgendaStore.getState().iniciarAtencionEnSede(sede);
+
+      const borradorB = useBorradorStore.getState().borrador;
+      expect(borradorB?.usuarioId).toBe('tec-B');
+      expect(borradorB?.observaciones).toBe('');
+
+      const borradorAEnDisco = await new BorradorRepository().obtenerActivo('tec-A');
+      expect(borradorAEnDisco?.observaciones).toBe('Hallazgo reservado de A');
+    });
+
+    it('si el borrador no se guarda en disco la visita no pasa a EN_CURSO', async () => {
+      await useAgendaStore.getState().cargarAgenda(tecnicoId);
+      const visita = useAgendaStore.getState().items[0];
+      await cerrarBaseDeDatos();
+
+      const exito = await useAgendaStore.getState().iniciarAtencionVisita(visita.id);
+
+      expect(exito).toBe(false);
+      expect(useAgendaStore.getState().visitaSeleccionada).toBeNull();
+      expect(useBorradorStore.getState().errorPersistencia).not.toBeNull();
+    });
+
+    it('iniciarAtencionEnSede activa una sede y genera borrador para contingencia', async () => {
       const store = useAgendaStore.getState();
       const sede = store.sedesActivas[0];
 
-      store.iniciarAtencionEnSede(sede);
+      const exito = await store.iniciarAtencionEnSede(sede);
 
+      expect(exito).toBe(true);
       expect(useAgendaStore.getState().sedeSeleccionada?.id).toBe(sede.id);
       const borrador = useBorradorStore.getState().borrador;
       expect(borrador).not.toBeNull();
