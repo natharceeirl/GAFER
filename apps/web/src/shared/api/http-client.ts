@@ -59,3 +59,23 @@ export async function apiFetch<T = unknown>(ruta: string, { metodo = 'GET', cuer
   if (respuesta.status === 401 && token) cerrar();
   throw errorDeRespuesta(respuesta.status, (datos ?? null) as Parameters<typeof errorDeRespuesta>[1], token !== null);
 }
+
+/** Descarga un archivo binario (p. ej. un PDF) con el Bearer de la sesión; los errores del API se traducen igual que en `apiFetch`. */
+export async function apiFetchBlob(ruta: string): Promise<Blob> {
+  const { token, cerrar } = useSesion.getState();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let respuesta: Response;
+  try {
+    respuesta = await fetch(urlDe(ruta), { method: 'GET', headers });
+  } catch {
+    throw errorDeRed();
+  }
+
+  if (respuesta.ok) return respuesta.blob();
+
+  const datos = await leerJson(respuesta);
+  if (respuesta.status === 401 && token) cerrar();
+  throw errorDeRespuesta(respuesta.status, (datos ?? null) as Parameters<typeof errorDeRespuesta>[1], token !== null);
+}
