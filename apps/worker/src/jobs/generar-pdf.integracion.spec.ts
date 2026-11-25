@@ -76,6 +76,9 @@ describeSiHayInfra('PDF asíncrono contra Redis, MinIO y PostgreSQL (GAF-54)', (
   });
 
   afterAll(async () => {
+    // Los documentos creados por las pruebas (y su historial, que cae en cascada) referencian al cliente.
+    await pool.query('DELETE FROM documentos WHERE cliente_id = $1', [clienteId]);
+    await pool.query('DELETE FROM correlativos WHERE cliente_id = $1', [clienteId]);
     await pool.query('DELETE FROM clientes WHERE id = $1', [clienteId]);
     await pool.end();
     await moduleRef.close();
