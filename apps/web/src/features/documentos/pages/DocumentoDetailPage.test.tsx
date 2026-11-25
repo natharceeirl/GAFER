@@ -152,7 +152,8 @@ describe('DocumentoDetailPage', () => {
       expect(within(pdf).getByText('Generado')).toBeInTheDocument();
       fireEvent.click(within(pdf).getByRole('button', { name: 'Descargar PDF' }));
       await waitFor(() => expect(guardar).toHaveBeenCalledTimes(1));
-      expect(guardar.mock.calls[0][0]).toBeInstanceOf(Blob);
+      // Por forma y no con instanceof: jsdom y Node tienen su propio Blob según la versión.
+      expect(Object.prototype.toString.call(guardar.mock.calls[0][0])).toBe('[object Blob]');
       expect(guardar.mock.calls[0][1]).toBe('INFORME-KALLPA-014-2026.pdf');
     });
 

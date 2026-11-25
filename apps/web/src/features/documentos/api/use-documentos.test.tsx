@@ -167,7 +167,9 @@ describe('hooks de documentos', () => {
       const [url, init] = fetchMock.mock.calls[0];
       expect(String(url)).toMatch(new RegExp(`/api/documentos/${ID}/pdf$`));
       expect(init.headers.Authorization).toBe('Bearer jwt');
-      expect(blob).toBeInstanceOf(Blob);
+      // Se comprueba por forma y no con instanceof: jsdom y Node tienen su propio Blob según la versión.
+      expect(Object.prototype.toString.call(blob)).toBe('[object Blob]');
+      expect(blob?.type).toBe('application/pdf');
     });
 
     it('un 409 explica por qué no se puede descargar', async () => {
