@@ -41,7 +41,7 @@ function datosBase(extra: Partial<DatosInformePdf> = {}): DatosInformePdf {
   return {
     documento: { id: 'd1', tipo: 'INFORME', codigo: 'INFORME-QA001-001-2026', numeroCorrelativo: 1, estado: 'APROBADO', fecha: '2026-11-24' },
     empresa: { razonSocial: null, ruc: null, direccion: null, telefono: null },
-    director: { nombre: 'Ing. Carlos Medina Ruiz', cip: '84512' },
+    director: { nombre: 'Ing. Carlos Medina Ruiz', cip: '84512', firma: null },
     cliente: {
       razonSocial: 'Cliente Prueba 001 S.A.',
       ruc: '20000000001',
@@ -74,7 +74,8 @@ function datosBase(extra: Partial<DatosInformePdf> = {}): DatosInformePdf {
     ],
     personal: [{ nombre: 'Juan Perez Gomez', cargo: 'Técnico Operador' }],
     inspeccion: null,
-    aprobadoPor: 'SUP.UNO',
+    aprobacion: { usuario: 'SUP.UNO', nombre: 'Sara Supervisora Demo', cargo: 'SUPERVISOR', fecha: '2026-11-25T20:30:00.000Z' },
+    firmaCliente: null,
     fotos: [],
     ...extra,
   };
@@ -89,6 +90,17 @@ async function leer(buffer: Buffer) {
     texto += contenido.items.map((i: { str: string; hasEOL?: boolean }) => i.str + (i.hasEOL ? '\n' : ' ')).join('') + '\n';
   }
   return { texto, paginas: documento.numPages as number };
+}
+
+/** Cantidad de imágenes realmente dibujadas en el PDF (firmas y fotos). */
+async function contarImagenes(buffer: Buffer): Promise<number> {
+  const documento = await pdfjs.getDocument({ data: new Uint8Array(buffer), verbosity: 0 }).promise;
+  let total = 0;
+  for (let n = 1; n <= documento.numPages; n++) {
+    const operadores = await (await documento.getPage(n)).getOperatorList();
+    total += operadores.fnArray.filter((f: number) => f === pdfjs.OPS.paintImageXObject).length;
+  }
+  return total;
 }
 
 describe('PdfkitInformeRenderer (sección 6.1)', () => {
@@ -148,16 +160,54 @@ describe('PdfkitInformeRenderer (sección 6.1)', () => {
     expect(texto).toContain('Nebulizadora ULV Vector Fog C-150');
   });
 
-  it('las firmas y los anexos son marcadores claros, no firmas inventadas (GAF-55)', async () => {
-    const { texto } = await leer(await renderer.renderizar(datosBase()));
+  it('sin firmas disponibles deja marcas claras, no firmas inventadas, y los anexos pendientes (GAF-55)', async () => {
+    const pdf = await renderer.renderizar(datosBase());
+    // pdf.js separa en renglones lo que pdfkit parte en la caja: se compara con espacios normalizados.
+    const texto = (await leer(pdf)).texto.replace(/\s+/g, ' ');
+    expect(await contarImagenes(pdf)).toBe(0);
     expect(texto).toContain('Director Técnico');
+    expect(texto).toContain('Firma del Director Técnico no configurada');
     expect(texto).toContain('Supervisor de Operaciones');
-    expect(texto).toContain('SUP.UNO');
     expect(texto).toContain('Conformidad del cliente');
-    expect((texto.match(/Firma pendiente/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect(texto).toContain('Responsable no disponible');
+    expect(texto).not.toContain('Firma pendiente');
     expect(texto).toContain('Certificado de saneamiento ambiental');
     expect(texto).toContain('Resolución de licencia');
     expect(texto).toContain('Anexo pendiente');
+  });
+
+  it('el Supervisor de Operaciones aparece con nombre, rol y fecha/hora de aprobación en hora de Lima (GAF-55)', async () => {
+    const { texto } = await leer(await renderer.renderizar(datosBase()));
+    expect(texto).toContain('Sara Supervisora Demo');
+    expect(texto).toContain('SUP.UNO');
+    expect(texto).toContain('Supervisor');
+    expect(texto).toContain('25/11/2026 15:30');
+  });
+
+  it('sin aprobación registrada lo dice y no inventa persona', async () => {
+    const { texto } = await leer(await renderer.renderizar(datosBase({ aprobacion: null })));
+    expect(texto).toContain('Aprobador no registrado');
+    expect(texto).not.toContain('Sara Supervisora Demo');
+  });
+
+  it('estampa la firma del Director Técnico y la del responsable del cliente cuando existen (GAF-55)', async () => {
+    const solo = datosBase({ director: { nombre: 'Ing. Carlos Medina Ruiz', cip: '84512', firma: png1x1() } });
+    const pdfDirector = await renderer.renderizar(solo);
+    expect(await contarImagenes(pdfDirector)).toBe(1);
+    const textoDirector = (await leer(pdfDirector)).texto;
+    expect(textoDirector).not.toContain('Firma del Director Técnico no configurada');
+    expect(textoDirector).toContain('Responsable no disponible');
+
+    const ambas = datosBase({ director: { nombre: 'Ing. Carlos Medina Ruiz', cip: '84512', firma: png1x1() }, firmaCliente: png1x1() });
+    const pdfAmbas = await renderer.renderizar(ambas);
+    expect(await contarImagenes(pdfAmbas)).toBe(2);
+    expect((await leer(pdfAmbas)).texto).not.toContain('Responsable no disponible');
+  });
+
+  it('una firma corrupta no tumba el PDF: queda la marca de ausencia', async () => {
+    const pdf = await renderer.renderizar(datosBase({ firmaCliente: Buffer.from('no es una imagen') }));
+    expect(await contarImagenes(pdf)).toBe(0);
+    expect((await leer(pdf)).texto).toContain('Responsable no disponible');
   });
 
   it('las secciones sin datos dicen que no hay información en vez de quedar vacías', async () => {

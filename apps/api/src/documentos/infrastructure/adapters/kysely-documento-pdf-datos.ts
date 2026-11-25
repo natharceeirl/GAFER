@@ -1,8 +1,12 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Kysely, sql } from 'kysely';
 import { KYSELY_DATABASE } from '../../../database/database.module';
 import { GaferDatabase } from '../../../database/types';
+import { interpretarFirma, esImagenFirma } from '../../domain/firma-imagen';
 import {
+  ALMACEN_PDF,
+  AlmacenPdfPort,
+  AprobacionPdf,
   DatosInformePdf,
   DocumentoPdfDatosPort,
   EmpresaPdf,
@@ -25,7 +29,31 @@ function empresaDe(parametros: Record<string, unknown> | undefined): EmpresaPdf 
 
 @Injectable()
 export class KyselyDocumentoPdfDatos implements DocumentoPdfDatosPort {
-  constructor(@Inject(KYSELY_DATABASE) private readonly db: Kysely<GaferDatabase>) {}
+  private readonly logger = new Logger(KyselyDocumentoPdfDatos.name);
+
+  constructor(
+    @Inject(KYSELY_DATABASE) private readonly db: Kysely<GaferDatabase>,
+    @Inject(ALMACEN_PDF) private readonly almacen: AlmacenPdfPort,
+  ) {}
+
+  /**
+   * Convierte el valor guardado (data URL o clave de almacenamiento) en bytes PNG/JPEG. Sin firma utilizable
+   * devuelve `null`: el PDF muestra la marca de ausencia en vez de dibujar algo que no existe.
+   */
+  private async resolverFirma(valor: string | null | undefined, origen: string): Promise<Buffer | null> {
+    const firma = interpretarFirma(valor);
+    if (!firma) {
+      if (valor?.trim()) this.logger.warn(`La firma (${origen}) no es una imagen PNG/JPEG válida: se omite`);
+      return null;
+    }
+    if (firma.tipo === 'imagen') return firma.bytes;
+    const bytes = await this.almacen.obtener(firma.clave);
+    if (!bytes || !esImagenFirma(bytes)) {
+      this.logger.warn(`La firma (${origen}) ${bytes ? 'no es una imagen PNG/JPEG válida' : 'no existe en el almacenamiento'}: se omite`);
+      return null;
+    }
+    return bytes;
+  }
 
   async cargar(documentoId: string): Promise<DatosInformePdf | null> {
     const doc = await this.db
@@ -39,6 +67,8 @@ export class KyselyDocumentoPdfDatos implements DocumentoPdfDatosPort {
         'd.estado',
         'd.proyecto_id',
         'd.inspeccion_id',
+        'd.firma_cliente',
+        'd.firma_director',
         sql<string>`to_char(d.fecha, 'YYYY-MM-DD')`.as('fecha'),
         'c.razon_social',
         'c.ruc',
@@ -53,16 +83,32 @@ export class KyselyDocumentoPdfDatos implements DocumentoPdfDatosPort {
     if (!doc) return null;
 
     const [config, sede, aprobacion] = await Promise.all([
-      this.db.selectFrom('configuracion_sistema').select(['director_nombre', 'director_cip', 'parametros']).where('id', '=', 'global').executeTakeFirst(),
+      this.db.selectFrom('configuracion_sistema').select(['director_nombre', 'director_cip', 'director_firma', 'parametros']).where('id', '=', 'global').executeTakeFirst(),
       doc.proyecto_id ? this.db.selectFrom('proyectos').selectAll().where('id', '=', doc.proyecto_id).executeTakeFirst() : undefined,
       this.db
         .selectFrom('documentos_transiciones')
-        .select('actor_usuario')
+        .select(['actor_usuario', 'actor_rol', 'created_at'])
         .where('documento_id', '=', documentoId)
         .where('estado_nuevo', '=', 'APROBADO')
         .orderBy('created_at', 'desc')
         .executeTakeFirst(),
     ]);
+
+    const [personalAprobador, firmaDirector, firmaCliente] = await Promise.all([
+      aprobacion
+        ? this.db.selectFrom('personal').select(['nombres', 'apellidos']).where('usuario', '=', aprobacion.actor_usuario).executeTakeFirst()
+        : undefined,
+      this.resolverFirma(doc.firma_director?.trim() ? doc.firma_director : config?.director_firma, 'Director Técnico'),
+      this.resolverFirma(doc.firma_cliente, 'responsable del cliente'),
+    ]);
+    const datosAprobacion: AprobacionPdf | null = aprobacion
+      ? {
+          usuario: aprobacion.actor_usuario,
+          nombre: personalAprobador ? `${personalAprobador.nombres} ${personalAprobador.apellidos}` : null,
+          cargo: aprobacion.actor_rol,
+          fecha: aprobacion.created_at.toISOString(),
+        }
+      : null;
 
     const inspeccion = doc.inspeccion_id
       ? await this.db
@@ -115,7 +161,7 @@ export class KyselyDocumentoPdfDatos implements DocumentoPdfDatosPort {
     return {
       documento: { id: doc.id, tipo: doc.tipo, codigo: doc.codigo, numeroCorrelativo: doc.numero_correlativo, estado: doc.estado, fecha: doc.fecha },
       empresa: empresaDe(config?.parametros),
-      director: { nombre: config?.director_nombre ?? '', cip: config?.director_cip ?? '' },
+      director: { nombre: config?.director_nombre ?? '', cip: config?.director_cip ?? '', firma: firmaDirector },
       cliente: {
         razonSocial: doc.razon_social,
         ruc: doc.ruc,
@@ -139,7 +185,8 @@ export class KyselyDocumentoPdfDatos implements DocumentoPdfDatosPort {
       servicios,
       personal,
       inspeccion: datosInspeccion,
-      aprobadoPor: aprobacion?.actor_usuario ?? null,
+      aprobacion: datosAprobacion,
+      firmaCliente,
       fotos: [],
     };
   }

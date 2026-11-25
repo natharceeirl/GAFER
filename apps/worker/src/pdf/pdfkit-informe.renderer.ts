@@ -277,27 +277,90 @@ function cierre(doc: Doc, d: DatosInformePdf): void {
 
   const ancho = (ANCHO_UTIL - 20) / 3;
   const y = doc.y;
-  const cajas: Array<{ titulo: string; lineas: string[] }> = [
-    { titulo: 'Director Técnico', lineas: [d.director.nombre || NO_CONFIGURADO, `CIP ${d.director.cip || NO_CONFIGURADO}`] },
-    { titulo: 'Supervisor de Operaciones', lineas: [d.aprobadoPor ? `Aprobado por: ${d.aprobadoPor}` : 'Aprobador no registrado'] },
-    { titulo: 'Conformidad del cliente', lineas: [`Cliente: ${d.cliente.razonSocial}`, 'Nombre, cargo y fecha/hora: pendientes'] },
+  const cajas: Caja[] = [
+    {
+      titulo: 'Director Técnico',
+      firma: d.director.firma,
+      sinFirma: 'Firma del Director Técnico no configurada',
+      lineas: [d.director.nombre || NO_CONFIGURADO, `CIP ${d.director.cip || NO_CONFIGURADO}`],
+    },
+    {
+      titulo: 'Supervisor de Operaciones',
+      // El Supervisor no tiene imagen de firma guardada: consta quién aprobó, con qué cargo y cuándo.
+      firma: null,
+      sinFirma: d.aprobacion ? 'Aprobación registrada en el sistema' : 'Aprobador no registrado',
+      lineas: d.aprobacion
+        ? [
+            d.aprobacion.nombre ? `${d.aprobacion.nombre} (${d.aprobacion.usuario})` : d.aprobacion.usuario,
+            CARGOS[d.aprobacion.cargo] ?? d.aprobacion.cargo,
+            `Aprobado el ${fechaHoraLima(d.aprobacion.fecha)}`,
+          ]
+        : [],
+    },
+    {
+      titulo: 'Conformidad del cliente',
+      firma: d.firmaCliente,
+      sinFirma: 'Responsable no disponible al momento del servicio',
+      lineas: [`Cliente: ${d.cliente.razonSocial}`],
+    },
   ];
   cajas.forEach((caja, i) => {
     const x = MARGEN + i * (ancho + 10);
-    doc.save().rect(x, y, ancho, 100).dash(3, { space: 2 }).strokeColor(COLOR_LINEA).stroke().undash().restore();
+    doc.save().rect(x, y, ancho, ALTO_CAJA_FIRMA).dash(3, { space: 2 }).strokeColor(COLOR_LINEA).stroke().undash().restore();
     doc.font('Helvetica-Bold').fontSize(8.5).fillColor(COLOR_TEXTO).text(caja.titulo, x + 6, y + 6, { width: ancho - 12 });
-    doc.font('Helvetica-Oblique').fontSize(8).fillColor(COLOR_SUAVE).text('[Firma pendiente]', x + 6, y + 34, { width: ancho - 12, align: 'center' });
-    doc.save().moveTo(x + 10, y + 70).lineTo(x + ancho - 10, y + 70).lineWidth(0.5).strokeColor(COLOR_LINEA).stroke().restore();
-    doc.font('Helvetica').fontSize(7.5).fillColor(COLOR_TEXTO).text(caja.lineas.join('\n'), x + 6, y + 74, { width: ancho - 12 });
+    if (!caja.firma || !dibujarFirma(doc, caja.firma, x + 10, y + 22, ancho - 20, 56)) {
+      doc.font('Helvetica-Oblique').fontSize(8).fillColor(COLOR_SUAVE).text(caja.sinFirma, x + 10, y + 40, { width: ancho - 20, align: 'center' });
+    }
+    doc.save().moveTo(x + 10, y + 82).lineTo(x + ancho - 10, y + 82).lineWidth(0.5).strokeColor(COLOR_LINEA).stroke().restore();
+    doc.font('Helvetica').fontSize(7.5).fillColor(COLOR_TEXTO).text(caja.lineas.join('\n'), x + 6, y + 86, { width: ancho - 12 });
   });
-  doc.y = y + 108;
+  doc.y = y + ALTO_CAJA_FIRMA + 8;
   doc.x = MARGEN;
-  doc.font('Helvetica-Oblique').fontSize(7.5).fillColor(COLOR_SUAVE).text(
-    'Las firmas digitales y la opción "Responsable no disponible al momento del servicio" se incorporan en una etapa posterior.',
-    MARGEN,
-    doc.y,
-    { width: ANCHO_UTIL },
+}
+
+interface Caja {
+  titulo: string;
+  /** Imagen de la firma; `null` si no hay una utilizable. */
+  firma: Buffer | null;
+  /** Marca visible cuando no hay imagen: nunca se dibuja una firma que no existe. */
+  sinFirma: string;
+  lineas: string[];
+}
+
+const ALTO_CAJA_FIRMA = 124;
+
+const CARGOS: Record<string, string> = {
+  SUPERVISOR: 'Supervisor de Operaciones',
+  ADMINISTRADOR: 'Administrador',
+  TECNICO_OPERADOR: 'Técnico Operador',
+};
+
+/** `false` si la imagen no se pudo dibujar (corrupta): el llamador deja la marca de ausencia. */
+function dibujarFirma(doc: Doc, imagen: Buffer, x: number, y: number, ancho: number, alto: number): boolean {
+  try {
+    doc.image(imagen, x, y, { fit: [ancho, alto], align: 'center', valign: 'center' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** dd/mm/aaaa HH:mm en hora de Lima (UTC-5, sin horario de verano). */
+function fechaHoraLima(iso: string): string {
+  const partes = Object.fromEntries(
+    new Intl.DateTimeFormat('es-PE', {
+      timeZone: 'America/Lima',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(new Date(iso))
+      .map((p) => [p.type, p.value]),
   );
+  return `${partes.day}/${partes.month}/${partes.year} ${partes.hour}:${partes.minute}`;
 }
 
 function anexos(doc: Doc): void {

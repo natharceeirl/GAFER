@@ -18,7 +18,7 @@ function datosDe(id: string, codigo: string): DatosInformePdf {
   return {
     documento: { id, tipo: 'INFORME', codigo, numeroCorrelativo: 1, estado: 'APROBADO', fecha: '2026-11-24' },
     empresa: { razonSocial: null, ruc: null, direccion: null, telefono: null },
-    director: { nombre: 'Ing. Demo', cip: '00000' },
+    director: { nombre: 'Ing. Demo', cip: '00000', firma: null },
     cliente: {
       razonSocial: 'Cliente Demo S.A.',
       ruc: '20123456789',
@@ -32,7 +32,8 @@ function datosDe(id: string, codigo: string): DatosInformePdf {
     servicios: [],
     personal: [],
     inspeccion: null,
-    aprobadoPor: null,
+    aprobacion: null,
+    firmaCliente: null,
     fotos: [],
   };
 }

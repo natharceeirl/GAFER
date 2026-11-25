@@ -13,7 +13,11 @@ import { DOCUMENTO_REPOSITORY, DocumentoRepository } from '../../src/documentos/
 import { DOCUMENTO_PDF_DATOS, DocumentoPdfDatosPort, PdfRendererPort } from '../../src/documentos/domain/ports/pdf.ports';
 import { TRANSACCION, TransaccionPort } from '../../src/documentos/domain/ports/transaccion.port';
 
-describe('PDF del documento: API y datos (GAF-54)', () => {
+/** PNG de 1x1 píxel: solo para pruebas; la aplicación nunca fabrica firmas. */
+const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY44YAAAAASUVORK5CYII=';
+const PNG = Buffer.from(PNG_B64, 'base64');
+
+describe('PDF del documento: API y datos (GAF-54, GAF-55)', () => {
   let t: TestApp;
   let http: Api;
   let esc: Escenario;
@@ -204,8 +208,10 @@ describe('PDF del documento: API y datos (GAF-54)', () => {
       expect(d.documento.codigo).toMatch(/^INFORME-QA\d{3}-001-\d{4}$/);
       expect(d.cliente).toMatchObject({ ruc: expect.stringMatching(/^20\d{9}$/), giroNegocio: 'Generación Eléctrica' });
       expect(d.sede).toMatchObject({ distrito: 'Mollendo', departamento: 'Arequipa' });
-      expect(d.director).toEqual({ nombre: 'Ing. Carlos Medina Ruiz', cip: '84512' });
-      expect(d.aprobadoPor).toBe('SUP.UNO');
+      expect(d.director).toEqual({ nombre: 'Ing. Carlos Medina Ruiz', cip: '84512', firma: null });
+      expect(d.aprobacion).toEqual({ usuario: 'SUP.UNO', nombre: 'Usuario De Prueba', cargo: 'SUPERVISOR', fecha: expect.any(String) });
+      expect(new Date(d.aprobacion!.fecha).getTime()).toBeGreaterThan(Date.now() - 60_000);
+      expect(d.firmaCliente).toBeNull();
       expect(d.servicios).toHaveLength(1);
       expect(d.servicios[0]).toMatchObject({ tipoServicio: 'DRT', areaTotalM2: 5000, areaTratarM2: 3500 });
       expect(d.servicios[0].insumos[0]).toMatchObject({
@@ -215,6 +221,38 @@ describe('PDF del documento: API y datos (GAF-54)', () => {
       });
       expect(d.servicios[0].equipos).toHaveLength(1);
       expect(d.fotos).toEqual([]);
+    });
+
+    describe('firmas (GAF-55)', () => {
+      it('el Director Técnico: la firma configurada en Mantenimiento (data URL) llega como imagen', async () => {
+        await t.db.query(`UPDATE configuracion_sistema SET director_firma = $1 WHERE id = 'global'`, [`data:image/png;base64,${PNG_B64}`]);
+        const id = await aprobado();
+        expect((await datos.cargar(id))!.director.firma).toEqual(PNG);
+      });
+
+      it('el Director Técnico: una clave de almacenamiento se lee del almacén; si no existe o no es imagen, no hay firma', async () => {
+        const id = await aprobado();
+        await t.db.query(`UPDATE configuracion_sistema SET director_firma = 'firmas/director.png' WHERE id = 'global'`);
+        expect((await datos.cargar(id))!.director.firma).toBeNull();
+        await t.almacen.guardar('firmas/director.png', Buffer.from('%PDF-no-es-imagen'));
+        expect((await datos.cargar(id))!.director.firma).toBeNull();
+        await t.almacen.guardar('firmas/director.png', PNG);
+        expect((await datos.cargar(id))!.director.firma).toEqual(PNG);
+      });
+
+      it('el cliente: la firma del responsable guardada en el documento llega como imagen; vacía = no disponible', async () => {
+        const id = await aprobado();
+        expect((await datos.cargar(id))!.firmaCliente).toBeNull();
+        await t.db.query(`UPDATE documentos SET firma_cliente = $2 WHERE id = $1`, [id, `data:image/png;base64,${PNG_B64}`]);
+        expect((await datos.cargar(id))!.firmaCliente).toEqual(PNG);
+        await t.db.query(`UPDATE documentos SET firma_cliente = 'texto-basura' WHERE id = $1`, [id]);
+        expect((await datos.cargar(id))!.firmaCliente).toBeNull();
+      });
+
+      it('si el documento no tiene aprobación registrada, aprobacion es null (no se inventa aprobador)', async () => {
+        const id = await crearDocumento();
+        expect((await datos.cargar(id))!.aprobacion).toBeNull();
+      });
     });
 
     it('sin datos de empresa configurados llegan nulos (no se inventan) y con ellos se usan tal cual', async () => {
