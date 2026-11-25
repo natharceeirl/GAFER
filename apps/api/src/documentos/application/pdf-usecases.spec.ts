@@ -1,9 +1,10 @@
-import { ConflictException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { createHash } from 'crypto';
+import { ConflictException, InternalServerErrorException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { CrearDocumentoUseCase } from './crear-documento.usecase';
 import { TransicionarDocumentoUseCase } from './transicionar-documento.usecase';
 import { SolicitarPdfDocumentoUseCase } from './solicitar-pdf-documento.usecase';
 import { GenerarPdfDocumentoUseCase } from './generar-pdf-documento.usecase';
-import { ObtenerPdfDocumentoUseCase } from './obtener-pdf-documento.usecase';
+import { ObtenerPdfDocumentoUseCase, PdfIntegridadException } from './obtener-pdf-documento.usecase';
 import { DocumentoRepositoryMemory } from '../infrastructure/documento.repository.memory';
 import { NumeradorCorrelativoMemory } from '../infrastructure/numerador-correlativo.memory';
 import { TransaccionMemory } from '../infrastructure/transaccion.memory';
@@ -55,15 +56,19 @@ function montar() {
     async renderizar(datos: DatosInformePdf): Promise<Buffer> {
       renderizados.push(datos.documento.id);
       if (renderer.fallar) throw renderer.fallar;
-      return Buffer.from(`%PDF-fake ${datos.documento.codigo}`);
+      return Buffer.from(`%PDF-fake ${datos.documento.codigo} ${datos.cliente.giroNegocio}`);
     },
   };
   const datos = {
     nulo: false,
+    /** Texto de catálogo que entra al PDF (p. ej. giro de negocio): se puede cambiar entre generaciones. */
+    textoCatalogo: 'Energía',
     async cargar(id: string): Promise<DatosInformePdf | null> {
       if (datos.nulo) return null;
       const doc = await repo.buscarPorId(id);
-      return doc ? datosDe(id, doc.codigo) : null;
+      if (!doc) return null;
+      const base = datosDe(id, doc.codigo);
+      return { ...base, cliente: { ...base.cliente, giroNegocio: datos.textoCatalogo } };
     },
   };
   const generar = new GenerarPdfDocumentoUseCase(repo, tx, datos, renderer, almacen);
@@ -201,15 +206,49 @@ describe('GenerarPdfDocumentoUseCase', () => {
     expect((await repo.buscarPorId(id))!.getPdf().estado).toBe('ERROR');
   });
 
-  it('volver a pedir un PDF ya generado lo regenera sobre la misma clave', async () => {
-    const { generar, solicitar, aprobado, renderizados, repo } = montar();
+  it('guarda el SHA-256 de los bytes exactos almacenados (GAF-56)', async () => {
+    const { generar, aprobado, almacen, repo } = montar();
     const id = await aprobado();
     await generar.ejecutar(id);
-    const primera = (await repo.buscarPorId(id))!.getPdf().storageKey;
-    await solicitar.ejecutar(id);
+    const pdf = (await repo.buscarPorId(id))!.getPdf();
+    const bytes = (await almacen.obtener(pdf.storageKey!))!;
+    expect(pdf.sha256).toBe(createHash('sha256').update(bytes).digest('hex'));
+  });
+
+  it('un PDF ya generado no se regenera: pedirlo otra vez responde 409 y no toca archivo, huella ni cola (GAF-56)', async () => {
+    const { generar, solicitar, aprobado, renderizados, repo, almacen, cola } = montar();
+    const id = await aprobado();
     await generar.ejecutar(id);
-    expect(renderizados).toEqual([id, id]);
-    expect((await repo.buscarPorId(id))!.getPdf().storageKey).toBe(primera);
+    const antes = (await repo.buscarPorId(id))!.getPdf();
+    const bytesAntes = Buffer.from((await almacen.obtener(antes.storageKey!))!);
+    cola.trabajos.length = 0;
+
+    await expect(solicitar.ejecutar(id)).rejects.toThrow(ConflictException);
+    await expect(solicitar.ejecutar(id)).rejects.toThrow('ya fue emitido');
+    await generar.ejecutar(id);
+
+    expect(cola.trabajos).toHaveLength(0);
+    expect(renderizados).toEqual([id]);
+    expect((await repo.buscarPorId(id))!.getPdf()).toEqual(antes);
+    expect((await almacen.obtener(antes.storageKey!))!.equals(bytesAntes)).toBe(true);
+  });
+
+  it('cambiar un texto del catálogo no cambia el PDF ya emitido (Listo cuando, GAF-56)', async () => {
+    const { generar, obtener, solicitar, aprobado, datos, repo } = montar();
+    const id = await aprobado();
+    await generar.ejecutar(id);
+    const emitido = await obtener.ejecutar(id);
+    const huella = (await repo.buscarPorId(id))!.getPdf().sha256;
+    expect(emitido.contenido.toString()).toContain('Energía');
+
+    datos.textoCatalogo = 'Minería (texto nuevo del catálogo)';
+    await expect(solicitar.ejecutar(id)).rejects.toThrow(ConflictException);
+    await generar.ejecutar(id);
+
+    const despues = await obtener.ejecutar(id);
+    expect(despues.contenido.equals(emitido.contenido)).toBe(true);
+    expect(despues.contenido.toString()).not.toContain('texto nuevo');
+    expect((await repo.buscarPorId(id))!.getPdf().sha256).toBe(huella);
   });
 });
 
@@ -245,5 +284,29 @@ describe('ObtenerPdfDocumentoUseCase', () => {
     await generar.ejecutar(id);
     almacen.vaciar();
     await expect(obtener.ejecutar(id)).rejects.toThrow(NotFoundException);
+  });
+
+  it('verifica la huella antes de servir: si los bytes cambiaron falla con 500 y un mensaje claro (GAF-56)', async () => {
+    const { generar, obtener, aprobado, almacen, repo } = montar();
+    const id = await aprobado();
+    await generar.ejecutar(id);
+    const { storageKey } = (await repo.buscarPorId(id))!.getPdf();
+    await almacen.guardar(storageKey!, Buffer.from('%PDF-fake adulterado'));
+
+    const error = await obtener.ejecutar(id).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(InternalServerErrorException);
+    expect(error).toBeInstanceOf(PdfIntegridadException);
+    expect((error as Error).message).toContain('no coincide con su huella SHA-256');
+    expect((error as PdfIntegridadException).documentoId).toBe(id);
+  });
+
+  it('un PDF GENERADO sin huella registrada tampoco se sirve', async () => {
+    const { generar, obtener, aprobado, repo } = montar();
+    const id = await aprobado();
+    await generar.ejecutar(id);
+    const doc = (await repo.buscarPorId(id))!;
+    (doc as unknown as { pdf: { sha256: string | null } }).pdf.sha256 = null;
+    await repo.guardar(doc);
+    await expect(obtener.ejecutar(id)).rejects.toThrow(PdfIntegridadException);
   });
 });

@@ -6,7 +6,7 @@ import { TransicionarDocumentoUseCase } from '../application/transicionar-docume
 import { ListarDocumentosUseCase } from '../application/listar-documentos.usecase';
 import { ObtenerDocumentoUseCase } from '../application/obtener-documento.usecase';
 import { SolicitarPdfDocumentoUseCase } from '../application/solicitar-pdf-documento.usecase';
-import { ObtenerPdfDocumentoUseCase } from '../application/obtener-pdf-documento.usecase';
+import { ObtenerPdfDocumentoUseCase, PdfIntegridadException } from '../application/obtener-pdf-documento.usecase';
 import { ActorDocumento } from '../domain/documento';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator';
 import { UsuarioActual } from '../../auth/infrastructure/decorators/usuario-actual.decorator';
@@ -72,15 +72,35 @@ export class DocumentosController {
   @ApiOperation({
     summary: 'Descargar el PDF del documento',
     description:
-      'Entrega el PDF ya generado (`application/pdf`). Responde 409 mientras no esté generado (o si la generación falló, ' +
+      'Entrega el PDF ya generado (`application/pdf`) tras verificar que sus bytes coinciden con la huella SHA-256 guardada; ' +
+      'si no coinciden responde 500 y registra un evento de auditoría. Responde 409 mientras no esté generado (o si la generación falló, ' +
       'con el motivo) y 404 si el documento no existe.',
   })
   @ApiParam({ name: 'id', description: 'UUID del documento' })
   @ApiOkResponse({ description: 'Archivo PDF', content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } } })
   @ApiResponse({ status: 404, description: 'Documento no encontrado', type: NotFoundErrorDto })
   @ApiResponse({ status: 409, description: 'El PDF todavía no está generado' })
-  async descargarPdf(@Param('id', new ParseUUIDPipe()) id: string, @Res() res: Response): Promise<void> {
-    const pdf = await this.obtenerPdf.ejecutar(id);
+  @ApiResponse({ status: 500, description: 'El archivo almacenado no coincide con su huella SHA-256 (se audita y no se entrega)' })
+  async descargarPdf(@Param('id', new ParseUUIDPipe()) id: string, @Res() res: Response, @UsuarioActual() usuario: TokenPayload): Promise<void> {
+    let pdf;
+    try {
+      pdf = await this.obtenerPdf.ejecutar(id);
+    } catch (error) {
+      if (error instanceof PdfIntegridadException) {
+        // Un PDF emitido que no coincide con su huella es un incidente: queda constancia además del 500.
+        await this.auditoria?.registrarEvento({
+          actorId: usuario.id,
+          actorUsuario: usuario.usuario,
+          actorRol: usuario.cargo,
+          modulo: 'DOCUMENTOS',
+          accion: 'PDF_INTEGRIDAD_FALLIDA',
+          entidad: 'documento',
+          entidadId: id,
+          payloadNuevo: { motivo: error.message },
+        });
+      }
+      throw error;
+    }
     res
       .status(200)
       .set({
@@ -99,12 +119,12 @@ export class DocumentosController {
     summary: 'Generar (o reintentar) el PDF del documento',
     description:
       'No renderiza en la petición: deja el PDF en PENDIENTE y encola el trabajo para el worker. Solo para documentos ' +
-      'aprobados. Sirve también para reintentar tras un error. Consulte el estado en `GET /documentos/:id` (campo `pdf`).',
+      'aprobados. Sirve para reintentar tras un error; un PDF ya emitido es inmutable y no se regenera (409). Consulte el estado en `GET /documentos/:id` (campo `pdf`).',
   })
   @ApiParam({ name: 'id', description: 'UUID del documento' })
   @ApiResponse({ status: 202, description: 'Trabajo encolado', type: PdfSolicitadoResponseDto })
   @ApiResponse({ status: 404, description: 'Documento no encontrado', type: NotFoundErrorDto })
-  @ApiResponse({ status: 409, description: 'El documento aún no está aprobado' })
+  @ApiResponse({ status: 409, description: 'El documento aún no está aprobado, o su PDF ya fue emitido (inmutable)' })
   @ApiResponse({ status: 503, description: 'No se pudo encolar el trabajo (cola no disponible)' })
   async generarPdf(@Param('id', new ParseUUIDPipe()) id: string, @UsuarioActual() usuario: TokenPayload): Promise<PdfSolicitadoResponseDto> {
     await this.solicitarPdf.ejecutar(id);

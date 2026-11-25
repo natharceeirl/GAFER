@@ -49,7 +49,7 @@ export class DocumentoRepositoryMemory implements DocumentoRepository {
     return {
       ...this.resumen(doc),
       transiciones: [...(this.historial.get(id) ?? [])],
-      pdf: { estado: pdf.estado, generadoAt: pdf.generadoAt?.toISOString() ?? null, error: pdf.error },
+      pdf: { estado: pdf.estado, generadoAt: pdf.generadoAt?.toISOString() ?? null, error: pdf.error, sha256: pdf.sha256 },
     };
   }
 

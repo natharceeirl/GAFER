@@ -1,6 +1,6 @@
 /**
  * documentos-pdf-repositorio.e2e-spec.ts
- * Migración 006 y persistencia del estado del PDF contra PostgreSQL real (GAF-54).
+ * Migraciones 006/007 y persistencia del estado del PDF contra PostgreSQL real (GAF-54).
  */
 import { randomUUID } from 'crypto';
 import { createTestApp, TestApp } from '../support/app';
@@ -10,6 +10,7 @@ import { CrearDocumentoUseCase } from '../../src/documentos/application/crear-do
 import { TransicionarDocumentoUseCase } from '../../src/documentos/application/transicionar-documento.usecase';
 import { DOCUMENTO_REPOSITORY, DocumentoRepository } from '../../src/documentos/domain/ports/documento.repository';
 
+const HUELLA = 'b'.repeat(64);
 const ACTOR = { id: randomUUID(), usuario: 'SUP.E2E', rol: 'SUPERVISOR' };
 
 describe('Estado del PDF en PostgreSQL (GAF-54)', () => {
@@ -46,6 +47,30 @@ describe('Estado del PDF en PostgreSQL (GAF-54)', () => {
     return doc.id;
   }
 
+  describe('migración 007 (huella SHA-256, GAF-56)', () => {
+    it('es idempotente y existe en la lista de migraciones', async () => {
+      const migraciones = await leerMigraciones('up');
+      expect(migraciones.map((m) => m.nombre)).toContain('007_documento_pdf_sha256.up.sql');
+      for (let vuelta = 0; vuelta < 3; vuelta++) for (const m of migraciones) await t.db.query(m.sql);
+    });
+
+    it('la base rechaza una huella que no sea SHA-256 hexadecimal', async () => {
+      const id = await aprobado();
+      await expect(t.db.query(`UPDATE documentos SET pdf_sha256 = 'abc' WHERE id = $1`, [id])).rejects.toThrow();
+    });
+
+    it('una vez emitido, la base no deja cambiar la huella ni la clave del PDF', async () => {
+      const id = await aprobado();
+      const doc = (await repo.buscarPorId(id))!;
+      doc.iniciarGeneracionPdf();
+      doc.marcarPdfGenerado(`documentos/${id}/x.pdf`, new Date(), HUELLA);
+      await repo.guardar(doc);
+      await expect(t.db.query(`UPDATE documentos SET pdf_sha256 = $2 WHERE id = $1`, [id, 'c'.repeat(64)])).rejects.toThrow(/inmutable/);
+      await expect(t.db.query(`UPDATE documentos SET pdf_storage_key = 'otra.pdf' WHERE id = $1`, [id])).rejects.toThrow(/inmutable/);
+      expect((await repo.buscarPorId(id))!.getPdf().sha256).toBe(HUELLA);
+    });
+  });
+
   describe('migración 006', () => {
     it('se puede aplicar varias veces seguidas y deja las columnas del PDF', async () => {
       const migraciones = await leerMigraciones('up');
@@ -54,7 +79,7 @@ describe('Estado del PDF en PostgreSQL (GAF-54)', () => {
       const cols = await t.db.query(
         `SELECT column_name FROM information_schema.columns WHERE table_name = 'documentos' AND column_name LIKE 'pdf_%' ORDER BY 1`,
       );
-      expect(cols.rows.map((r) => r.column_name)).toEqual(['pdf_error', 'pdf_estado', 'pdf_generado_at', 'pdf_intentos', 'pdf_storage_key']);
+      expect(cols.rows.map((r) => r.column_name)).toEqual(['pdf_error', 'pdf_estado', 'pdf_generado_at', 'pdf_intentos', 'pdf_sha256', 'pdf_storage_key']);
     });
 
     it('la reversa se aplica dos veces y se puede volver a subir', async () => {
@@ -90,7 +115,7 @@ describe('Estado del PDF en PostgreSQL (GAF-54)', () => {
     const reintento = (await repo.buscarPorId(id))!;
     reintento.iniciarGeneracionPdf();
     const fecha = new Date('2026-11-24T15:00:00.000Z');
-    reintento.marcarPdfGenerado(`documentos/${id}/x.pdf`, fecha);
+    reintento.marcarPdfGenerado(`documentos/${id}/x.pdf`, fecha, HUELLA);
     await repo.guardar(reintento);
     expect((await repo.buscarPorId(id))!.getPdf()).toEqual({
       estado: 'GENERADO',
@@ -98,6 +123,7 @@ describe('Estado del PDF en PostgreSQL (GAF-54)', () => {
       generadoAt: fecha,
       error: null,
       intentos: 2,
+      sha256: HUELLA,
     });
   });
 
@@ -107,6 +133,6 @@ describe('Estado del PDF en PostgreSQL (GAF-54)', () => {
     doc.solicitarPdf();
     await repo.guardar(doc);
     const detalle = await repo.obtenerDetalle(id);
-    expect(detalle!.pdf).toEqual({ estado: 'PENDIENTE', generadoAt: null, error: null });
+    expect(detalle!.pdf).toEqual({ estado: 'PENDIENTE', generadoAt: null, error: null, sha256: null });
   });
 });

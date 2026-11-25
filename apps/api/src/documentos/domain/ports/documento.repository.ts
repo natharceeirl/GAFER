@@ -33,6 +33,8 @@ export interface PdfLectura {
   /** ISO 8601 */
   generadoAt: string | null;
   error: string | null;
+  /** SHA-256 (hex) del PDF emitido; `null` hasta que se genere (GAF-56). */
+  sha256: string | null;
 }
 
 export interface DocumentoDetalleLectura extends DocumentoResumenLectura {

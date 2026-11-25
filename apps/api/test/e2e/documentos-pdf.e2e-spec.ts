@@ -3,6 +3,7 @@
  * Solicitud, descarga y datos del PDF del Informe de Servicio contra la aplicación real (GAF-54).
  * La cola y el almacenamiento van en memoria; la base es PostgreSQL real.
  */
+import { createHash } from 'crypto';
 import { createTestApp, TestApp } from '../support/app';
 import { autorizacion, autorizacionDePersonal } from '../support/auth';
 import { resetDb } from '../support/db';
@@ -72,7 +73,7 @@ describe('PDF del documento: API y datos (GAF-54)', () => {
       await transicionar(id, 'APROBADO');
       expect(t.cola.trabajos).toEqual([id]);
       const detalle = await http.get(`/documentos/${id}`, autorizacion('SUPERVISOR'));
-      expect(detalle.body.pdf).toEqual({ estado: 'PENDIENTE', generadoAt: null, error: null });
+      expect(detalle.body.pdf).toEqual({ estado: 'PENDIENTE', generadoAt: null, error: null, sha256: null });
     });
 
     it('si Redis está caído la aprobación responde 201 y el error del PDF queda visible', async () => {
@@ -151,6 +152,40 @@ describe('PDF del documento: API y datos (GAF-54)', () => {
       expect(res.headers['content-disposition']).toContain(`${detalle.body.codigo}.pdf`);
       expect((res.body as Buffer).toString()).toContain(`% ${detalle.body.codigo}`);
       expect(detalle.body.pdf).toMatchObject({ estado: 'GENERADO', error: null, generadoAt: expect.any(String) });
+    });
+
+    it('expone la huella SHA-256 en el detalle y coincide con los bytes entregados (GAF-56)', async () => {
+      const id = await aprobado();
+      expect((await http.get(`/documentos/${id}`, autorizacion('SUPERVISOR'))).body.pdf.sha256).toBeNull();
+      await generar.ejecutar(id);
+      const res = await http.get(`/documentos/${id}/pdf`, await supervisor()).buffer(true).parse(binario);
+      const detalle = await http.get(`/documentos/${id}`, autorizacion('SUPERVISOR'));
+      expect(detalle.body.pdf.sha256).toBe(createHash('sha256').update(res.body as Buffer).digest('hex'));
+    });
+
+    it('si los bytes guardados no coinciden con la huella responde 500 claro, no entrega el archivo y deja evento de auditoria (GAF-56)', async () => {
+      const id = await aprobado();
+      await generar.ejecutar(id);
+      const { rows } = await t.db.query(`SELECT pdf_storage_key FROM documentos WHERE id = $1`, [id]);
+      await t.almacen.guardar(rows[0].pdf_storage_key, Buffer.from('%PDF-1.4\n% adulterado\n'));
+
+      const res = await http.get(`/documentos/${id}/pdf`, await supervisor());
+      expect(res.status).toBe(500);
+      expect(res.body.message).toContain('no coincide con su huella SHA-256');
+
+      const eventos = await t.db.query(`SELECT modulo, accion, entidad_id FROM auditoria_eventos WHERE accion = 'PDF_INTEGRIDAD_FALLIDA'`);
+      expect(eventos.rows).toEqual([{ modulo: 'DOCUMENTOS', accion: 'PDF_INTEGRIDAD_FALLIDA', entidad_id: id }]);
+    });
+
+    it('un PDF ya generado no se puede volver a pedir: 409 y la cola no recibe nada (GAF-56)', async () => {
+      const id = await aprobado();
+      await generar.ejecutar(id);
+      t.cola.trabajos.length = 0;
+      const res = await http.post(`/documentos/${id}/pdf`, {}, await supervisor());
+      expect(res.status).toBe(409);
+      expect(res.body.message).toContain('ya fue emitido');
+      expect(t.cola.trabajos).toHaveLength(0);
+      expect((await http.get(`/documentos/${id}`, autorizacion('SUPERVISOR'))).body.pdf.estado).toBe('GENERADO');
     });
 
     it('el Técnico no descarga (403)', async () => {

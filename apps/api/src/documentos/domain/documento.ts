@@ -37,6 +37,8 @@ export interface PdfDocumento {
   /** Motivo del último fallo; visible hasta que un reintento termine bien. */
   error: string | null;
   intentos: number;
+  /** Huella SHA-256 (hex) de los bytes del PDF emitido (GAF-56); `null` hasta que se genere. */
+  sha256: string | null;
 }
 
 /** Clave determinista: regenerar el PDF sobrescribe el mismo objeto, nunca deja copias huérfanas. */
@@ -84,17 +86,23 @@ export class Documento {
     this.proyectoId = props.proyectoId ?? null;
     this.fecha = props.fecha ?? null;
     this.creadoPor = props.creadoPor ?? null;
-    this.pdf = { estado: null, storageKey: null, generadoAt: null, error: null, intentos: 0, ...props.pdf };
+    this.pdf = { estado: null, storageKey: null, generadoAt: null, error: null, intentos: 0, sha256: null, ...props.pdf };
   }
 
   getPdf(): PdfDocumento {
     return { ...this.pdf };
   }
 
-  /** Pide (o repite) el PDF. Solo un documento aprobado o enviado tiene un informe definitivo. */
+  /**
+   * Pide (o repite tras un error) el PDF. Solo un documento aprobado o enviado tiene un informe definitivo,
+   * y una vez emitido es inmutable (GAF-56, spec §13): no se regenera aunque cambien plantilla o catálogos.
+   */
   solicitarPdf(): void {
     if (this.estado !== 'APROBADO' && this.estado !== 'ENVIADO') {
       throw new Error(`Solo se puede generar el PDF de un documento aprobado (estado actual: ${this.estado})`);
+    }
+    if (this.pdf.estado === 'GENERADO') {
+      throw new Error(`El PDF del documento ${this.codigo || this.id} ya fue emitido y es inmutable: no se puede volver a generar`);
     }
     this.pdf = { ...this.pdf, estado: 'PENDIENTE', error: null, intentos: 0 };
   }
@@ -103,9 +111,10 @@ export class Documento {
     this.pdf = { ...this.pdf, estado: 'GENERANDO', error: null, intentos: this.pdf.intentos + 1 };
   }
 
-  marcarPdfGenerado(storageKey: string, fecha: Date): void {
+  marcarPdfGenerado(storageKey: string, fecha: Date, sha256: string): void {
     this.exigirGenerando();
-    this.pdf = { ...this.pdf, estado: 'GENERADO', storageKey, generadoAt: fecha, error: null };
+    if (!/^[0-9a-f]{64}$/.test(sha256)) throw new Error('La huella del PDF debe ser un SHA-256 hexadecimal de 64 caracteres');
+    this.pdf = { ...this.pdf, estado: 'GENERADO', storageKey, generadoAt: fecha, error: null, sha256 };
   }
 
   /** Falla mientras se genera, o antes de empezar (p. ej. no se pudo encolar el trabajo). */

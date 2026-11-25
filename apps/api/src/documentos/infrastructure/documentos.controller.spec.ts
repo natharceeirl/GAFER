@@ -4,7 +4,7 @@ import { TransicionarDocumentoUseCase } from '../application/transicionar-docume
 import { ListarDocumentosUseCase } from '../application/listar-documentos.usecase';
 import { ObtenerDocumentoUseCase } from '../application/obtener-documento.usecase';
 import { SolicitarPdfDocumentoUseCase } from '../application/solicitar-pdf-documento.usecase';
-import { ObtenerPdfDocumentoUseCase } from '../application/obtener-pdf-documento.usecase';
+import { ObtenerPdfDocumentoUseCase, PdfIntegridadException } from '../application/obtener-pdf-documento.usecase';
 import { Documento } from '../domain/documento';
 import { AuditoriaService } from '../../shared/auditoria/auditoria.service';
 import { TokenPayload } from '../../auth/domain/ports/token.service.port';
@@ -115,11 +115,27 @@ describe('DocumentosController', () => {
       const end = jest.fn();
       const set = jest.fn().mockReturnValue({ end });
       const res = { status: jest.fn().mockReturnValue({ set }) } as any;
-      await controller.descargarPdf('doc-1', res);
+      await controller.descargarPdf('doc-1', res, USUARIO);
       expect(set).toHaveBeenCalledWith(
         expect.objectContaining({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'inline; filename="INFORME-KAL-001-2026.pdf"', 'Content-Length': '6' }),
       );
       expect(end).toHaveBeenCalledWith(Buffer.from('%PDF-x'));
+    });
+
+    it('GET :id/pdf audita y propaga el 500 cuando el archivo no coincide con su huella (GAF-56)', async () => {
+      mockObtenerPdf.ejecutar.mockRejectedValue(new PdfIntegridadException('doc-1', 'no coincide con su huella SHA-256'));
+      const res = { status: jest.fn() } as any;
+      await expect(controller.descargarPdf('doc-1', res, USUARIO)).rejects.toThrow('no coincide con su huella SHA-256');
+      expect(res.status).not.toHaveBeenCalled();
+      expect(auditoria.registrarEvento).toHaveBeenCalledWith(
+        expect.objectContaining({ modulo: 'DOCUMENTOS', accion: 'PDF_INTEGRIDAD_FALLIDA', entidadId: 'doc-1', actorUsuario: 'SUP.UNO' }),
+      );
+    });
+
+    it('GET :id/pdf no audita otros errores (p. ej. 409 todavía no generado)', async () => {
+      mockObtenerPdf.ejecutar.mockRejectedValue(new Error('todavía no está generado'));
+      await expect(controller.descargarPdf('doc-1', { status: jest.fn() } as any, USUARIO)).rejects.toThrow('todavía');
+      expect(auditoria.registrarEvento).not.toHaveBeenCalled();
     });
   });
 });
