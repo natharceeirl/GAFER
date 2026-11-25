@@ -7,7 +7,7 @@ import { Button } from '../../../shared/ui/atoms/Button';
 import { fechaLocal } from '../../../shared/lib/fecha';
 import { NOMBRE_ROL, type Rol } from '../../auth/model/roles';
 import { EstadoBadge } from '../../documentos/components/EstadoBadge';
-import type { DocumentoResumen } from '../../documentos/model/tipos';
+import type { DocumentoFila } from '../../documentos/model/documento-mapper';
 import { useCartera } from '../../cliente-expediente/model/cartera-context';
 import { proyectosDe } from '../../cliente-expediente/model/cartera';
 import { useProgramacion } from '../../programacion/model/programacion-context';
@@ -41,7 +41,7 @@ const ESTADO_VISITA: Record<EstadoCampo, { etiqueta: string; color: ColorAura }>
 interface DashboardPageProps {
   /** El dashboard es exclusivo de Administrador y Supervisor — spec §10.1. */
   rol: Rol;
-  documentos: DocumentoResumen[];
+  documentos: DocumentoFila[];
   onAbrirDocumento: (id: string) => void;
   /** GAF-99: acceso directo al alta rápida de cliente; solo se ofrece al Administrador. */
   onNuevoCliente?: () => void;

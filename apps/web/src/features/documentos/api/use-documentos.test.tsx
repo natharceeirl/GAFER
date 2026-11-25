@@ -19,7 +19,7 @@ const resumen = {
   estado: 'ENVIADO_A_REVISION',
   fecha: '2026-11-24',
 };
-const detalle = (pdf = { estado: null, generadoAt: null, error: null }, estado = 'ENVIADO_A_REVISION') => ({ ...resumen, estado, transiciones: [], pdf });
+const detalle = (pdf: { estado: string | null; generadoAt: string | null; error: string | null } = { estado: null, generadoAt: null, error: null }, estado = 'ENVIADO_A_REVISION') => ({ ...resumen, estado, transiciones: [], pdf });
 
 function json(status: number, cuerpo: unknown) {
   return new Response(JSON.stringify(cuerpo), { status, headers: { 'Content-Type': 'application/json' } });
