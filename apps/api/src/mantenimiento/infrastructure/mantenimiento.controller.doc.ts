@@ -222,6 +222,19 @@ export function ApiActivarServicioContratadoDoc() {
   );
 }
 
+export function ApiCambiarEstadoTrabajoServicioDoc() {
+  return applyDecorators(
+    ApiOperation({
+      summary: 'Cambiar el estado de trabajo del servicio (PROGRAMADO → EJECUTADO → CONCLUIDO; cancelar o reabrir con motivo). PENDIENTE no se fija: se deriva de la fecha',
+    }),
+    ApiParam({ name: 'id', description: 'UUID del servicio contratado' }),
+    ApiResponse({ status: 200, description: 'Estado de trabajo actualizado', type: ServicioContratadoResponseDto }),
+    ApiResponse({ status: 400, description: 'Transición no permitida o motivo faltante', type: BadRequestErrorDto }),
+    ApiResponse({ status: 403, description: 'Acceso restringido a rol ADMINISTRADOR' }),
+    ApiResponse({ status: 404, description: 'Servicio contratado no encontrado', type: NotFoundErrorDto }),
+  );
+}
+
 // ==========================================
 // INSUMOS QUÍMICOS
 // ==========================================

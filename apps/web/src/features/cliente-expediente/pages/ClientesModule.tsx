@@ -5,6 +5,8 @@ import { NuevoClientePage } from './NuevoClientePage';
 import { NuevoProyectoPage } from './NuevoProyectoPage';
 import { NuevoServicioPage } from './NuevoServicioPage';
 import { EstadoCargando, EstadoError } from '../components/EstadoConsulta';
+import { PasosAltaRapida } from '../components/PasosAltaRapida';
+import { ResumenAltaRapida } from '../components/ResumenAltaRapida';
 import type { ClienteFila } from '../model/clientes-mock';
 import { TicketHeader } from '../../../shared/ui/molecules/TicketHeader';
 import { useCartera } from '../model/cartera-context';
@@ -13,6 +15,8 @@ import { camposDeErrorProyecto, datosDeProyecto } from '../model/proyecto-mapper
 import { camposDeErrorServicio, datosDeServicio } from '../model/servicio-mapper';
 import { etiquetaFrecuencia } from '../model/catalogos-servicio';
 import { mensajeDeError } from '../../../shared/api/errores';
+import { repartirError } from '../model/errores-servidor';
+import type { EstadoTrabajo } from '@gafer/contracts';
 import type { DatosCliente, DatosProyecto, DatosServicio } from '../model/validaciones';
 import { useActivarCliente, useActualizarCliente, useCliente, useClientes, useCrearCliente, useDesactivarCliente } from '../api/use-clientes';
 import {
@@ -20,6 +24,7 @@ import {
   useActivarServicio,
   useActualizarSede,
   useActualizarServicio,
+  useCambiarEstadoTrabajo,
   useCrearSede,
   useCrearServicio,
   useDesactivarSede,
@@ -42,7 +47,11 @@ import { ahora, fechaLocal } from '../../../shared/lib/fecha';
 
 type Vista =
   | { tipo: 'lista' }
-  | { tipo: 'nuevo-cliente' }
+  // Alta rápida encadenada (GAF-99): cliente → sede → servicio → resumen; cada paso guarda antes de avanzar.
+  | { tipo: 'alta-cliente' }
+  | { tipo: 'alta-sede'; clienteId: string; aviso: string }
+  | { tipo: 'alta-servicio'; clienteId: string; proyectoId: string; aviso: string | null }
+  | { tipo: 'alta-resumen'; clienteId: string; proyectoId: string }
   | { tipo: 'editar-cliente'; clienteId: string }
   | { tipo: 'expediente'; clienteId: string; aviso: string | null }
   | { tipo: 'nuevo-proyecto'; clienteId: string }
@@ -54,6 +63,10 @@ interface ClientesModuleProps {
   usuario: string;
   rol: Rol;
   onAbrirMapaMurino: (clienteId: string) => void;
+  /** Abre la pantalla de Programación (hoy una maqueta sin conexión al API) desde el resumen del alta rápida. */
+  onProgramarVisita?: () => void;
+  /** Abre directamente el paso 1 del alta rápida (acceso desde el panel de control); solo para el Administrador. */
+  iniciarEnAltaRapida?: boolean;
 }
 
 /** Técnico con el que se muestra la maqueta de la app. */
@@ -61,23 +74,23 @@ const TECNICO_DEMO_PERSONAL = PERSONAL_MOCK.find((p) => p.cargo === 'TECNICO_OPE
 const TECNICO_DEMO = TECNICO_DEMO_PERSONAL ? nombreCompleto(TECNICO_DEMO_PERSONAL) : 'Técnico operador';
 
 /** Jerarquía CLIENTE → PROYECTO (sede) → SERVICIO (§7); clientes, sedes y servicios vienen del API. */
-export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModuleProps) {
+export function ClientesModule({ usuario, rol, onAbrirMapaMurino, onProgramarVisita, iniciarEnAltaRapida = false }: ClientesModuleProps) {
   const { cartera } = useCartera();
   /** Giros del negocio: salen del catálogo de texto editable (§7.7), de modo que un cambio en Mantenimiento se ve aquí. */
   const giros = useCatalogosTexto().data?.find((c) => c.id === 'giros')?.items ?? [];
   const { registrar } = useAuditoria();
   const { visitas } = useProgramacion();
-  const [vista, setVista] = useState<Vista>({ tipo: 'lista' });
+  /** Solo el Administrador da de alta clientes, sedes y servicios (§12, decisión C1). */
+  const puedeDarDeAlta = rol === 'ADMINISTRADOR';
+  const [vista, setVista] = useState<Vista>(iniciarEnAltaRapida && puedeDarDeAlta ? { tipo: 'alta-cliente' } : { tipo: 'lista' });
   const hoy = fechaLocal();
   const historial = useMemo(() => generarHistorial(hoy), [hoy]);
   const estacionesRojo = useMemo(() => estacionesRojoDe(historial, cartera.clientes), [historial, cartera.clientes]);
-  /** Solo el Administrador da de alta clientes, sedes y servicios (§12, decisión C1). */
-  const puedeDarDeAlta = rol === 'ADMINISTRADOR';
   /** El API entrega insumos y equipos solo a Administrador y Técnico: el Supervisor no los consulta. */
   const puedeLeerCatalogos = rol === 'ADMINISTRADOR';
 
   const lista = useClientes();
-  const clienteIdAbierto = vista.tipo === 'lista' || vista.tipo === 'nuevo-cliente' ? null : vista.clienteId;
+  const clienteIdAbierto = vista.tipo === 'lista' || vista.tipo === 'alta-cliente' ? null : vista.clienteId;
   const ficha = useCliente(clienteIdAbierto);
   const sedes = useSedes(clienteIdAbierto);
   const insumos = useInsumos(puedeLeerCatalogos && clienteIdAbierto !== null);
@@ -94,6 +107,7 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
   const actualizarServicio = useActualizarServicio();
   const activarServicio = useActivarServicio();
   const desactivarServicio = useDesactivarServicio();
+  const cambiarEstadoTrabajo = useCambiarEstadoTrabajo();
 
   const erroresAlta = useMemo(() => (crear.error ? camposDeError(crear.error) : null), [crear.error]);
   const errorEdicion = actualizar.error ?? activar.error ?? desactivar.error;
@@ -104,7 +118,13 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
   const erroresSede = useMemo(() => (errorSede ? camposDeErrorProyecto(errorSede) : null), [errorSede]);
   const errorServicio = crearServicio.error ?? actualizarServicio.error;
   const erroresServicio = useMemo(() => (errorServicio ? camposDeErrorServicio(errorServicio) : null), [errorServicio]);
-  const cambiandoEstado = activarSede.isPending || desactivarSede.isPending || activarServicio.isPending || desactivarServicio.isPending;
+  const cambiandoEstado =
+    activarSede.isPending || desactivarSede.isPending || activarServicio.isPending || desactivarServicio.isPending || cambiarEstadoTrabajo.isPending;
+  const erroresEstadoTrabajo = useMemo(() => {
+    if (!cambiarEstadoTrabajo.error) return null;
+    const { campos, general } = repartirError(cambiarEstadoTrabajo.error, (ruta) => (ruta === 'motivo' ? 'motivo' : null));
+    return { motivo: campos.motivo, general: campos.motivo ? null : general };
+  }, [cambiarEstadoTrabajo.error]);
   const errorEstado = activarSede.error ?? desactivarSede.error ?? activarServicio.error ?? desactivarServicio.error;
   const errorCatalogos = insumos.error ?? equipos.error;
 
@@ -127,6 +147,7 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
       actualizarServicio,
       activarServicio,
       desactivarServicio,
+      cambiarEstadoTrabajo,
     ]) {
       mutacion.reset();
     }
@@ -137,7 +158,7 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
     try {
       const creado = await crear.mutateAsync({ datos: d, anticipacionAlertaDias: anticipacion });
       auditar('Alta de cliente', d.codigoCorto, `${d.razonSocial.trim()} · RUC ${d.ruc}`);
-      irA({ tipo: 'expediente', clienteId: creado.id, aviso: `Cliente ${d.codigoCorto} registrado. El siguiente paso es registrar su primera sede.` });
+      irA({ tipo: 'alta-sede', clienteId: creado.id, aviso: `Cliente ${d.codigoCorto} registrado. Ahora agregue su primera sede.` });
     } catch {
       // El error queda en la mutación y el formulario lo muestra por campo.
     }
@@ -158,6 +179,26 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
     try {
       await crearSede.mutateAsync({ clienteId, datos: d });
       irA({ tipo: 'expediente', clienteId, aviso: `Sede ${d.nombre} registrada. Ya puede agregarle servicios.` });
+    } catch {
+      // El error queda en la mutación y el formulario lo muestra por campo.
+    }
+  }
+
+  /** Paso 2 del alta rápida: la sede recién creada pasa directo al paso 3. */
+  async function registrarSedeAltaRapida(clienteId: string, d: DatosProyecto) {
+    try {
+      const sede = await crearSede.mutateAsync({ clienteId, datos: d });
+      irA({ tipo: 'alta-servicio', clienteId, proyectoId: sede.id, aviso: `Sede ${sede.nombre} registrada. Ahora agregue el servicio contratado.` });
+    } catch {
+      // El error queda en la mutación y el formulario lo muestra por campo.
+    }
+  }
+
+  /** Paso 3 del alta rápida: tras guardar el servicio se muestra el resumen. */
+  async function registrarServicioAltaRapida(clienteId: string, proyectoId: string, d: DatosServicio) {
+    try {
+      await crearServicio.mutateAsync({ proyectoId, datos: d });
+      irA({ tipo: 'alta-resumen', clienteId, proyectoId });
     } catch {
       // El error queda en la mutación y el formulario lo muestra por campo.
     }
@@ -203,23 +244,36 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
     (activa ? activarServicio : desactivarServicio).mutate(servicioId);
   }
 
+  /** GAF-99: resuelve `true` si el servidor aceptó el cambio; el error queda en la mutación para mostrarlo. */
+  async function cambiarTrabajo(servicioId: string, estado: EstadoTrabajo, motivo?: string): Promise<boolean> {
+    cambiarEstadoTrabajo.reset();
+    try {
+      await cambiarEstadoTrabajo.mutateAsync({ id: servicioId, estado, motivo });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   const cliente = ficha.data;
   const proyectos = sedes.data ?? [];
 
-  if (vista.tipo === 'nuevo-cliente' && puedeDarDeAlta) {
+  if (vista.tipo === 'alta-cliente' && puedeDarDeAlta) {
     return (
-      <NuevoClientePage
-        giros={giros}
-        enviando={crear.isPending}
-        erroresServidor={erroresAlta?.campos}
-        errorGeneral={erroresAlta?.general}
-        onRegistrar={registrarCliente}
-        onCancelar={() => irA({ tipo: 'lista' })}
-      />
+      <PasosAltaRapida paso={1} onSalir={() => irA({ tipo: 'lista' })}>
+        <NuevoClientePage
+          giros={giros}
+          enviando={crear.isPending}
+          erroresServidor={erroresAlta?.campos}
+          errorGeneral={erroresAlta?.general}
+          onRegistrar={registrarCliente}
+          onCancelar={() => irA({ tipo: 'lista' })}
+        />
+      </PasosAltaRapida>
     );
   }
 
-  if (vista.tipo !== 'lista' && vista.tipo !== 'nuevo-cliente' && !cliente) {
+  if (vista.tipo !== 'lista' && vista.tipo !== 'alta-cliente' && !cliente) {
     return (
       <div className="clientes-page">
         <TicketHeader
@@ -240,6 +294,78 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
           )}
         </div>
       </div>
+    );
+  }
+
+  if (
+    (vista.tipo === 'alta-sede' || vista.tipo === 'alta-servicio' || vista.tipo === 'alta-resumen') &&
+    puedeDarDeAlta &&
+    cliente
+  ) {
+    // Salir en cualquier paso abre el expediente: lo ya guardado queda guardado.
+    const salir = () => irA({ tipo: 'expediente', clienteId: cliente.id, aviso: null });
+
+    if (vista.tipo === 'alta-sede') {
+      return (
+        <PasosAltaRapida paso={2} aviso={vista.aviso} onSalir={salir}>
+          <NuevoProyectoPage
+            cliente={cliente}
+            nombresExistentes={proyectos.map((p) => p.nombre)}
+            enviando={crearSede.isPending}
+            erroresServidor={erroresSede?.campos}
+            errorGeneral={erroresSede?.general}
+            onRegistrar={(d) => void registrarSedeAltaRapida(cliente.id, d)}
+            onCancelar={salir}
+          />
+        </PasosAltaRapida>
+      );
+    }
+
+    const sede = proyectos.find((p) => p.id === vista.proyectoId);
+    if (!sede) {
+      return (
+        <div className="clientes-page__body">
+          {sedes.isError ? (
+            <EstadoError mensaje={mensajeDeError(sedes.error)} onReintentar={() => void sedes.refetch()} />
+          ) : (
+            <EstadoCargando mensaje="Cargando la sede…" />
+          )}
+        </div>
+      );
+    }
+
+    if (vista.tipo === 'alta-servicio') {
+      return (
+        <PasosAltaRapida paso={3} aviso={vista.aviso} onSalir={salir}>
+          <NuevoServicioPage
+            cliente={cliente}
+            proyecto={sede}
+            insumos={insumos.data ?? []}
+            equipos={equipos.data ?? []}
+            cargandoCatalogos={insumos.isPending || equipos.isPending}
+            errorCatalogos={errorCatalogos ? mensajeDeError(errorCatalogos) : null}
+            onReintentarCatalogos={() => {
+              if (insumos.isError) void insumos.refetch();
+              if (equipos.isError) void equipos.refetch();
+            }}
+            enviando={crearServicio.isPending}
+            erroresServidor={erroresServicio?.campos}
+            errorGeneral={erroresServicio?.general}
+            onRegistrar={(d) => void registrarServicioAltaRapida(cliente.id, sede.id, d)}
+            onCancelar={salir}
+          />
+        </PasosAltaRapida>
+      );
+    }
+
+    return (
+      <ResumenAltaRapida
+        cliente={cliente}
+        sede={sede}
+        onAgregarServicio={() => irA({ tipo: 'alta-servicio', clienteId: cliente.id, proyectoId: sede.id, aviso: null })}
+        onVerExpediente={salir}
+        onProgramarVisita={onProgramarVisita}
+      />
     );
   }
 
@@ -321,7 +447,7 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
     }
   }
 
-  if (vista.tipo !== 'lista' && vista.tipo !== 'nuevo-cliente' && cliente) {
+  if (vista.tipo !== 'lista' && vista.tipo !== 'alta-cliente' && cliente) {
     const contrataDesratizacion = proyectos.some((p) =>
       p.estado === 'ACTIVO' && p.servicios.some((s) => s.estado === 'ACTIVO' && s.tipoServicio === 'DRT'),
     );
@@ -362,6 +488,8 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
         onNuevoServicio={(proyectoId) => irA({ tipo: 'nuevo-servicio', clienteId: cliente.id, proyectoId })}
         onEditarServicio={(proyectoId, servicioId) => irA({ tipo: 'editar-servicio', clienteId: cliente.id, proyectoId, servicioId })}
         onCambiarEstadoServicio={cambiarEstadoServicio}
+        onCambiarEstadoTrabajo={cambiarTrabajo}
+        errorEstadoTrabajo={erroresEstadoTrabajo}
         onAbrirMapaMurino={() => onAbrirMapaMurino(cliente.id)}
       />
     );
@@ -375,7 +503,7 @@ export function ClientesModule({ usuario, rol, onAbrirMapaMurino }: ClientesModu
       onReintentar={() => void lista.refetch()}
       onAbrirCliente={(c) => irA({ tipo: 'expediente', clienteId: c.id, aviso: null })}
       puedeCrearCliente={puedeDarDeAlta}
-      onNuevoCliente={() => irA({ tipo: 'nuevo-cliente' })}
+      onNuevoCliente={() => irA({ tipo: 'alta-cliente' })}
     />
   );
 }

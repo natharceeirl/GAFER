@@ -6,6 +6,7 @@ import type {
   EstadoDocumento,
   EstadoInspeccion,
   EstadoOperativoEquipo,
+  EstadoTrabajo,
   FrecuenciaServicio,
   PresentacionInsumo,
   TipoEquipo,
@@ -73,6 +74,8 @@ export interface ServiciosContratadosTable {
   requiere_certificado: Generated<boolean>;
   vigencia_dias: number | null;
   estado: Generated<EstadoGeneral>;
+  /** GAF-99 (migración 004): estado del trabajo, aparte de la baja lógica. */
+  estado_trabajo: Generated<EstadoTrabajo>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

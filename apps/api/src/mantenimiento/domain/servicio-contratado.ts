@@ -1,9 +1,37 @@
 import { randomUUID } from 'crypto';
 import { EstadoGeneral } from './cliente';
 
-import type { FrecuenciaServicio, TipoServicio } from '@gafer/contracts';
+import { EstadoTrabajoSchema, MOTIVO_MINIMO_CARACTERES, estadoVisibleDeServicio } from '@gafer/contracts';
+import type { EstadoTrabajo, EstadoVisibleTrabajo, FrecuenciaServicio, TipoServicio } from '@gafer/contracts';
 
-export type { FrecuenciaServicio, TipoServicio };
+export type { EstadoTrabajo, EstadoVisibleTrabajo, FrecuenciaServicio, TipoServicio };
+
+/**
+ * Transiciones del estado de trabajo (GAF-99). CONCLUIDO y CANCELADO son finales: solo salen por una
+ * reapertura explícita a EJECUTADO, con motivo. Cancelar también exige motivo.
+ * PENDIENTE no es un estado guardado ni una transición: se deriva (ver `getEstadoVisible`).
+ */
+const TRANSICIONES_ESTADO_TRABAJO: Record<EstadoTrabajo, readonly EstadoTrabajo[]> = {
+  PROGRAMADO: ['EJECUTADO', 'CANCELADO'],
+  EJECUTADO: ['CONCLUIDO', 'CANCELADO'],
+  CONCLUIDO: ['EJECUTADO'],
+  CANCELADO: ['EJECUTADO'],
+};
+
+const ESTADOS_FINALES: readonly EstadoTrabajo[] = ['CONCLUIDO', 'CANCELADO'];
+
+/** La transición pedida no está permitida desde el estado actual. */
+export class TransicionEstadoTrabajoError extends Error {}
+
+/** Cancelar o reabrir sin un motivo suficiente. */
+export class MotivoObligatorioError extends Error {}
+
+export interface CambioEstadoTrabajoRealizado {
+  anterior: EstadoTrabajo;
+  nuevo: EstadoTrabajo;
+  /** El servicio estaba terminado (concluido o cancelado) y vuelve a EJECUTADO. */
+  reapertura: boolean;
+}
 
 export interface ServicioContratadoProps {
   id?: string;
@@ -18,6 +46,9 @@ export interface ServicioContratadoProps {
   requiereCertificado?: boolean;
   vigenciaDias?: number | null;
   estado?: EstadoGeneral;
+  estadoTrabajo?: EstadoTrabajo;
+  /** Fecha (AAAA-MM-DD) de la próxima visita programada sin ejecutar; solo de lectura, no se guarda en el servicio. */
+  fechaProgramada?: string | null;
 }
 
 export class ServicioContratado {
@@ -33,6 +64,8 @@ export class ServicioContratado {
   public requiereCertificado: boolean;
   public vigenciaDias: number | null;
   private estado: EstadoGeneral;
+  private estadoTrabajo: EstadoTrabajo;
+  private readonly fechaProgramada: string | null;
 
   constructor(props: ServicioContratadoProps) {
     const tiposValidos: TipoServicio[] = ['DSF', 'DSS', 'DRT', 'LRA', 'LTG', 'LTS', 'LAM'];
@@ -68,6 +101,13 @@ export class ServicioContratado {
     this.requiereCertificado = props.requiereCertificado ?? false;
     this.vigenciaDias = props.vigenciaDias ?? null;
     this.estado = props.estado ?? 'ACTIVO';
+
+    const estadoTrabajo = props.estadoTrabajo ?? 'PROGRAMADO';
+    if (!EstadoTrabajoSchema.safeParse(estadoTrabajo).success) {
+      throw new Error(`Estado de trabajo no válido: ${estadoTrabajo}`);
+    }
+    this.estadoTrabajo = estadoTrabajo;
+    this.fechaProgramada = props.fechaProgramada ?? null;
   }
 
   actualizarDatos(props: {
@@ -118,5 +158,41 @@ export class ServicioContratado {
 
   getEstado(): EstadoGeneral {
     return this.estado;
+  }
+
+  getEstadoTrabajo(): EstadoTrabajo {
+    return this.estadoTrabajo;
+  }
+
+  getFechaProgramada(): string | null {
+    return this.fechaProgramada;
+  }
+
+  /** Estado que se muestra: PENDIENTE si está PROGRAMADO y su fecha programada es anterior a `hoy` (AAAA-MM-DD). */
+  getEstadoVisible(hoy: string): EstadoVisibleTrabajo {
+    return estadoVisibleDeServicio(this.estadoTrabajo, this.fechaProgramada, hoy);
+  }
+
+  /** Cambia el estado de trabajo según las transiciones permitidas; la baja lógica no se toca. */
+  cambiarEstadoTrabajo(nuevo: EstadoTrabajo, motivo?: string): CambioEstadoTrabajoRealizado {
+    if (this.estado !== 'ACTIVO') {
+      throw new TransicionEstadoTrabajoError('No se puede cambiar el estado de trabajo de un servicio inactivo');
+    }
+
+    const anterior = this.estadoTrabajo;
+    if (!TRANSICIONES_ESTADO_TRABAJO[anterior].includes(nuevo)) {
+      throw new TransicionEstadoTrabajoError(`No se puede pasar el servicio de ${anterior} a ${nuevo}`);
+    }
+
+    const reapertura = ESTADOS_FINALES.includes(anterior);
+    if ((nuevo === 'CANCELADO' || reapertura) && (motivo ?? '').trim().length < MOTIVO_MINIMO_CARACTERES) {
+      const accion = reapertura ? 'reabrir' : 'cancelar';
+      throw new MotivoObligatorioError(
+        `El motivo es obligatorio para ${accion} el servicio y debe tener al menos ${MOTIVO_MINIMO_CARACTERES} caracteres`,
+      );
+    }
+
+    this.estadoTrabajo = nuevo;
+    return { anterior, nuevo, reapertura };
   }
 }
