@@ -182,3 +182,14 @@ describe('Montos y presupuestos opcionales en proyectos/sedes (GAF-105)', () => 
     ).toBe(true);
   });
 });
+
+describe('proyecto: monto con más de 2 decimales', () => {
+  it('rechaza montoPresupuestado con 3 decimales en el registro y en la actualización, señalando el campo', () => {
+    esperarFallaEn(ProyectoRegistroSchema, { ...registro, montoPresupuestado: 10.999, moneda: 'PEN' }, 'montoPresupuestado');
+    esperarFallaEn(ProyectoActualizacionSchema, { montoPresupuestado: 10.999, moneda: 'PEN' }, 'montoPresupuestado');
+  });
+
+  it('acepta montoPresupuestado con 2 decimales', () => {
+    expect(ProyectoRegistroSchema.safeParse({ ...registro, montoPresupuestado: 10.99, moneda: 'PEN' }).success).toBe(true);
+  });
+});

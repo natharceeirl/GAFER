@@ -4,6 +4,7 @@ import { ServicioContratado } from './servicio-contratado';
 import { Insumo } from './insumo';
 import { Equipo } from './equipo';
 import { Personal } from './personal';
+import { MontoMonedaError, validarMontoYMoneda } from './monto-moneda';
 
 describe('Mantenimiento Domain Entities — Business Rules (T2.2)', () => {
   describe('Cliente Entity', () => {
@@ -146,6 +147,43 @@ describe('Mantenimiento Domain Entities — Business Rules (T2.2)', () => {
       expect(() => p2.actualizarDatos({ montoPresupuestado: null, moneda: 'PEN' })).toThrow(
         'No se puede especificar una moneda sin un presupuesto',
       );
+    });
+  });
+
+  describe('validarMontoYMoneda: máximo 2 decimales (GAF-105)', () => {
+    it('rechaza montos con más de 2 decimales y nombra el campo', () => {
+      let error: unknown;
+      try {
+        validarMontoYMoneda(10.999, 'PEN', 'presupuesto');
+      } catch (e) {
+        error = e;
+      }
+      expect(error).toBeInstanceOf(MontoMonedaError);
+      expect((error as MontoMonedaError).campo).toBe('montoPresupuestado');
+      expect((error as Error).message).toBe('El presupuesto admite como máximo 2 decimales');
+      expect(() => validarMontoYMoneda(0.001, 'USD', 'monto')).toThrow('El monto admite como máximo 2 decimales');
+      expect(() => validarMontoYMoneda(0.1 + 0.2, 'USD', 'monto')).toThrow('admite como máximo 2 decimales');
+    });
+
+    it('acepta montos con hasta 2 decimales y el máximo', () => {
+      expect(() => validarMontoYMoneda(10.99, 'PEN', 'monto')).not.toThrow();
+      expect(() => validarMontoYMoneda(1200.5, 'PEN', 'monto')).not.toThrow();
+      expect(() => validarMontoYMoneda(9_999_999_999.99, 'PEN', 'monto')).not.toThrow();
+    });
+
+    it('lo aplican las entidades al crear y al actualizar', () => {
+      const props = {
+        id: 's1111111-1111-1111-1111-111111111111',
+        proyectoId: 'p1111111-1111-1111-1111-111111111111',
+        tipoServicio: 'DSF' as const,
+        frecuencia: 'MENSUAL' as const,
+        areaTotalM2: 5000,
+        areaTratarM2: 3000,
+      };
+      expect(() => new ServicioContratado({ ...props, monto: 10.999, moneda: 'PEN' })).toThrow('admite como máximo 2 decimales');
+      const servicio = new ServicioContratado({ ...props, monto: 10, moneda: 'PEN' });
+      expect(() => servicio.actualizarDatos({ monto: 10.999 })).toThrow('admite como máximo 2 decimales');
+      expect(servicio.monto).toBe(10);
     });
   });
 

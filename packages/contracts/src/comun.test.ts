@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { DniSchema, FechaSchema, HoraSchema, PaginacionQuerySchema, RucSchema, TelefonoSchema } from './comun';
+import {
+  DniSchema,
+  FechaSchema,
+  HoraSchema,
+  MONTO_MAXIMO,
+  MontoSchema,
+  PaginacionQuerySchema,
+  RucSchema,
+  TelefonoSchema,
+  tieneComoMuchoDosDecimales,
+} from './comun';
 
 describe('RucSchema', () => {
   it('acepta 11 dígitos', () => expect(RucSchema.safeParse('20508565434').success).toBe(true));
@@ -57,4 +67,27 @@ describe('PaginacionQuerySchema', () => {
   it.each([{ limit: '0' }, { limit: '101' }, { limit: '1.5' }, { limit: 'abc' }, { offset: '-1' }])('rechaza %j', (consulta) =>
     expect(PaginacionQuerySchema.safeParse(consulta).success).toBe(false),
   );
+});
+
+describe('MontoSchema: máximo 2 decimales (NUMERIC(12, 2))', () => {
+  it.each([0, 1, 10.5, 10.99, 0.01, 1200.5, 25000.5, 0.3, 1.1, 100.07, MONTO_MAXIMO])('acepta %s', (monto) =>
+    expect(MontoSchema.safeParse(monto).success).toBe(true),
+  );
+
+  it.each([10.999, 0.001, 1.005, 0.1 + 0.2, 1e-7, 1_234_567.891])('rechaza %s por tener más de 2 decimales', (monto) => {
+    const resultado = MontoSchema.safeParse(monto);
+    expect(resultado.success).toBe(false);
+    if (!resultado.success) expect(resultado.error.issues[0].message).toBe('El monto admite como máximo 2 decimales');
+  });
+});
+
+describe('tieneComoMuchoDosDecimales', () => {
+  it('distingue valores con 2 decimales de los que tienen más, sin errores de coma flotante', () => {
+    expect(tieneComoMuchoDosDecimales(1.15)).toBe(true);
+    expect(tieneComoMuchoDosDecimales(4.35)).toBe(true);
+    expect(tieneComoMuchoDosDecimales(8.2)).toBe(true);
+    expect(tieneComoMuchoDosDecimales(10.999)).toBe(false);
+    expect(tieneComoMuchoDosDecimales(Number.NaN)).toBe(false);
+    expect(tieneComoMuchoDosDecimales(Number.POSITIVE_INFINITY)).toBe(false);
+  });
 });

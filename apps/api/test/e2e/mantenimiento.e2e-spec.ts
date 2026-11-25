@@ -546,6 +546,37 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
       expect(servicio.body).toMatchObject({ monto: 300, moneda: 'USD' });
     });
 
+    it('rechaza montos con más de 2 decimales en alta y modificación en lugar de redondearlos', async () => {
+      const { sedeId, servicioId } = await crearSedeYServicioConMontos();
+
+      const sede = await http.patch(`/mantenimiento/proyectos/${sedeId}`, { montoPresupuestado: 10.999, moneda: 'PEN' });
+      const servicio = await http.patch(`/mantenimiento/servicios-contratados/${servicioId}`, { monto: 10.999 });
+      const alta = await http.post('/mantenimiento/servicios-contratados', {
+        proyectoId: sedeId,
+        tipoServicio: 'DSF',
+        frecuencia: 'MENSUAL',
+        areaTotalM2: 800,
+        areaTratarM2: 500,
+        insumosAutorizados: [],
+        equiposAutorizados: [],
+        dosisReferencial: {},
+        requiereCertificado: false,
+        monto: 0.001,
+        moneda: 'PEN',
+      });
+
+      for (const [respuesta, campo] of [
+        [sede, 'montoPresupuestado'],
+        [servicio, 'monto'],
+        [alta, 'monto'],
+      ] as const) {
+        expect(respuesta.status).toBe(400);
+        expect(respuesta.body.errors[0].path).toBe(campo);
+      }
+      const guardado = await http.get(`/mantenimiento/proyectos/${sedeId}`);
+      expect(guardado.body.montoPresupuestado).toBe(25000.5);
+    });
+
     it('TECNICO_OPERADOR lee sedes y servicios sin montos ni moneda', async () => {
       const { clienteId, sedeId, servicioId } = await crearSedeYServicioConMontos();
       const tecnico = api(t.baseUrl, 'TECNICO_OPERADOR');

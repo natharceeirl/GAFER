@@ -211,3 +211,14 @@ describe('Montos y pagos opcionales en servicio contratado (GAF-105)', () => {
     ).toBe(true);
   });
 });
+
+describe('servicio: monto con más de 2 decimales', () => {
+  it('rechaza monto con 3 decimales en el registro y en la actualización, señalando el campo', () => {
+    esperarFallaEn(ServicioContratadoRegistroSchema, { ...registro, monto: 10.999, moneda: 'PEN' }, 'monto');
+    esperarFallaEn(ServicioContratadoActualizacionSchema, { monto: 10.999, moneda: 'PEN' }, 'monto');
+  });
+
+  it('acepta monto con 2 decimales', () => {
+    expect(ServicioContratadoRegistroSchema.safeParse({ ...registro, monto: 10.99, moneda: 'PEN' }).success).toBe(true);
+  });
+});

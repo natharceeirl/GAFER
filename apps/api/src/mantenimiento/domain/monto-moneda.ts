@@ -1,4 +1,4 @@
-import { MONEDAS_VALIDAS, MONTO_MAXIMO, type Moneda } from '@gafer/contracts';
+import { MONEDAS_VALIDAS, MONTO_MAXIMO, tieneComoMuchoDosDecimales, type Moneda } from '@gafer/contracts';
 
 /** Campo del contrato HTTP al que se atribuye un incumplimiento de monto o moneda. */
 export type CampoMonto = 'monto' | 'montoPresupuestado' | 'moneda';
@@ -30,6 +30,9 @@ export function validarMontoYMoneda(
     }
     if (monto > MONTO_MAXIMO) {
       throw new MontoMonedaError(campoMonto, `El ${etiqueta} no puede superar ${MONTO_MAXIMO}`);
+    }
+    if (!tieneComoMuchoDosDecimales(monto)) {
+      throw new MontoMonedaError(campoMonto, `El ${etiqueta} admite como máximo 2 decimales`);
     }
   }
 
