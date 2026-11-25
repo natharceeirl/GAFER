@@ -1,132 +1,89 @@
-import { BadRequestException } from '@nestjs/common';
 import { DocumentosController } from './documentos.controller';
 import { CrearDocumentoUseCase } from '../application/crear-documento.usecase';
 import { TransicionarDocumentoUseCase } from '../application/transicionar-documento.usecase';
+import { ListarDocumentosUseCase } from '../application/listar-documentos.usecase';
+import { ObtenerDocumentoUseCase } from '../application/obtener-documento.usecase';
 import { Documento } from '../domain/documento';
+import { AuditoriaService } from '../../shared/auditoria/auditoria.service';
+import { TokenPayload } from '../../auth/domain/ports/token.service.port';
+
+const USUARIO = { id: '11111111-1111-4111-8111-111111111111', usuario: 'SUP.UNO', cargo: 'SUPERVISOR' } as TokenPayload;
+const ACTOR = { id: USUARIO.id, usuario: 'SUP.UNO', rol: 'SUPERVISOR' };
+const CLIENTE = '22222222-2222-4222-8222-222222222222';
 
 describe('DocumentosController', () => {
   let controller: DocumentosController;
   let mockCrear: jest.Mocked<CrearDocumentoUseCase>;
   let mockTransicionar: jest.Mocked<TransicionarDocumentoUseCase>;
+  let mockListar: jest.Mocked<ListarDocumentosUseCase>;
+  let mockObtener: jest.Mocked<ObtenerDocumentoUseCase>;
+  let auditoria: jest.Mocked<Pick<AuditoriaService, 'registrarEvento'>>;
 
   beforeEach(() => {
-    mockCrear = {
-      ejecutar: jest.fn(),
-    } as any;
-    mockTransicionar = {
-      ejecutar: jest.fn(),
-    } as any;
+    mockCrear = { ejecutar: jest.fn() } as any;
+    mockTransicionar = { ejecutar: jest.fn() } as any;
+    mockListar = { ejecutar: jest.fn() } as any;
+    mockObtener = { ejecutar: jest.fn() } as any;
+    auditoria = { registrarEvento: jest.fn().mockResolvedValue(null) } as any;
 
-    controller = new DocumentosController(mockCrear, mockTransicionar);
+    controller = new DocumentosController(mockCrear, mockTransicionar, mockListar, mockObtener, auditoria as any);
   });
 
   describe('crear (POST /documentos)', () => {
-    it('crea exitosamente un documento cuando el tipo es INFORME', async () => {
-      const doc = new Documento('doc-1', 'cli-100', 101);
+    it('crea el documento con el actor de la sesión y lo audita', async () => {
+      const doc = new Documento('doc-1', CLIENTE, 101, { tipo: 'INFORME', codigo: 'INFORME-KAL-101-2026' });
       mockCrear.ejecutar.mockResolvedValue(doc);
 
-      const res = await controller.crear('cli-100', 'INFORME');
+      const res = await controller.crear({ clienteId: CLIENTE, tipo: 'INFORME' }, USUARIO);
 
       expect(res).toEqual({
         id: 'doc-1',
+        codigo: 'INFORME-KAL-101-2026',
+        tipo: 'INFORME',
         numeroCorrelativo: 101,
         estado: 'BORRADOR',
       });
-      expect(mockCrear.ejecutar).toHaveBeenCalledWith('cli-100', 'INFORME');
+      expect(mockCrear.ejecutar).toHaveBeenCalledWith(CLIENTE, 'INFORME', ACTOR, null);
+      expect(auditoria.registrarEvento).toHaveBeenCalledWith(
+        expect.objectContaining({ modulo: 'DOCUMENTOS', accion: 'CREAR', entidad: 'documento', entidadId: 'doc-1', actorUsuario: 'SUP.UNO' }),
+      );
     });
 
-    it('crea exitosamente un documento cuando el tipo es REPORTE', async () => {
-      const doc = new Documento('doc-2', 'cli-200', 102);
-      mockCrear.ejecutar.mockResolvedValue(doc);
-
-      const res = await controller.crear('cli-200', 'REPORTE');
-
-      expect(res).toEqual({
-        id: 'doc-2',
-        numeroCorrelativo: 102,
-        estado: 'BORRADOR',
-      });
-      expect(mockCrear.ejecutar).toHaveBeenCalledWith('cli-200', 'REPORTE');
-    });
-
-    it('rechaza con 400 Bad Request si tipo no es enviado (undefined)', async () => {
-      await expect(
-        controller.crear('cli-100', undefined as any),
-      ).rejects.toThrow(BadRequestException);
-
-      await expect(
-        controller.crear('cli-100', undefined as any),
-      ).rejects.toThrow('El campo tipo es obligatorio y debe ser INFORME o REPORTE');
-      expect(mockCrear.ejecutar).not.toHaveBeenCalled();
-    });
-
-    it('rechaza con 400 Bad Request si tipo es nulo', async () => {
-      await expect(
-        controller.crear('cli-100', null as any),
-      ).rejects.toThrow(BadRequestException);
-
-      await expect(
-        controller.crear('cli-100', null as any),
-      ).rejects.toThrow('El campo tipo es obligatorio y debe ser INFORME o REPORTE');
-      expect(mockCrear.ejecutar).not.toHaveBeenCalled();
-    });
-
-    it('rechaza con 400 Bad Request si tipo es un valor no soportado', async () => {
-      await expect(
-        controller.crear('cli-100', 'valor-que-no-existe'),
-      ).rejects.toThrow(BadRequestException);
-
-      await expect(
-        controller.crear('cli-100', 'valor-que-no-existe'),
-      ).rejects.toThrow('El campo tipo es obligatorio y debe ser INFORME o REPORTE');
-      expect(mockCrear.ejecutar).not.toHaveBeenCalled();
-    });
-
-    it('rechaza con 400 Bad Request si clienteId está ausente o vacío', async () => {
-      await expect(
-        controller.crear('', 'INFORME'),
-      ).rejects.toThrow(BadRequestException);
-
-      await expect(
-        controller.crear('', 'INFORME'),
-      ).rejects.toThrow('El campo clienteId es obligatorio');
-
-      await expect(
-        controller.crear('   ', 'INFORME'),
-      ).rejects.toThrow('El campo clienteId es obligatorio');
-
-      await expect(
-        controller.crear(undefined as any, 'INFORME'),
-      ).rejects.toThrow('El campo clienteId es obligatorio');
-
-      expect(mockCrear.ejecutar).not.toHaveBeenCalled();
+    it('pasa la sede cuando viene en el cuerpo', async () => {
+      mockCrear.ejecutar.mockResolvedValue(new Documento('doc-2', CLIENTE, 1, { tipo: 'REPORTE' }));
+      const proyectoId = '33333333-3333-4333-8333-333333333333';
+      await controller.crear({ clienteId: CLIENTE, tipo: 'REPORTE', proyectoId }, USUARIO);
+      expect(mockCrear.ejecutar).toHaveBeenCalledWith(CLIENTE, 'REPORTE', ACTOR, proyectoId);
     });
   });
 
   describe('transicionar (POST /documentos/:id/transicion)', () => {
-    it('transiciona exitosamente a un estado válido', async () => {
-      const doc = new Documento('doc-1', 'cli-100', 101);
+    it('transiciona con el actor y el motivo, y lo audita', async () => {
+      const doc = new Documento('doc-1', CLIENTE, 101);
       doc.transicionarA('CERRADO');
       mockTransicionar.ejecutar.mockResolvedValue(doc);
 
-      const res = await controller.transicionar('doc-1', 'CERRADO');
+      const res = await controller.transicionar('doc-1', { nuevoEstado: 'CERRADO', motivo: 'Listo' }, USUARIO);
 
-      expect(res).toEqual({
-        id: 'doc-1',
-        estado: 'CERRADO',
-      });
-      expect(mockTransicionar.ejecutar).toHaveBeenCalledWith('doc-1', 'CERRADO');
+      expect(res).toEqual({ id: 'doc-1', estado: 'CERRADO' });
+      expect(mockTransicionar.ejecutar).toHaveBeenCalledWith('doc-1', 'CERRADO', ACTOR, 'Listo');
+      expect(auditoria.registrarEvento).toHaveBeenCalledWith(
+        expect.objectContaining({ modulo: 'DOCUMENTOS', accion: 'TRANSICION', payloadNuevo: { estado: 'CERRADO' } }),
+      );
+    });
+  });
+
+  describe('consultas', () => {
+    it('listar entrega el filtro al caso de uso', async () => {
+      mockListar.ejecutar.mockResolvedValue([]);
+      await expect(controller.listar({ estado: 'ENVIADO_A_REVISION' })).resolves.toEqual([]);
+      expect(mockListar.ejecutar).toHaveBeenCalledWith({ estado: 'ENVIADO_A_REVISION' });
     });
 
-    it('rechaza con 400 Bad Request si el estado es desconocido', async () => {
-      await expect(
-        controller.transicionar('doc-1', 'ESTADO_INEXISTENTE'),
-      ).rejects.toThrow(BadRequestException);
-
-      await expect(
-        controller.transicionar('doc-1', 'ESTADO_INEXISTENTE'),
-      ).rejects.toThrow('Estado desconocido: ESTADO_INEXISTENTE');
-      expect(mockTransicionar.ejecutar).not.toHaveBeenCalled();
+    it('obtener entrega el detalle con su historial', async () => {
+      const detalle = { id: 'doc-1', transiciones: [] } as any;
+      mockObtener.ejecutar.mockResolvedValue(detalle);
+      await expect(controller.obtener('doc-1')).resolves.toBe(detalle);
     });
   });
 });
