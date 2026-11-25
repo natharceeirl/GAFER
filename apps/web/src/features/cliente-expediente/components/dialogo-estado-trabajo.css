@@ -1,0 +1,36 @@
+.dialogo-estado {
+  flex-basis: 100%;
+  display: grid;
+  gap: 10px;
+  margin: 6px 0 4px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--gf-rule-strong);
+  border-radius: var(--gf-radius);
+  background: var(--gf-panel-raised);
+}
+.dialogo-estado__titulo {
+  margin: 0;
+  font-family: var(--gf-font-ui);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--gf-ink);
+}
+.dialogo-estado__error {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--gf-radius);
+  background: var(--gf-rojo);
+  color: var(--gf-rojo-ink);
+  font-size: 13px;
+}
+.dialogo-estado textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font: inherit;
+}
+.dialogo-estado__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

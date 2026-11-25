@@ -17,6 +17,7 @@ import {
   PersonalRegistroSchema,
   ProyectoActualizacionSchema,
   ProyectoRegistroSchema,
+  CambioEstadoTrabajoSchema,
   ServicioContratadoActualizacionSchema,
   ServicioContratadoRegistroSchema,
 } from '@gafer/contracts';
@@ -93,6 +94,11 @@ export class ActualizarServicioContratadoDto extends createZodDtoDocumentado(Ser
   dosisReferencial: { 'i1111111-1111-4111-8111-111111111111': '10 ml / Litro de agua' },
   requiereCertificado: true,
   vigenciaDias: 60,
+}) {}
+
+export class CambiarEstadoTrabajoServicioDto extends createZodDtoDocumentado(CambioEstadoTrabajoSchema, {
+  estado: 'CANCELADO',
+  motivo: 'El cliente suspendió el contrato',
 }) {}
 
 export class CrearInsumoDto extends createZodDtoDocumentado(InsumoRegistroSchema, {

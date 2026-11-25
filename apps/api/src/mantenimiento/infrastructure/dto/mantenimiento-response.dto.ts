@@ -130,8 +130,30 @@ export class ServicioContratadoResponseDto {
   @ApiProperty({ example: 30, nullable: true })
   vigenciaDias!: number | null;
 
-  @ApiProperty({ example: 'ACTIVO', enum: ['ACTIVO', 'INACTIVO'] })
+  @ApiProperty({ example: 'ACTIVO', enum: ['ACTIVO', 'INACTIVO'], description: 'Baja lógica del servicio' })
   estado!: 'ACTIVO' | 'INACTIVO';
+
+  @ApiProperty({
+    example: 'EJECUTADO',
+    enum: ['PROGRAMADO', 'EJECUTADO', 'CONCLUIDO', 'CANCELADO'],
+    description: 'Estado guardado del trabajo del servicio (GAF-99)',
+  })
+  estadoTrabajo!: 'PROGRAMADO' | 'EJECUTADO' | 'CONCLUIDO' | 'CANCELADO';
+
+  @ApiProperty({
+    example: 'PENDIENTE',
+    enum: ['PROGRAMADO', 'PENDIENTE', 'EJECUTADO', 'CONCLUIDO', 'CANCELADO'],
+    description:
+      'Estado que se muestra: el guardado, o PENDIENTE si el servicio está PROGRAMADO y su fecha programada ya pasó (no se guarda ni se puede fijar a mano)',
+  })
+  estadoVisible!: 'PROGRAMADO' | 'PENDIENTE' | 'EJECUTADO' | 'CONCLUIDO' | 'CANCELADO';
+
+  @ApiProperty({
+    example: '2026-12-01',
+    nullable: true,
+    description: 'Fecha de la próxima visita programada del servicio sin ejecutar (AAAA-MM-DD); null si no tiene',
+  })
+  fechaProgramada!: string | null;
 }
 
 export class InsumoResponseDto {

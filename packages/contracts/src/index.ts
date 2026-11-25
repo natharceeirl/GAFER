@@ -15,6 +15,7 @@ export * from './comun';
 export * from './cliente';
 export * from './proyecto';
 export * from './servicio';
+export * from './estado-trabajo';
 export * from './catalogos';
 export * from './almacenamiento';
 export * from './estacion';

@@ -1,5 +1,7 @@
 import type {
   EstadoActivoInactivo,
+  EstadoTrabajo,
+  EstadoVisibleTrabajo,
   FrecuenciaServicio,
   ServicioContratadoActualizacion,
   ServicioContratadoDetalle,
@@ -16,6 +18,8 @@ import type { DatosServicio } from './validaciones';
  *  - El formulario trabaja con textos; el API recibe números (áreas, días de vigencia).
  *  - La vigencia del certificado se pide en días (`vigenciaDias`) y solo viaja si el servicio requiere certificado.
  *  - El estado no viaja en el alta ni en la edición: tiene sus propias rutas (`activar` / `desactivar`).
+ *  - El estado de trabajo (GAF-99) tampoco: cambia por `PATCH /:id/estado`; un servidor anterior que no lo envíe se lee como PROGRAMADO.
+ *  - El estado visible (PENDIENTE = programado con la fecha vencida) lo deriva el servidor; si no llega, se usa el guardado.
  */
 
 /** Servicio contratado en una sede (§7.3): lo que después se precarga en el formulario de campo (§8.2). */
@@ -33,6 +37,12 @@ export interface ServicioContratado {
   requiereCertificado: boolean;
   vigenciaDias: number | null;
   estado: EstadoActivoInactivo;
+  /** Estado guardado del trabajo, aparte de la baja lógica. */
+  estadoTrabajo: EstadoTrabajo;
+  /** Estado que se muestra: el guardado, o PENDIENTE si está programado y su fecha ya pasó. */
+  estadoVisible: EstadoVisibleTrabajo;
+  /** Fecha (AAAA-MM-DD) de la próxima visita programada, si la hay. */
+  fechaProgramada: string | null;
 }
 
 export function servicioDeApi(api: ServicioContratadoDetalle): ServicioContratado {
@@ -49,6 +59,9 @@ export function servicioDeApi(api: ServicioContratadoDetalle): ServicioContratad
     requiereCertificado: api.requiereCertificado ?? false,
     vigenciaDias: api.vigenciaDias ?? null,
     estado: api.estado,
+    estadoTrabajo: api.estadoTrabajo ?? 'PROGRAMADO',
+    estadoVisible: api.estadoVisible ?? api.estadoTrabajo ?? 'PROGRAMADO',
+    fechaProgramada: api.fechaProgramada ?? null,
   };
 }
 

@@ -6,6 +6,7 @@ import {
   AgregarItemCatalogoTextoDto,
   AsignarClavePersonalDto,
   CambiarEstadoEquipoDto,
+  CambiarEstadoTrabajoServicioDto,
   ConsultaAuditoriaDto,
   CrearClienteDto,
   CrearEquipoDto,
@@ -77,6 +78,7 @@ const documentados: [string, Parameters<typeof metadatosOpenApi>[0], { obligator
     },
   ],
   ['CambiarEstadoEquipoDto', CambiarEstadoEquipoDto, { obligatorios: ['estadoOperativo'], opcionales: [] }],
+  ['CambiarEstadoTrabajoServicioDto', CambiarEstadoTrabajoServicioDto, { obligatorios: ['estado'], opcionales: ['motivo'] }],
   [
     'CrearPersonalDto',
     CrearPersonalDto,
@@ -126,6 +128,7 @@ describe('Swagger de los catálogos cerrados', () => {
     expect(metadatosOpenApi(CrearInsumoDto).presentacion.enum).toEqual(['LIQUIDO', 'POLVO', 'BLOQUE', 'SOBRE', 'GEL', 'OTRO']);
     expect(metadatosOpenApi(CrearEquipoDto).estadoOperativo.enum).toEqual(['OPERATIVO', 'MANTENIMIENTO', 'FUERA_SERVICIO']);
     expect(metadatosOpenApi(CrearPersonalDto).cargo.enum).toEqual(['ADMINISTRADOR', 'SUPERVISOR', 'TECNICO_OPERADOR']);
+    expect(metadatosOpenApi(CambiarEstadoTrabajoServicioDto).estado.enum).toEqual(['PROGRAMADO', 'EJECUTADO', 'CONCLUIDO', 'CANCELADO']);
   });
 
   it('documenta el formato de los campos con reglas de texto', () => {

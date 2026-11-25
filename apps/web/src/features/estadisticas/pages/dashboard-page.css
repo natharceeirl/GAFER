@@ -569,3 +569,10 @@
     justify-self: start;
   }
 }
+
+/* GAF-99: el acceso directo «Nuevo cliente» va junto a «Exportar alertas». */
+.dashboard-page__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

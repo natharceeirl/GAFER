@@ -316,3 +316,14 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* GAF-99: estado derivado de la sede y acciones de estado de trabajo de cada servicio. */
+.expediente-proyecto__estado {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.expediente-proyecto__estado-etiqueta {
+  font-size: 12px;
+  color: var(--gf-ink-faint);
+}

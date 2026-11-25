@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { EstadoActivoInactivoSchema } from './cliente';
+import { EstadoTrabajoSchema, EstadoVisibleTrabajoSchema, FechaProgramadaSchema } from './estado-trabajo';
 
 export const TipoServicioSchema = z.enum(['DSF', 'DSS', 'DRT', 'LRA', 'LTG', 'LTS', 'LAM']);
 export type TipoServicio = z.infer<typeof TipoServicioSchema>;
@@ -63,6 +64,12 @@ export type ServicioContratadoRegistro = z.infer<typeof ServicioContratadoRegist
 export const ServicioContratadoDetalleSchema = ServicioContratadoBaseSchema.extend({
   id: z.string().uuid(),
   estado: EstadoActivoInactivoSchema,
+  /** Opcional solo por compatibilidad con servidores anteriores a GAF-99; el servidor actual siempre lo envía. */
+  estadoTrabajo: EstadoTrabajoSchema.optional().describe('Estado guardado del trabajo: PROGRAMADO, EJECUTADO, CONCLUIDO o CANCELADO'),
+  fechaProgramada: FechaProgramadaSchema.nullish().describe('Fecha de la próxima visita programada del servicio (AAAA-MM-DD), si la hay'),
+  estadoVisible: EstadoVisibleTrabajoSchema.optional().describe(
+    'Estado que se muestra: el guardado, o PENDIENTE si está PROGRAMADO y su fecha programada ya pasó',
+  ),
 }).superRefine(aplicarReglasServicio);
 export type ServicioContratadoDetalle = z.infer<typeof ServicioContratadoDetalleSchema>;
 

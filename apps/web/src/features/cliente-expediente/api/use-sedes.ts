@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { EstadoTrabajo } from '@gafer/contracts';
 import type { DatosProyecto, DatosServicio } from '../model/validaciones';
 import {
   actualizarSede,
   actualizarServicio,
   cambiarEstadoSede,
   cambiarEstadoServicio,
+  cambiarEstadoTrabajo,
   crearSede,
   crearServicio,
   listarSedesConServicios,
@@ -77,3 +79,12 @@ function useCambiarEstadoServicio(accion: 'activar' | 'desactivar') {
 
 export const useActivarServicio = () => useCambiarEstadoServicio('activar');
 export const useDesactivarServicio = () => useCambiarEstadoServicio('desactivar');
+
+/** GAF-99: cambia el estado de trabajo de un servicio; el expediente vuelve a leer las sedes para el estado derivado. */
+export function useCambiarEstadoTrabajo() {
+  const invalidar = useInvalidarSedes();
+  return useMutation({
+    mutationFn: ({ id, estado, motivo }: { id: string; estado: EstadoTrabajo; motivo?: string }) => cambiarEstadoTrabajo(id, estado, motivo),
+    onSuccess: invalidar,
+  });
+}

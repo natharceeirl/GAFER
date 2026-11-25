@@ -7,6 +7,7 @@ import {
   useActivarSede,
   useActualizarServicio,
   useActualizarSede,
+  useCambiarEstadoTrabajo,
   useCrearServicio,
   useCrearSede,
   useDesactivarServicio,
@@ -14,6 +15,7 @@ import {
   useSedes,
 } from './use-sedes';
 import { useSesion } from '../../../shared/api/sesion';
+import { ErrorApi } from '../../../shared/api/errores';
 import type { DatosProyecto, DatosServicio } from '../model/validaciones';
 
 const fetchMock = vi.fn();
@@ -275,6 +277,40 @@ describe('hooks de sedes y servicios', () => {
 
       const [url] = llamadas('PATCH')[0];
       expect(String(url)).toMatch(new RegExp(`/api/mantenimiento/servicios-contratados/${SERVICIO}/${accion}$`));
+    });
+
+    it('cambia el estado de trabajo por su ruta, con el motivo recortado, y vuelve a leer las sedes (GAF-99)', async () => {
+      simularLectura();
+      const { result: sedes } = renderHook(() => useSedes(CLIENTE), { wrapper: envoltorio });
+      await waitFor(() => expect(sedes.current.isSuccess).toBe(true));
+      fetchMock.mockClear();
+      simularLectura();
+
+      const { result } = renderHook(() => useCambiarEstadoTrabajo(), { wrapper: envoltorio });
+      await act(async () => {
+        await result.current.mutateAsync({ id: SERVICIO, estado: 'CANCELADO', motivo: '  Cliente suspendió  ' });
+      });
+
+      const [url, init] = llamadas('PATCH')[0];
+      expect(String(url)).toMatch(new RegExp(`/api/mantenimiento/servicios-contratados/${SERVICIO}/estado$`));
+      expect(JSON.parse(init.body)).toEqual({ estado: 'CANCELADO', motivo: 'Cliente suspendió' });
+      await waitFor(() => expect(llamadas('GET', `/proyectos/cliente/${CLIENTE}`)).toHaveLength(1));
+    });
+
+    it('sin motivo no envía el campo, y un 400 del servidor llega como ErrorApi con el campo motivo', async () => {
+      fetchMock.mockResolvedValueOnce(json(200, { ...servicioApi, estadoTrabajo: 'EJECUTADO' }));
+      const { result } = renderHook(() => useCambiarEstadoTrabajo(), { wrapper: envoltorio });
+      await act(async () => {
+        await result.current.mutateAsync({ id: SERVICIO, estado: 'EJECUTADO' });
+      });
+      expect(JSON.parse(llamadas('PATCH')[0][1].body)).toEqual({ estado: 'EJECUTADO' });
+
+      fetchMock.mockResolvedValueOnce(
+        json(400, { statusCode: 400, message: ['motivo: corto'], errors: [{ path: 'motivo', message: 'El motivo debe tener al menos 5 caracteres' }] }),
+      );
+      const error = await result.current.mutateAsync({ id: SERVICIO, estado: 'CANCELADO', motivo: 'no' }).catch((e) => e);
+      expect(error).toBeInstanceOf(ErrorApi);
+      expect((error as ErrorApi).campos).toEqual({ motivo: 'El motivo debe tener al menos 5 caracteres' });
     });
   });
 });
