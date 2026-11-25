@@ -118,12 +118,16 @@ describe('Database Migration and Schema Configuration (T2.1)', () => {
     }
   });
 
-  it('004 es idempotente: agrega la columna con su CHECK solo si falta y siembra el estado inicial una sola vez', async () => {
+  it('004 es idempotente: crea la columna solo si falta, migra los valores de la versión anterior y deja un CHECK con los valores nuevos', async () => {
     const up = (await leerMigraciones('up')).find((m) => m.nombre === '004_servicio_estado_trabajo.up.sql');
     const down = (await leerMigraciones('down')).find((m) => m.nombre === '004_servicio_estado_trabajo.down.sql');
     expect(up?.sql).toContain('estado_trabajo');
-    expect(up?.sql).toContain("CHECK (estado_trabajo IN ('PENDIENTE', 'EN_CURSO', 'COMPLETADO', 'CANCELADO'))");
+    expect(up?.sql).toContain("CHECK (estado_trabajo IN ('PROGRAMADO', 'EJECUTADO', 'CONCLUIDO', 'CANCELADO'))");
     expect(up?.sql).toMatch(/IF NOT EXISTS/);
+    expect(up?.sql).toContain('DROP CONSTRAINT IF EXISTS chk_servicios_estado_trabajo');
+    expect(up?.sql).toContain("estado_trabajo = 'PROGRAMADO' WHERE estado_trabajo = 'PENDIENTE'");
+    expect(up?.sql).toContain("estado_trabajo = 'EJECUTADO' WHERE estado_trabajo = 'EN_CURSO'");
+    expect(up?.sql).toContain("estado_trabajo = 'CONCLUIDO' WHERE estado_trabajo = 'COMPLETADO'");
     expect(down?.sql).toContain('DROP COLUMN IF EXISTS estado_trabajo');
   });
 });

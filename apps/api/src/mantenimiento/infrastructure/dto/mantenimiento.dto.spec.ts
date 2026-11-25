@@ -158,8 +158,8 @@ describe('CrearServicioContratadoDto', () => {
 });
 
 describe('CambiarEstadoTrabajoServicioDto (GAF-99)', () => {
-  it('acepta iniciar sin motivo y cancelar con motivo', () => {
-    expect(validarDto(CambiarEstadoTrabajoServicioDto, { estado: 'EN_CURSO' })).toEqual({ estado: 'EN_CURSO' });
+  it('acepta ejecutar sin motivo y cancelar con motivo', () => {
+    expect(validarDto(CambiarEstadoTrabajoServicioDto, { estado: 'EJECUTADO' })).toEqual({ estado: 'EJECUTADO' });
     expect(validarDto(CambiarEstadoTrabajoServicioDto, { estado: 'CANCELADO', motivo: 'Cliente suspendió' })).toEqual({
       estado: 'CANCELADO',
       motivo: 'Cliente suspendió',
@@ -170,6 +170,10 @@ describe('CambiarEstadoTrabajoServicioDto (GAF-99)', () => {
     expect(rutasRechazadas(CambiarEstadoTrabajoServicioDto, { estado: 'CANCELADO' })).toEqual(['motivo']);
     expect(rutasRechazadas(CambiarEstadoTrabajoServicioDto, { estado: 'CANCELADO', motivo: 'no' })).toEqual(['motivo']);
     expect(rutasRechazadas(CambiarEstadoTrabajoServicioDto, { estado: 'ACTIVO' })).toEqual(['estado']);
+  });
+
+  it('rechaza PENDIENTE: es un estado derivado que el Administrador no puede fijar', () => {
+    expect(rutasRechazadas(CambiarEstadoTrabajoServicioDto, { estado: 'PENDIENTE' })).toEqual(['estado']);
   });
 });
 

@@ -30,7 +30,7 @@ describe('CambiarEstadoTrabajoServicioUseCase (GAF-99)', () => {
   });
 
   it('guarda el nuevo estado y registra en la auditoría el actor, el valor anterior, el nuevo y el motivo', async () => {
-    repo.buscarPorId.mockResolvedValue(servicioEn('EN_CURSO'));
+    repo.buscarPorId.mockResolvedValue(servicioEn('EJECUTADO'));
 
     const servicio = await useCase.execute({ id: 's1', estado: 'CANCELADO', motivo: 'Cliente suspendió', ...ACTOR });
 
@@ -42,52 +42,52 @@ describe('CambiarEstadoTrabajoServicioUseCase (GAF-99)', () => {
       accion: 'CAMBIAR_ESTADO_TRABAJO_SERVICIO',
       entidad: 'servicio_contratado',
       entidadId: 's1',
-      payloadAnterior: { estadoTrabajo: 'EN_CURSO' },
+      payloadAnterior: { estadoTrabajo: 'EJECUTADO' },
       payloadNuevo: { estadoTrabajo: 'CANCELADO', motivo: 'Cliente suspendió' },
       detalles: { reapertura: false },
     });
   });
 
   it('una reapertura queda marcada en la auditoría', async () => {
-    repo.buscarPorId.mockResolvedValue(servicioEn('COMPLETADO'));
+    repo.buscarPorId.mockResolvedValue(servicioEn('CONCLUIDO'));
 
-    await useCase.execute({ id: 's1', estado: 'EN_CURSO', motivo: 'Faltó un ambiente', ...ACTOR });
+    await useCase.execute({ id: 's1', estado: 'EJECUTADO', motivo: 'Faltó un ambiente', ...ACTOR });
 
     expect(auditoria.registrarEvento).toHaveBeenCalledWith(
       expect.objectContaining({
         accion: 'REABRIR_SERVICIO',
-        payloadAnterior: { estadoTrabajo: 'COMPLETADO' },
-        payloadNuevo: { estadoTrabajo: 'EN_CURSO', motivo: 'Faltó un ambiente' },
+        payloadAnterior: { estadoTrabajo: 'CONCLUIDO' },
+        payloadNuevo: { estadoTrabajo: 'EJECUTADO', motivo: 'Faltó un ambiente' },
         detalles: { reapertura: true },
       }),
     );
   });
 
-  it('sin motivo, iniciar registra el motivo como nulo', async () => {
-    repo.buscarPorId.mockResolvedValue(servicioEn('PENDIENTE'));
+  it('sin motivo, ejecutar registra el motivo como nulo', async () => {
+    repo.buscarPorId.mockResolvedValue(servicioEn('PROGRAMADO'));
 
-    await useCase.execute({ id: 's1', estado: 'EN_CURSO', ...ACTOR });
+    await useCase.execute({ id: 's1', estado: 'EJECUTADO', ...ACTOR });
 
     expect(auditoria.registrarEvento).toHaveBeenCalledWith(
-      expect.objectContaining({ payloadNuevo: { estadoTrabajo: 'EN_CURSO', motivo: null } }),
+      expect.objectContaining({ payloadNuevo: { estadoTrabajo: 'EJECUTADO', motivo: null } }),
     );
   });
 
   it('404 si el servicio no existe, sin guardar ni auditar', async () => {
     repo.buscarPorId.mockResolvedValue(null);
 
-    await expect(useCase.execute({ id: 'nada', estado: 'EN_CURSO', ...ACTOR })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(useCase.execute({ id: 'nada', estado: 'EJECUTADO', ...ACTOR })).rejects.toBeInstanceOf(NotFoundException);
     expect(repo.guardar).not.toHaveBeenCalled();
     expect(auditoria.registrarEvento).not.toHaveBeenCalled();
   });
 
   it('400 con el mensaje de la regla si la transición no está permitida, sin guardar ni auditar', async () => {
-    repo.buscarPorId.mockResolvedValue(servicioEn('COMPLETADO'));
+    repo.buscarPorId.mockResolvedValue(servicioEn('CONCLUIDO'));
 
-    const error = await useCase.execute({ id: 's1', estado: 'PENDIENTE', ...ACTOR }).catch((e) => e);
+    const error = await useCase.execute({ id: 's1', estado: 'PROGRAMADO', ...ACTOR }).catch((e) => e);
 
     expect(error).toBeInstanceOf(BadRequestException);
-    expect(error.getResponse()).toEqual(expect.objectContaining({ message: 'No se puede pasar el servicio de COMPLETADO a PENDIENTE' }));
+    expect(error.getResponse()).toEqual(expect.objectContaining({ message: 'No se puede pasar el servicio de CONCLUIDO a PROGRAMADO' }));
     expect(repo.guardar).not.toHaveBeenCalled();
     expect(auditoria.registrarEvento).not.toHaveBeenCalled();
   });
@@ -95,7 +95,7 @@ describe('CambiarEstadoTrabajoServicioUseCase (GAF-99)', () => {
   it('400 señalando el campo motivo si se reabre sin motivo', async () => {
     repo.buscarPorId.mockResolvedValue(servicioEn('CANCELADO'));
 
-    const error = await useCase.execute({ id: 's1', estado: 'EN_CURSO', ...ACTOR }).catch((e) => e);
+    const error = await useCase.execute({ id: 's1', estado: 'EJECUTADO', ...ACTOR }).catch((e) => e);
 
     expect(error).toBeInstanceOf(BadRequestException);
     expect(error.getResponse()).toEqual(

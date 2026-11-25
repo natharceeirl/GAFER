@@ -1,9 +1,19 @@
 import { Injectable } from '@nestjs/common';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { GaferDatabase } from '../../../database/types';
 import { EstadoTrabajo, ServicioContratado, TipoServicio, FrecuenciaServicio } from '../../domain/servicio-contratado';
 import { EstadoGeneral } from '../../domain/cliente';
 import { ServicioContratadoRepository } from '../../domain/ports/servicio-contratado.repository';
+
+/**
+ * Fecha programada del servicio (GAF-99): la de su visita programada más próxima que aún no se ejecutó
+ * (sin inspección asociada). El servicio contratado no guarda una fecha propia; la agenda de visitas es la fuente.
+ */
+const FECHA_PROGRAMADA = sql<string | null>`(
+  SELECT MIN(v.fecha)::text FROM visitas v
+  WHERE v.servicio_id = servicios_contratados.id
+    AND NOT EXISTS (SELECT 1 FROM inspecciones i WHERE i.visita_id = v.id)
+)`.as('fecha_programada');
 
 @Injectable()
 export class KyselyServicioContratadoRepository implements ServicioContratadoRepository {
@@ -49,6 +59,7 @@ export class KyselyServicioContratadoRepository implements ServicioContratadoRep
     const row = await this.db
       .selectFrom('servicios_contratados')
       .selectAll()
+      .select(FECHA_PROGRAMADA)
       .where('id', '=', id)
       .executeTakeFirst();
 
@@ -59,6 +70,7 @@ export class KyselyServicioContratadoRepository implements ServicioContratadoRep
     const rows = await this.db
       .selectFrom('servicios_contratados')
       .selectAll()
+      .select(FECHA_PROGRAMADA)
       .where('proyecto_id', '=', proyectoId)
       .execute();
 
@@ -95,6 +107,7 @@ export class KyselyServicioContratadoRepository implements ServicioContratadoRep
       vigenciaDias: row.vigencia_dias ? Number(row.vigencia_dias) : null,
       estado: row.estado as EstadoGeneral,
       estadoTrabajo: row.estado_trabajo as EstadoTrabajo,
+      fechaProgramada: row.fecha_programada ?? null,
     });
   }
 }

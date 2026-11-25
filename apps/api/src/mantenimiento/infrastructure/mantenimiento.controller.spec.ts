@@ -418,7 +418,29 @@ describe('MantenimientoController', () => {
       expect(res.tipoServicio).toBe('DRT');
       expect(res.insumosAutorizados).toEqual(['i-2']);
       expect(res.dosisReferencial).toEqual({ 'i-2': '1 bloque' });
-      expect(res.estadoTrabajo).toBe('PENDIENTE');
+      expect(res.estadoTrabajo).toBe('PROGRAMADO');
+      expect(res.estadoVisible).toBe('PROGRAMADO');
+      expect(res.fechaProgramada).toBeNull();
+    });
+
+    it('expone PENDIENTE como estado visible cuando el servicio programado ya venció (GAF-99)', async () => {
+      const { ServicioContratado } = await import('../domain/servicio-contratado');
+      const servicio = new ServicioContratado({
+        id: 's-2',
+        proyectoId: 'p-1',
+        tipoServicio: 'DRT',
+        frecuencia: 'QUINCENAL',
+        areaTotalM2: 1000,
+        areaTratarM2: 500,
+        estadoTrabajo: 'PROGRAMADO',
+        fechaProgramada: '2020-01-01',
+      });
+      mockCambiarEstadoTrabajoUseCase.execute.mockResolvedValue(servicio);
+      const usuario = { id: 'u-1', usuario: 'ADMIN.GAFER', cargo: 'ADMINISTRADOR' } as any;
+
+      const res = await controller.cambiarEstadoTrabajoServicio('s-2', { estado: 'PROGRAMADO' } as any, usuario);
+
+      expect(res).toEqual(expect.objectContaining({ estadoTrabajo: 'PROGRAMADO', estadoVisible: 'PENDIENTE', fechaProgramada: '2020-01-01' }));
     });
 
     it('debe cambiar el estado de trabajo con el actor del token y devolver el servicio (GAF-99)', async () => {

@@ -111,6 +111,7 @@ import {
   ConsultaAuditoriaDto,
 } from './dto/mantenimiento.dto';
 import { PaginacionQueryDto } from '../../shared/infrastructure/dto/paginacion.dto';
+import { fechaHoyLima } from '../../shared/fecha-hoy';
 
 // DTOs Response
 import {
@@ -575,6 +576,8 @@ export class MantenimientoController {
       vigenciaDias: s.vigenciaDias,
       estado: s.getEstado(),
       estadoTrabajo: s.getEstadoTrabajo(),
+      estadoVisible: s.getEstadoVisible(fechaHoyLima()),
+      fechaProgramada: s.getFechaProgramada(),
     };
   }
 

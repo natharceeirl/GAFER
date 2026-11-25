@@ -225,7 +225,7 @@ export function ApiActivarServicioContratadoDoc() {
 export function ApiCambiarEstadoTrabajoServicioDoc() {
   return applyDecorators(
     ApiOperation({
-      summary: 'Cambiar el estado de trabajo del servicio (PENDIENTE → EN_CURSO → COMPLETADO; cancelar o reabrir con motivo)',
+      summary: 'Cambiar el estado de trabajo del servicio (PROGRAMADO → EJECUTADO → CONCLUIDO; cancelar o reabrir con motivo). PENDIENTE no se fija: se deriva de la fecha',
     }),
     ApiParam({ name: 'id', description: 'UUID del servicio contratado' }),
     ApiResponse({ status: 200, description: 'Estado de trabajo actualizado', type: ServicioContratadoResponseDto }),

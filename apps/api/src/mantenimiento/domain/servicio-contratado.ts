@@ -1,23 +1,24 @@
 import { randomUUID } from 'crypto';
 import { EstadoGeneral } from './cliente';
 
-import { EstadoTrabajoSchema, MOTIVO_MINIMO_CARACTERES } from '@gafer/contracts';
-import type { EstadoTrabajo, FrecuenciaServicio, TipoServicio } from '@gafer/contracts';
+import { EstadoTrabajoSchema, MOTIVO_MINIMO_CARACTERES, estadoVisibleDeServicio } from '@gafer/contracts';
+import type { EstadoTrabajo, EstadoVisibleTrabajo, FrecuenciaServicio, TipoServicio } from '@gafer/contracts';
 
-export type { EstadoTrabajo, FrecuenciaServicio, TipoServicio };
+export type { EstadoTrabajo, EstadoVisibleTrabajo, FrecuenciaServicio, TipoServicio };
 
 /**
- * Transiciones del estado de trabajo (GAF-99). COMPLETADO y CANCELADO son finales: solo salen por una
- * reapertura explícita a EN_CURSO, con motivo. Cancelar también exige motivo.
+ * Transiciones del estado de trabajo (GAF-99). CONCLUIDO y CANCELADO son finales: solo salen por una
+ * reapertura explícita a EJECUTADO, con motivo. Cancelar también exige motivo.
+ * PENDIENTE no es un estado guardado ni una transición: se deriva (ver `getEstadoVisible`).
  */
 const TRANSICIONES_ESTADO_TRABAJO: Record<EstadoTrabajo, readonly EstadoTrabajo[]> = {
-  PENDIENTE: ['EN_CURSO', 'CANCELADO'],
-  EN_CURSO: ['COMPLETADO', 'CANCELADO'],
-  COMPLETADO: ['EN_CURSO'],
-  CANCELADO: ['EN_CURSO'],
+  PROGRAMADO: ['EJECUTADO', 'CANCELADO'],
+  EJECUTADO: ['CONCLUIDO', 'CANCELADO'],
+  CONCLUIDO: ['EJECUTADO'],
+  CANCELADO: ['EJECUTADO'],
 };
 
-const ESTADOS_FINALES: readonly EstadoTrabajo[] = ['COMPLETADO', 'CANCELADO'];
+const ESTADOS_FINALES: readonly EstadoTrabajo[] = ['CONCLUIDO', 'CANCELADO'];
 
 /** La transición pedida no está permitida desde el estado actual. */
 export class TransicionEstadoTrabajoError extends Error {}
@@ -28,7 +29,7 @@ export class MotivoObligatorioError extends Error {}
 export interface CambioEstadoTrabajoRealizado {
   anterior: EstadoTrabajo;
   nuevo: EstadoTrabajo;
-  /** El servicio estaba terminado (completado o cancelado) y vuelve a EN_CURSO. */
+  /** El servicio estaba terminado (concluido o cancelado) y vuelve a EJECUTADO. */
   reapertura: boolean;
 }
 
@@ -46,6 +47,8 @@ export interface ServicioContratadoProps {
   vigenciaDias?: number | null;
   estado?: EstadoGeneral;
   estadoTrabajo?: EstadoTrabajo;
+  /** Fecha (AAAA-MM-DD) de la próxima visita programada sin ejecutar; solo de lectura, no se guarda en el servicio. */
+  fechaProgramada?: string | null;
 }
 
 export class ServicioContratado {
@@ -62,6 +65,7 @@ export class ServicioContratado {
   public vigenciaDias: number | null;
   private estado: EstadoGeneral;
   private estadoTrabajo: EstadoTrabajo;
+  private readonly fechaProgramada: string | null;
 
   constructor(props: ServicioContratadoProps) {
     const tiposValidos: TipoServicio[] = ['DSF', 'DSS', 'DRT', 'LRA', 'LTG', 'LTS', 'LAM'];
@@ -98,11 +102,12 @@ export class ServicioContratado {
     this.vigenciaDias = props.vigenciaDias ?? null;
     this.estado = props.estado ?? 'ACTIVO';
 
-    const estadoTrabajo = props.estadoTrabajo ?? 'PENDIENTE';
+    const estadoTrabajo = props.estadoTrabajo ?? 'PROGRAMADO';
     if (!EstadoTrabajoSchema.safeParse(estadoTrabajo).success) {
       throw new Error(`Estado de trabajo no válido: ${estadoTrabajo}`);
     }
     this.estadoTrabajo = estadoTrabajo;
+    this.fechaProgramada = props.fechaProgramada ?? null;
   }
 
   actualizarDatos(props: {
@@ -157,6 +162,15 @@ export class ServicioContratado {
 
   getEstadoTrabajo(): EstadoTrabajo {
     return this.estadoTrabajo;
+  }
+
+  getFechaProgramada(): string | null {
+    return this.fechaProgramada;
+  }
+
+  /** Estado que se muestra: PENDIENTE si está PROGRAMADO y su fecha programada es anterior a `hoy` (AAAA-MM-DD). */
+  getEstadoVisible(hoy: string): EstadoVisibleTrabajo {
+    return estadoVisibleDeServicio(this.estadoTrabajo, this.fechaProgramada, hoy);
   }
 
   /** Cambia el estado de trabajo según las transiciones permitidas; la baja lógica no se toca. */
