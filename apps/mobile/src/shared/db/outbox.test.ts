@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { OutboxQueue, MemoryOutboxStorage } from './outbox';
+import { OutboxQueue, MemoryOutboxStorage, ErrorPersistenciaLocal } from './outbox';
 import { OperacionSync } from '@gafer/contracts';
 
 describe('OutboxQueue (Móvil Offline-First con sync.v1 - GAP-05)', () => {
@@ -333,6 +333,83 @@ describe('OutboxQueue (Móvil Offline-First con sync.v1 - GAP-05)', () => {
         [dummyOperacion.operationId],
       );
       expect(fila?.status).toBe('SYNCED');
+    });
+  });
+
+  describe('construcción sin destino explícito', () => {
+    it('lanza un error claro si la base de datos no fue inicializada, en vez de operar solo en memoria', async () => {
+      const { cerrarBaseDeDatos } = await import('./sqlite');
+      await cerrarBaseDeDatos();
+
+      expect(() => new OutboxQueue()).toThrow(/inicializarBaseDeDatos/);
+    });
+  });
+
+  describe('enviarLote separa errores de red de fallos de persistencia local', () => {
+    const agregadoId = dummyOperacion.agregadoId;
+
+    async function crearColaConOperacion() {
+      const { MemorySqliteAdapter, ejecutarMigraciones } = await import('./sqlite');
+      const db = new MemorySqliteAdapter();
+      await ejecutarMigraciones(db);
+      const queue = new OutboxQueue(db);
+      await queue.encolar(dummyOperacion);
+      return { db, queue };
+    }
+
+    async function intentosEnDb(db: { getFirstAsync: <T>(sql: string, p?: unknown[]) => Promise<T | null> }) {
+      const fila = await db.getFirstAsync<{ attempt_count: number }>(
+        'SELECT attempt_count FROM sync_outbox WHERE operation_id = ?;',
+        [dummyOperacion.operationId],
+      );
+      return fila?.attempt_count;
+    }
+
+    it('un fallo SQLite tras una respuesta exitosa no cuenta como intento fallido y se informa distinto', async () => {
+      const { db, queue } = await crearColaConOperacion();
+      const fetchFn = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          inspeccionId: agregadoId,
+          procesadas: [dummyOperacion.operationId],
+          omitidasIdempotentes: [],
+          conflictos: [],
+          serverReceivedAt: '2026-09-20T18:00:01.000Z',
+        }),
+      });
+      vi.spyOn(db, 'withExclusiveTransactionAsync').mockRejectedValueOnce(new Error('SQLITE_FULL'));
+
+      await expect(queue.enviarLote('http://api', agregadoId, fetchFn)).rejects.toBeInstanceOf(
+        ErrorPersistenciaLocal,
+      );
+
+      expect(queue.obtenerPendientes()[0].intentos).toBe(0);
+      expect(await intentosEnDb(db)).toBe(0);
+    });
+
+    it('si falla el UPDATE de intentos no muta la memoria y lo informa como fallo local', async () => {
+      const { db, queue } = await crearColaConOperacion();
+      const fetchFn = vi.fn().mockRejectedValue(new Error('Network request failed'));
+      vi.spyOn(db, 'withExclusiveTransactionAsync').mockRejectedValueOnce(new Error('SQLITE_IOERR'));
+
+      await expect(queue.enviarLote('http://api', agregadoId, fetchFn)).rejects.toBeInstanceOf(
+        ErrorPersistenciaLocal,
+      );
+
+      expect(queue.obtenerPendientes()[0].intentos).toBe(0);
+      expect(queue.obtenerPendientes()[0].ultimoError).toBeUndefined();
+    });
+
+    it('un error de red sigue sumando un intento en SQLite y memoria y devuelve null', async () => {
+      const { db, queue } = await crearColaConOperacion();
+      const fetchFn = vi.fn().mockRejectedValue(new Error('Network request failed'));
+
+      expect(await queue.enviarLote('http://api', agregadoId, fetchFn)).toBeNull();
+
+      expect(queue.obtenerPendientes()[0].intentos).toBe(1);
+      expect(queue.obtenerPendientes()[0].ultimoError).toBe('Network request failed');
+      expect(await intentosEnDb(db)).toBe(1);
     });
   });
 });

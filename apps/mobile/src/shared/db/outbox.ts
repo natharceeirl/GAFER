@@ -71,6 +71,14 @@ interface FilaSyncOutboxDb {
   last_error_message_sanitized: string | null;
 }
 
+/** Fallo al leer o escribir el almacenamiento local, distinto de un error de red o del servidor. */
+export class ErrorPersistenciaLocal extends Error {
+  constructor(mensaje: string, causa?: unknown) {
+    super(mensaje, { cause: causa });
+    this.name = 'ErrorPersistenciaLocal';
+  }
+}
+
 export class OutboxQueue {
   private cola: OutboxRecord[] = [];
   private readonly contadoresEnMemoria = new Map<string, number>();
@@ -84,10 +92,15 @@ export class OutboxQueue {
     } else if (target && 'getItem' in target) {
       this.storage = target;
     } else {
+      // Sin destino explícito exigimos la base real: degradar a memoria perdería operaciones al cerrar la app.
+      // El modo sin SQLite solo existe pasando un OutboxStorage de forma explícita.
       try {
         this.db = obtenerBaseDeDatos();
-      } catch {
-        // DB no inicializada aún, operará en memoria
+      } catch (causa) {
+        throw new Error(
+          'OutboxQueue requiere la base de datos SQLite inicializada. Llama primero a inicializarBaseDeDatos() o pasa un OutboxStorage explícito.',
+          { cause: causa },
+        );
       }
     }
   }
@@ -367,6 +380,7 @@ export class OutboxQueue {
       operaciones: pendientes.map((p) => p.operacion),
     };
 
+    let resBody: LoteSyncResponse;
     try {
       const response = await fetchFn(
         `${apiUrl}/api/operaciones/inspecciones/${inspeccionId}/sincronizar`,
@@ -378,48 +392,49 @@ export class OutboxQueue {
       );
 
       if (!response.ok) {
-        const errorMsg = `HTTP ${response.status}: ${response.statusText}`;
-        const ahora = new Date().toISOString();
-        for (const item of pendientes) {
-          item.intentos += 1;
-          item.ultimoError = errorMsg;
-        }
-
-        if (this.db) {
-          await this.db.withExclusiveTransactionAsync(async (tx) => {
-            for (const item of pendientes) {
-              await tx.runAsync(
-                `UPDATE sync_outbox 
-                 SET attempt_count = attempt_count + 1,
-                     last_attempt_at = ?,
-                     last_error_message_sanitized = ?
-                 WHERE operation_id = ?;`,
-                [ahora, errorMsg, item.operacion.operationId],
-              );
-            }
-          });
-        }
-
-        await this.persistir();
+        await this.registrarIntentoFallido(pendientes, `HTTP ${response.status}: ${response.statusText}`);
         return null;
       }
 
-      const resBody = LoteSyncResponseSchema.parse(await response.json());
+      resBody = LoteSyncResponseSchema.parse(await response.json());
+    } catch (err) {
+      if (err instanceof ErrorPersistenciaLocal) throw err;
+      await this.registrarIntentoFallido(
+        pendientes,
+        err instanceof Error && err.message ? err.message : 'Error de red',
+      );
+      return null;
+    }
+
+    // El servidor ya aceptó el lote: de aquí en adelante un fallo es local y no cuenta como intento fallido.
+    try {
       const exitosos = [...resBody.procesadas, ...resBody.omitidasIdempotentes];
       await this.marcarSincronizadas(exitosos);
       await this.limpiarSincronizados();
-      return resBody;
-    } catch (err: any) {
-      const errorMsg = err.message || 'Error de red';
-      const ahora = new Date().toISOString();
-      for (const item of pendientes) {
-        item.intentos += 1;
-        item.ultimoError = errorMsg;
-      }
+    } catch (causa) {
+      throw new ErrorPersistenciaLocal(
+        'El servidor aceptó el lote, pero no se pudo guardar el resultado en la base local. Las operaciones no se contaron como intento fallido.',
+        causa,
+      );
+    }
+    return resBody;
+  }
 
+  /**
+   * Registra un intento fallido (red o servidor). Escribe primero en SQLite y solo después
+   * actualiza la memoria, para que ambas queden consistentes si la escritura falla.
+   */
+  private async registrarIntentoFallido(pendientes: OutboxRecord[], errorMsg: string): Promise<void> {
+    const ahora = new Date().toISOString();
+    const siguientes = pendientes.map((item) => ({
+      item,
+      intentos: item.intentos + 1,
+    }));
+
+    try {
       if (this.db) {
         await this.db.withExclusiveTransactionAsync(async (tx) => {
-          for (const item of pendientes) {
+          for (const { item } of siguientes) {
             await tx.runAsync(
               `UPDATE sync_outbox 
                SET attempt_count = attempt_count + 1,
@@ -431,9 +446,23 @@ export class OutboxQueue {
           }
         });
       }
+      if (this.storage) {
+        const copia = this.cola.map((r) => {
+          const s = siguientes.find((x) => x.item === r);
+          return s ? { ...r, intentos: s.intentos, ultimoError: errorMsg } : r;
+        });
+        await this.storage.setItem(this.storageKey, JSON.stringify(copia));
+      }
+    } catch (causa) {
+      throw new ErrorPersistenciaLocal(
+        `No se pudo registrar el intento fallido en el almacenamiento local (error original: ${errorMsg}).`,
+        causa,
+      );
+    }
 
-      await this.persistir();
-      return null;
+    for (const { item, intentos } of siguientes) {
+      item.intentos = intentos;
+      item.ultimoError = errorMsg;
     }
   }
 }
