@@ -3,7 +3,8 @@ import type { EstadoDocumento } from '@gafer/contracts';
 import { TicketHeader } from '../../../shared/ui/molecules/TicketHeader';
 import { PerforatedDivider } from '../../../shared/ui/molecules/PerforatedDivider';
 import { EstadoBadge } from '../components/EstadoBadge';
-import type { DocumentoResumen } from '../model/tipos';
+import { useDocumentosLista } from '../api/use-documentos';
+import { CargandoDocumentos, ErrorLecturaDocumentos } from '../components/EstadoConsultaDocumentos';
 import './bandeja-aprobacion-page.css';
 
 const FILTROS: Array<{ id: 'TODOS' | EstadoDocumento; etiqueta: string }> = [
@@ -15,13 +16,13 @@ const FILTROS: Array<{ id: 'TODOS' | EstadoDocumento; etiqueta: string }> = [
 ];
 
 interface BandejaAprobacionPageProps {
-  /** Documentos de campo recién enviados a revisión, seguidos de los de ejemplo. */
-  documentos: DocumentoResumen[];
   onAbrirDocumento?: (id: string) => void;
 }
 
-export function BandejaAprobacionPage({ documentos: todos, onAbrirDocumento }: BandejaAprobacionPageProps) {
+export function BandejaAprobacionPage({ onAbrirDocumento }: BandejaAprobacionPageProps) {
+  const consulta = useDocumentosLista();
   const [filtro, setFiltro] = useState<'TODOS' | EstadoDocumento>('TODOS');
+  const todos = useMemo(() => consulta.data ?? [], [consulta.data]);
 
   const documentos = useMemo(() => (filtro === 'TODOS' ? todos : todos.filter((d) => d.estado === filtro)), [todos, filtro]);
 
@@ -51,7 +52,13 @@ export function BandejaAprobacionPage({ documentos: todos, onAbrirDocumento }: B
           ))}
         </div>
 
-        {documentos.length === 0 ? (
+        {consulta.isPending ? (
+          <CargandoDocumentos mensaje="Cargando documentos…" />
+        ) : consulta.isError ? (
+          <ErrorLecturaDocumentos error={consulta.error} recurso="los documentos" onReintentar={() => void consulta.refetch()} />
+        ) : todos.length === 0 ? (
+          <p className="bandeja-empty">Todavía no hay documentos registrados.</p>
+        ) : documentos.length === 0 ? (
           <p className="bandeja-empty">Ningún documento en este estado.</p>
         ) : (
           <ul className="bandeja-lista">

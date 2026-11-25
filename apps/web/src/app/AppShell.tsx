@@ -9,7 +9,7 @@ import { DashboardPage } from '../features/estadisticas/pages/DashboardPage';
 import { ClientesModule } from '../features/cliente-expediente/pages/ClientesModule';
 import { BandejaAprobacionPage } from '../features/documentos/pages/BandejaAprobacionPage';
 import { DocumentoDetailPage } from '../features/documentos/pages/DocumentoDetailPage';
-import { useDocumentos } from '../features/documentos/model/documentos-context';
+import { useDocumentosLista } from '../features/documentos/api/use-documentos';
 import { MapaMurinoPage, type SeleccionMapa } from '../features/mapa-murino/pages/MapaMurinoPage';
 import { MantenimientoPage } from '../features/mantenimiento/pages/MantenimientoPage';
 import { InventarioPage } from '../features/inventario/pages/InventarioPage';
@@ -65,11 +65,11 @@ function ShellConSesion(sesion: { rol: Rol; usuario: string }) {
   const [mapaSeleccion, setMapaSeleccion] = useState<SeleccionMapa | null>(null);
   /** GAF-99: Clientes se abre en el paso 1 del alta rápida cuando se llega por el acceso directo del panel. */
   const [altaRapida, setAltaRapida] = useState(false);
-  const { documentos } = useDocumentos();
+  /** El Dashboard recibe los documentos del API (sin datos mientras carga o si falla). */
+  const documentos = useDocumentosLista().data ?? [];
   const barra = useBarraLateral(sesion.usuario);
 
   const pantallasVisibles = PANTALLAS.filter((p) => sesion.rol === 'ADMINISTRADOR' || !SOLO_ADMINISTRADOR.includes(p.id));
-  const detalleAbierto = documentoAbierto ? documentos.find((d) => d.id === documentoAbierto) : undefined;
 
   function abrirDocumento(id: string) {
     setPantalla('DOCUMENTOS');
@@ -156,16 +156,10 @@ function ShellConSesion(sesion: { rol: Rol; usuario: string }) {
           />
         ) : null}
         {pantalla === 'DOCUMENTOS' ? (
-          detalleAbierto ? (
-            <DocumentoDetailPage
-              key={detalleAbierto.id}
-              detalle={detalleAbierto}
-              rol={sesion.rol}
-              usuario={sesion.usuario}
-              onVolver={() => setDocumentoAbierto(null)}
-            />
+          documentoAbierto ? (
+            <DocumentoDetailPage key={documentoAbierto} id={documentoAbierto} rol={sesion.rol} onVolver={() => setDocumentoAbierto(null)} />
           ) : (
-            <BandejaAprobacionPage documentos={documentos} onAbrirDocumento={setDocumentoAbierto} />
+            <BandejaAprobacionPage onAbrirDocumento={setDocumentoAbierto} />
           )
         ) : null}
         {pantalla === 'MAPA_MURINO' ? <MapaMurinoPage seleccion={mapaSeleccion} onSeleccionar={setMapaSeleccion} /> : null}
