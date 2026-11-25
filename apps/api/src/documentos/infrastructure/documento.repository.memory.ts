@@ -45,7 +45,12 @@ export class DocumentoRepositoryMemory implements DocumentoRepository {
   async obtenerDetalle(id: string): Promise<DocumentoDetalleLectura | null> {
     const doc = this.store.get(id);
     if (!doc) return null;
-    return { ...this.resumen(doc), transiciones: [...(this.historial.get(id) ?? [])] };
+    const pdf = doc.getPdf();
+    return {
+      ...this.resumen(doc),
+      transiciones: [...(this.historial.get(id) ?? [])],
+      pdf: { estado: pdf.estado, generadoAt: pdf.generadoAt?.toISOString() ?? null, error: pdf.error },
+    };
   }
 
   private resumen(d: Documento): DocumentoResumenLectura {
