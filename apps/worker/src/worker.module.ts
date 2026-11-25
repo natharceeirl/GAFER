@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
-import { DocumentosModule } from '@gafer/api';
+import { DatabaseModule, DocumentosModule } from '@gafer/api';
 import { GenerarPdfConsumer } from './jobs/generar-pdf.consumer';
 
 @Module({
-  imports: [DocumentosModule],
+  // DocumentosModule persiste en PostgreSQL: el worker necesita la misma conexión que la API.
+  imports: [DatabaseModule, DocumentosModule],
   providers: [GenerarPdfConsumer],
 })
 export class WorkerModule {}
