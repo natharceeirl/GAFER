@@ -12,7 +12,7 @@ import { assertTestDatabase, TEST_DATABASE_URL } from './config';
 export async function resetDb(db: Pool): Promise<void> {
   assertTestDatabase(TEST_DATABASE_URL);
   await db.query(
-    `TRUNCATE auditoria_eventos, inspecciones_auditoria, inspecciones, servicios_contratados, proyectos,
+    `TRUNCATE auditoria_eventos, correlativos_globales, documentos_transiciones, documentos, correlativos, inspecciones_auditoria, inspecciones, servicios_contratados, proyectos,
               clientes, insumos, equipos, personal, catalogos_texto, configuracion_sistema RESTART IDENTITY CASCADE;
 
      INSERT INTO catalogos_texto (id, titulo, items, solo_administrador)

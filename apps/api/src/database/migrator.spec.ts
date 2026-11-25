@@ -101,7 +101,8 @@ describe('Database Migration and Schema Configuration (T2.1)', () => {
     expect(up.slice(0, 2)).toEqual(['001_initial_schema.up.sql', '002_personal_clave_hash.up.sql']);
     expect(up).toContain('004_servicio_estado_trabajo.up.sql');
     expect(up.indexOf('004_servicio_estado_trabajo.up.sql')).toBeGreaterThan(up.indexOf('002_personal_clave_hash.up.sql'));
-    expect(down[0]).toBe('004_servicio_estado_trabajo.down.sql');
+    expect(down.indexOf('004_servicio_estado_trabajo.down.sql')).toBeLessThan(down.indexOf('002_personal_clave_hash.down.sql'));
+    expect(down.indexOf('005_documentos.down.sql')).toBeLessThan(down.indexOf('004_servicio_estado_trabajo.down.sql'));
     expect(down.slice(-2)).toEqual(['002_personal_clave_hash.down.sql', '001_initial_schema.down.sql']);
   });
 
@@ -129,5 +130,16 @@ describe('Database Migration and Schema Configuration (T2.1)', () => {
     expect(up?.sql).toContain("estado_trabajo = 'EJECUTADO' WHERE estado_trabajo = 'EN_CURSO'");
     expect(up?.sql).toContain("estado_trabajo = 'CONCLUIDO' WHERE estado_trabajo = 'COMPLETADO'");
     expect(down?.sql).toContain('DROP COLUMN IF EXISTS estado_trabajo');
+  });
+
+  it('005 crea el historial de transiciones y el contador global de certificados de forma idempotente', async () => {
+    const up = (await leerMigraciones('up')).find((m) => m.nombre === '005_documentos.up.sql')!;
+    const down = (await leerMigraciones('down')).find((m) => m.nombre === '005_documentos.down.sql')!;
+    expect(up.sql).toContain('CREATE TABLE IF NOT EXISTS documentos_transiciones');
+    expect(up.sql).toContain('CREATE TABLE IF NOT EXISTS correlativos_globales');
+    expect(up.sql).toContain('CREATE OR REPLACE FUNCTION fn_siguiente_correlativo_global');
+    expect(up.sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS uq_documentos_certificado_correlativo');
+    expect(down.sql).toContain('DROP TABLE IF EXISTS documentos_transiciones');
+    expect(down.sql).toContain('DROP TABLE IF EXISTS correlativos_globales');
   });
 });

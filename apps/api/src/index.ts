@@ -7,3 +7,8 @@
 export { DocumentosModule } from './documentos/documentos.module';
 export { TransicionarDocumentoUseCase } from './documentos/application/transicionar-documento.usecase';
 export { CrearDocumentoUseCase } from './documentos/application/crear-documento.usecase';
+export { DatabaseModule, KYSELY_DATABASE } from './database/database.module';
+export { DOCUMENTO_REPOSITORY } from './documentos/domain/ports/documento.repository';
+export { DocumentoRepositoryMemory } from './documentos/infrastructure/documento.repository.memory';
+export { TRANSACCION } from './documentos/domain/ports/transaccion.port';
+export { TransaccionMemory } from './documentos/infrastructure/transaccion.memory';

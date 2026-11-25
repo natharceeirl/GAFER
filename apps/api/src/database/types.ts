@@ -1,8 +1,9 @@
-import { Generated, ColumnType } from 'kysely';
+import { Generated, ColumnType, RawBuilder } from 'kysely';
 
 import type {
   CargoPersonal,
   EstadoActivoInactivo,
+  EstadoDocumento,
   EstadoInspeccion,
   EstadoOperativoEquipo,
   EstadoTrabajo,
@@ -15,6 +16,7 @@ import type {
 
 export type {
   CargoPersonal,
+  EstadoDocumento,
   EstadoInspeccion,
   EstadoOperativoEquipo,
   FrecuenciaServicio,
@@ -185,6 +187,49 @@ export interface AuditoriaEventosTable {
   created_at: Generated<Date>;
 }
 
+export type TipoDocumentoDb = 'INFORME' | 'REPORTE' | 'CERTIFICADO';
+
+export interface DocumentosTable {
+  id: string;
+  cliente_id: string;
+  proyecto_id: string | null;
+  inspeccion_id: string | null;
+  tipo: TipoDocumentoDb;
+  codigo: string;
+  numero_correlativo: number;
+  estado: Generated<EstadoDocumento>;
+  fecha: ColumnType<Date, Date | RawBuilder<Date>, Date>;
+  creado_por_id: string | null;
+  creado_por_usuario: string | null;
+  created_at: Generated<Date>;
+  updated_at: ColumnType<Date, Date | RawBuilder<Date> | undefined, Date | RawBuilder<Date>>;
+}
+
+export interface DocumentosTransicionesTable {
+  id: Generated<string>;
+  documento_id: string;
+  estado_anterior: EstadoDocumento | null;
+  estado_nuevo: EstadoDocumento;
+  actor_id: string | null;
+  actor_usuario: string;
+  actor_rol: string;
+  motivo: string | null;
+  created_at: Generated<Date>;
+}
+
+export interface CorrelativosTable {
+  cliente_id: string;
+  tipo: TipoDocumentoDb;
+  ultimo_numero: number;
+  updated_at: Generated<Date>;
+}
+
+export interface CorrelativosGlobalesTable {
+  tipo: 'CERTIFICADO';
+  ultimo_numero: number;
+  updated_at: Generated<Date>;
+}
+
 export interface GaferDatabase {
   clientes: ClientesTable;
   proyectos: ProyectosTable;
@@ -197,4 +242,8 @@ export interface GaferDatabase {
   catalogos_texto: CatalogosTextoTable;
   configuracion_sistema: ConfiguracionSistemaTable;
   auditoria_eventos: AuditoriaEventosTable;
+  documentos: DocumentosTable;
+  documentos_transiciones: DocumentosTransicionesTable;
+  correlativos: CorrelativosTable;
+  correlativos_globales: CorrelativosGlobalesTable;
 }
