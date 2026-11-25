@@ -26,6 +26,24 @@ export interface ActorDocumento {
 
 export const ACTOR_SISTEMA: ActorDocumento = { id: null, usuario: 'SISTEMA', rol: 'SISTEMA' };
 
+/** Estado de la generación asíncrona del PDF (GAF-54). `null` mientras nadie lo ha pedido. */
+export type EstadoPdf = 'PENDIENTE' | 'GENERANDO' | 'GENERADO' | 'ERROR';
+
+export interface PdfDocumento {
+  estado: EstadoPdf | null;
+  /** Clave del objeto en el almacenamiento de archivos. */
+  storageKey: string | null;
+  generadoAt: Date | null;
+  /** Motivo del último fallo; visible hasta que un reintento termine bien. */
+  error: string | null;
+  intentos: number;
+}
+
+/** Clave determinista: regenerar el PDF sobrescribe el mismo objeto, nunca deja copias huérfanas. */
+export function clavePdfDocumento(documentoId: string, codigo: string): string {
+  return `documentos/${documentoId}/${codigo}.pdf`;
+}
+
 export interface TransicionDocumento {
   estadoAnterior: EstadoDocumento | null;
   estadoNuevo: EstadoDocumento;
@@ -41,11 +59,13 @@ export interface DocumentoProps {
   proyectoId?: string | null;
   fecha?: Date;
   creadoPor?: ActorDocumento | null;
+  pdf?: Partial<PdfDocumento>;
 }
 
 export class Documento {
   private estado: EstadoDocumento;
   private transicionesPendientes: TransicionDocumento[] = [];
+  private pdf: PdfDocumento;
   readonly tipo: TipoDocumento;
   readonly codigo: string;
   readonly proyectoId: string | null;
@@ -64,6 +84,40 @@ export class Documento {
     this.proyectoId = props.proyectoId ?? null;
     this.fecha = props.fecha ?? null;
     this.creadoPor = props.creadoPor ?? null;
+    this.pdf = { estado: null, storageKey: null, generadoAt: null, error: null, intentos: 0, ...props.pdf };
+  }
+
+  getPdf(): PdfDocumento {
+    return { ...this.pdf };
+  }
+
+  /** Pide (o repite) el PDF. Solo un documento aprobado o enviado tiene un informe definitivo. */
+  solicitarPdf(): void {
+    if (this.estado !== 'APROBADO' && this.estado !== 'ENVIADO') {
+      throw new Error(`Solo se puede generar el PDF de un documento aprobado (estado actual: ${this.estado})`);
+    }
+    this.pdf = { ...this.pdf, estado: 'PENDIENTE', error: null, intentos: 0 };
+  }
+
+  iniciarGeneracionPdf(): void {
+    this.pdf = { ...this.pdf, estado: 'GENERANDO', error: null, intentos: this.pdf.intentos + 1 };
+  }
+
+  marcarPdfGenerado(storageKey: string, fecha: Date): void {
+    this.exigirGenerando();
+    this.pdf = { ...this.pdf, estado: 'GENERADO', storageKey, generadoAt: fecha, error: null };
+  }
+
+  /** Falla mientras se genera, o antes de empezar (p. ej. no se pudo encolar el trabajo). */
+  marcarPdfFallido(motivo: string): void {
+    if (this.pdf.estado !== 'PENDIENTE') this.exigirGenerando();
+    this.pdf = { ...this.pdf, estado: 'ERROR', error: motivo };
+  }
+
+  private exigirGenerando(): void {
+    if (this.pdf.estado !== 'GENERANDO') {
+      throw new Error(`El PDF del documento ${this.id} no se está generando (estado del PDF: ${this.pdf.estado ?? 'sin pedir'})`);
+    }
   }
 
   /** Deja constancia de la creación (sin estado anterior) en el historial. */

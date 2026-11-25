@@ -38,7 +38,17 @@ export class KyselyDocumentoRepository implements DocumentoRepository {
           creado_por_id: documento.creadoPor?.id ?? null,
           creado_por_usuario: documento.creadoPor?.usuario ?? null,
         })
-        .onConflict((oc) => oc.column('id').doUpdateSet({ estado: documento.getEstado(), updated_at: sql<Date>`now()` }))
+        .onConflict((oc) =>
+          oc.column('id').doUpdateSet({
+            estado: documento.getEstado(),
+            pdf_estado: documento.getPdf().estado,
+            pdf_storage_key: documento.getPdf().storageKey,
+            pdf_generado_at: documento.getPdf().generadoAt,
+            pdf_error: documento.getPdf().error,
+            pdf_intentos: documento.getPdf().intentos,
+            updated_at: sql<Date>`now()`,
+          }),
+        )
         .execute();
 
       const pendientes = documento.vaciarTransicionesPendientes();
@@ -77,6 +87,13 @@ export class KyselyDocumentoRepository implements DocumentoRepository {
       estado: fila.estado,
       proyectoId: fila.proyecto_id,
       fecha: fila.fecha,
+      pdf: {
+        estado: fila.pdf_estado,
+        storageKey: fila.pdf_storage_key,
+        generadoAt: fila.pdf_generado_at,
+        error: fila.pdf_error,
+        intentos: fila.pdf_intentos,
+      },
       creadoPor: fila.creado_por_usuario ? { id: fila.creado_por_id, usuario: fila.creado_por_usuario, rol: '' } : null,
     });
   }
@@ -92,6 +109,11 @@ export class KyselyDocumentoRepository implements DocumentoRepository {
   async obtenerDetalle(id: string): Promise<DocumentoDetalleLectura | null> {
     const resumen = await this.consultaResumen().where('d.id', '=', id).executeTakeFirst();
     if (!resumen) return null;
+    const pdf = await this.db
+      .selectFrom('documentos')
+      .select(['pdf_estado', 'pdf_generado_at', 'pdf_error'])
+      .where('id', '=', id)
+      .executeTakeFirstOrThrow();
     const filas = await this.db
       .selectFrom('documentos_transiciones')
       .selectAll()
@@ -101,6 +123,7 @@ export class KyselyDocumentoRepository implements DocumentoRepository {
       .execute();
     return {
       ...resumen,
+      pdf: { estado: pdf.pdf_estado, generadoAt: pdf.pdf_generado_at?.toISOString() ?? null, error: pdf.pdf_error },
       transiciones: filas.map((f) => ({
         estadoAnterior: f.estado_anterior,
         estadoNuevo: f.estado_nuevo,

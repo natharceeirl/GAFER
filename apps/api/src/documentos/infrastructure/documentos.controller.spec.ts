@@ -3,6 +3,8 @@ import { CrearDocumentoUseCase } from '../application/crear-documento.usecase';
 import { TransicionarDocumentoUseCase } from '../application/transicionar-documento.usecase';
 import { ListarDocumentosUseCase } from '../application/listar-documentos.usecase';
 import { ObtenerDocumentoUseCase } from '../application/obtener-documento.usecase';
+import { SolicitarPdfDocumentoUseCase } from '../application/solicitar-pdf-documento.usecase';
+import { ObtenerPdfDocumentoUseCase } from '../application/obtener-pdf-documento.usecase';
 import { Documento } from '../domain/documento';
 import { AuditoriaService } from '../../shared/auditoria/auditoria.service';
 import { TokenPayload } from '../../auth/domain/ports/token.service.port';
@@ -17,6 +19,8 @@ describe('DocumentosController', () => {
   let mockTransicionar: jest.Mocked<TransicionarDocumentoUseCase>;
   let mockListar: jest.Mocked<ListarDocumentosUseCase>;
   let mockObtener: jest.Mocked<ObtenerDocumentoUseCase>;
+  let mockSolicitarPdf: jest.Mocked<SolicitarPdfDocumentoUseCase>;
+  let mockObtenerPdf: jest.Mocked<ObtenerPdfDocumentoUseCase>;
   let auditoria: jest.Mocked<Pick<AuditoriaService, 'registrarEvento'>>;
 
   beforeEach(() => {
@@ -24,9 +28,11 @@ describe('DocumentosController', () => {
     mockTransicionar = { ejecutar: jest.fn() } as any;
     mockListar = { ejecutar: jest.fn() } as any;
     mockObtener = { ejecutar: jest.fn() } as any;
+    mockSolicitarPdf = { ejecutar: jest.fn() } as any;
+    mockObtenerPdf = { ejecutar: jest.fn() } as any;
     auditoria = { registrarEvento: jest.fn().mockResolvedValue(null) } as any;
 
-    controller = new DocumentosController(mockCrear, mockTransicionar, mockListar, mockObtener, auditoria as any);
+    controller = new DocumentosController(mockCrear, mockTransicionar, mockListar, mockObtener, auditoria as any, mockSolicitarPdf, mockObtenerPdf);
   });
 
   describe('crear (POST /documentos)', () => {
@@ -84,6 +90,36 @@ describe('DocumentosController', () => {
       const detalle = { id: 'doc-1', transiciones: [] } as any;
       mockObtener.ejecutar.mockResolvedValue(detalle);
       await expect(controller.obtener('doc-1')).resolves.toBe(detalle);
+    });
+  });
+
+  describe('PDF', () => {
+    it('POST :id/pdf encola, audita y responde PENDIENTE', async () => {
+      mockSolicitarPdf.ejecutar.mockResolvedValue(undefined);
+      const res = await controller.generarPdf('doc-1', USUARIO);
+      expect(res).toEqual({ id: 'doc-1', pdfEstado: 'PENDIENTE' });
+      expect(mockSolicitarPdf.ejecutar).toHaveBeenCalledWith('doc-1');
+      expect(auditoria.registrarEvento).toHaveBeenCalledWith(
+        expect.objectContaining({ modulo: 'DOCUMENTOS', accion: 'GENERAR_PDF', entidadId: 'doc-1', actorUsuario: 'SUP.UNO' }),
+      );
+    });
+
+    it('POST :id/pdf no audita si no se pudo encolar', async () => {
+      mockSolicitarPdf.ejecutar.mockRejectedValue(new Error('cola caída'));
+      await expect(controller.generarPdf('doc-1', USUARIO)).rejects.toThrow('cola caída');
+      expect(auditoria.registrarEvento).not.toHaveBeenCalled();
+    });
+
+    it('GET :id/pdf entrega el archivo con sus cabeceras', async () => {
+      mockObtenerPdf.ejecutar.mockResolvedValue({ contenido: Buffer.from('%PDF-x'), nombreArchivo: 'INFORME-KAL-001-2026.pdf' });
+      const end = jest.fn();
+      const set = jest.fn().mockReturnValue({ end });
+      const res = { status: jest.fn().mockReturnValue({ set }) } as any;
+      await controller.descargarPdf('doc-1', res);
+      expect(set).toHaveBeenCalledWith(
+        expect.objectContaining({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'inline; filename="INFORME-KAL-001-2026.pdf"', 'Content-Length': '6' }),
+      );
+      expect(end).toHaveBeenCalledWith(Buffer.from('%PDF-x'));
     });
   });
 });

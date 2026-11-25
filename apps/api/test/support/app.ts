@@ -14,6 +14,8 @@ import { Pool } from 'pg';
 import { AppModule } from '../../src/app.module';
 import { KYSELY_DATABASE } from '../../src/database/database.module';
 import { DomainExceptionFilter } from '../../src/shared/infrastructure/filters/domain-exception.filter';
+import { ALMACEN_PDF, COLA_PDF } from '../../src/documentos/domain/ports/pdf.ports';
+import { AlmacenPdfMemory, ColaPdfMemory } from '../../src/documentos/infrastructure/pdf.memory';
 import { TEST_DATABASE_URL } from './config';
 
 export interface TestApp {
@@ -22,12 +24,22 @@ export interface TestApp {
   baseUrl: string;
   /** Conexión directa a la base de pruebas */
   db: Pool;
+  /** Cola y almacenamiento del PDF en memoria: las pruebas HTTP no necesitan Redis ni MinIO. */
+  cola: ColaPdfMemory;
+  almacen: AlmacenPdfMemory;
   close(): Promise<void>;
 }
 
 /** Enciende la aplicación con la misma configuración que main.ts, en un puerto libre. */
 export async function createTestApp(): Promise<TestApp> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  const cola = new ColaPdfMemory();
+  const almacen = new AlmacenPdfMemory();
+  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(COLA_PDF)
+    .useValue(cola)
+    .overrideProvider(ALMACEN_PDF)
+    .useValue(almacen)
+    .compile();
   const app = moduleRef.createNestApplication({ logger: false });
 
   app.setGlobalPrefix('api', { exclude: ['docs', 'docs-json'] });
@@ -41,6 +53,8 @@ export async function createTestApp(): Promise<TestApp> {
     app,
     baseUrl,
     db,
+    cola,
+    almacen,
     async close() {
       await db.end();
       // Cierra las conexiones a la base para que Jest termine sin esperar.

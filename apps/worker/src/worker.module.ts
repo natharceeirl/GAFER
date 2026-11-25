@@ -1,10 +1,15 @@
 import { Module } from '@nestjs/common';
-import { DatabaseModule, DocumentosModule } from '@gafer/api';
+import { DatabaseModule, DocumentosModule, GenerarPdfDocumentoUseCase, PDF_RENDERER, StorageModule } from '@gafer/api';
 import { GenerarPdfConsumer } from './jobs/generar-pdf.consumer';
+import { PdfkitInformeRenderer } from './pdf/pdfkit-informe.renderer';
 
 @Module({
-  // DocumentosModule persiste en PostgreSQL: el worker necesita la misma conexión que la API.
-  imports: [DatabaseModule, DocumentosModule],
-  providers: [GenerarPdfConsumer],
+  imports: [DatabaseModule, StorageModule, DocumentosModule],
+  providers: [
+    GenerarPdfDocumentoUseCase,
+    // El motor de PDF se elige aquí: cambiar de motor es cambiar esta línea (puerto PdfRendererPort).
+    { provide: PDF_RENDERER, useClass: PdfkitInformeRenderer },
+    GenerarPdfConsumer,
+  ],
 })
 export class WorkerModule {}

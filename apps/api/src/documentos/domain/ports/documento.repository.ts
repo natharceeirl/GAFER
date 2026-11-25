@@ -1,4 +1,4 @@
-import { Documento, EstadoDocumento } from '../documento';
+import { Documento, EstadoDocumento, EstadoPdf } from '../documento';
 import { ContextoTransaccional, TipoDocumento } from './numerador-correlativo.port';
 
 /** Fila de la cola de revisión / listado. */
@@ -28,8 +28,16 @@ export interface TransicionLectura {
   fecha: string;
 }
 
+export interface PdfLectura {
+  estado: EstadoPdf | null;
+  /** ISO 8601 */
+  generadoAt: string | null;
+  error: string | null;
+}
+
 export interface DocumentoDetalleLectura extends DocumentoResumenLectura {
   transiciones: TransicionLectura[];
+  pdf: PdfLectura;
 }
 
 export interface FiltroDocumentos {
