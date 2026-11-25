@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Optional, Param, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Optional, Param, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiCreatedResponse, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CrearDocumentoUseCase } from '../application/crear-documento.usecase';
@@ -35,7 +35,7 @@ export class DocumentosController {
     private readonly transicionarDocumento: TransicionarDocumentoUseCase,
     private readonly listarDocumentos: ListarDocumentosUseCase,
     private readonly obtenerDocumento: ObtenerDocumentoUseCase,
-    @Optional() private readonly auditoria: AuditoriaService | undefined,
+    @Optional() @Inject(AuditoriaService) private readonly auditoria: AuditoriaService | undefined,
     private readonly solicitarPdf: SolicitarPdfDocumentoUseCase,
     private readonly obtenerPdf: ObtenerPdfDocumentoUseCase,
   ) {}

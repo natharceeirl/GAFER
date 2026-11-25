@@ -92,12 +92,14 @@ describe('PDF del documento: API y datos (GAF-54)', () => {
     it('Administrador y Supervisor reintentan la generación (202) y se encola de nuevo', async () => {
       const id = await aprobado();
       t.cola.trabajos.length = 0;
-      const a = await http.post(`/documentos/${id}/pdf`, {}, autorizacion('ADMINISTRADOR'));
-      const b = await http.post(`/documentos/${id}/pdf`, {}, autorizacion('SUPERVISOR'));
+      const a = await http.post(`/documentos/${id}/pdf`, {}, await autorizacionDePersonal(t.db, 'ADMINISTRADOR', 'ADM.UNO'));
+      const b = await http.post(`/documentos/${id}/pdf`, {}, await supervisor());
       expect(a.status).toBe(202);
       expect(a.body).toEqual({ id, pdfEstado: 'PENDIENTE' });
       expect(b.status).toBe(202);
       expect(t.cola.trabajos).toEqual([id, id]);
+      const eventos = await t.db.query(`SELECT actor_usuario FROM auditoria_eventos WHERE entidad_id = $1 AND accion = 'GENERAR_PDF' ORDER BY created_at`, [id]);
+      expect(eventos.rows.map((r) => r.actor_usuario)).toEqual(['ADM.UNO', 'SUP.UNO']);
     });
 
     it('el Técnico no entra (403)', async () => {
