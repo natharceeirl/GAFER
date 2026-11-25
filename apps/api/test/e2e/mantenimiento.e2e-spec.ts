@@ -458,6 +458,89 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
     });
   });
 
+  describe('Montos opcionales de sedes y servicios (GAF-105)', () => {
+    async function crearSedeYServicioConMontos() {
+      const cliente = await http.post('/mantenimiento/clientes', {
+        razonSocial: 'Agroindustrial Camana S.A.',
+        ruc: '20600000001',
+        codigoCorto: 'AGROCAM',
+        direccionFiscal: 'Av. Camana 100',
+        giroNegocio: 'Agroindustria',
+        contactoNombre: 'Rosa Huaman',
+        contactoCargo: 'Jefa de Planta',
+        contactoTelefono: '954111222',
+        contactoCorreo: 'rhuaman@agrocam.pe',
+      });
+      const sede = await http.post('/mantenimiento/proyectos', {
+        clienteId: cliente.body.id,
+        nombre: 'PLANTA_CAMANA',
+        direccionSede: 'Zona Industrial Camana',
+        distrito: 'Camana',
+        provincia: 'Camana',
+        departamento: 'Arequipa',
+        contactoNombre: 'Rosa Huaman',
+        contactoCargo: 'Jefa de Planta',
+        contactoTelefono: '954111222',
+        montoPresupuestado: 25000.5,
+        moneda: 'PEN',
+      });
+      const servicio = await http.post('/mantenimiento/servicios-contratados', {
+        proyectoId: sede.body.id,
+        tipoServicio: 'DSF',
+        frecuencia: 'MENSUAL',
+        areaTotalM2: 800,
+        areaTratarM2: 500,
+        insumosAutorizados: [],
+        equiposAutorizados: [],
+        dosisReferencial: {},
+        requiereCertificado: false,
+        monto: 1200.5,
+        moneda: 'USD',
+      });
+      expect(sede.status).toBe(201);
+      expect(servicio.status).toBe(201);
+      return { clienteId: cliente.body.id, sedeId: sede.body.id, servicioId: servicio.body.id };
+    }
+
+    it.each(['ADMINISTRADOR', 'SUPERVISOR'] as const)('%s lee montos y monedas de sedes y servicios', async (cargo) => {
+      const { clienteId, sedeId, servicioId } = await crearSedeYServicioConMontos();
+      const lector = api(t.baseUrl, cargo);
+
+      const sede = await lector.get(`/mantenimiento/proyectos/${sedeId}`);
+      const sedes = await lector.get(`/mantenimiento/proyectos/cliente/${clienteId}`);
+      const servicio = await lector.get(`/mantenimiento/servicios-contratados/${servicioId}`);
+      const servicios = await lector.get(`/mantenimiento/servicios-contratados/proyecto/${sedeId}`);
+
+      expect(sede.status).toBe(200);
+      expect(sede.body).toMatchObject({ montoPresupuestado: 25000.5, moneda: 'PEN' });
+      expect(sedes.body[0]).toMatchObject({ montoPresupuestado: 25000.5, moneda: 'PEN' });
+      expect(servicio.body).toMatchObject({ monto: 1200.5, moneda: 'USD' });
+      expect(servicios.body[0]).toMatchObject({ monto: 1200.5, moneda: 'USD' });
+    });
+
+    it('TECNICO_OPERADOR lee sedes y servicios sin montos ni moneda', async () => {
+      const { clienteId, sedeId, servicioId } = await crearSedeYServicioConMontos();
+      const tecnico = api(t.baseUrl, 'TECNICO_OPERADOR');
+
+      const sede = await tecnico.get(`/mantenimiento/proyectos/${sedeId}`);
+      const sedes = await tecnico.get(`/mantenimiento/proyectos/cliente/${clienteId}`);
+      const servicio = await tecnico.get(`/mantenimiento/servicios-contratados/${servicioId}`);
+      const servicios = await tecnico.get(`/mantenimiento/servicios-contratados/proyecto/${sedeId}`);
+
+      for (const res of [sede, servicio]) expect(res.status).toBe(200);
+      for (const cuerpo of [sede.body, sedes.body[0]]) {
+        expect(cuerpo.nombre).toBe('PLANTA_CAMANA');
+        expect(cuerpo).not.toHaveProperty('montoPresupuestado');
+        expect(cuerpo).not.toHaveProperty('moneda');
+      }
+      for (const cuerpo of [servicio.body, servicios.body[0]]) {
+        expect(cuerpo.tipoServicio).toBe('DSF');
+        expect(cuerpo).not.toHaveProperty('monto');
+        expect(cuerpo).not.toHaveProperty('moneda');
+      }
+    });
+  });
+
   describe('Flujo de Catálogo de Insumos (GAF-22)', () => {
     it('crea, consulta, lista, actualiza y gestiona ciclo de vida de un insumo', async () => {
       // 1. Crear insumo

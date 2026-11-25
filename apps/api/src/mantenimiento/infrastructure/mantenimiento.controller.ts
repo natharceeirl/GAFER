@@ -385,9 +385,10 @@ export class MantenimientoController {
   @ApiListarProyectosPorClienteDoc()
   async listarProyectosPorCliente(
     @Param('clienteId', new ParseUUIDPipe({ version: '4' })) clienteId: string,
+    @UsuarioActual() usuario: TokenPayload,
   ): Promise<ProyectoResponseDto[]> {
     const proyectos = await this.proyectoRepo.buscarPorClienteId(clienteId);
-    return proyectos.map((p) => this.mapProyectoResponse(p));
+    return proyectos.map((p) => this.mapProyectoResponse(p, this.puedeVerMontos(usuario)));
   }
 
   @Get('proyectos/:id')
@@ -395,12 +396,13 @@ export class MantenimientoController {
   @ApiObtenerProyectoDoc()
   async obtenerProyecto(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @UsuarioActual() usuario: TokenPayload,
   ): Promise<ProyectoResponseDto> {
     const proyecto = await this.proyectoRepo.buscarPorId(id);
     if (!proyecto) {
       throw new NotFoundException(`Sede/Proyecto ${id} no encontrado`);
     }
-    return this.mapProyectoResponse(proyecto);
+    return this.mapProyectoResponse(proyecto, this.puedeVerMontos(usuario));
   }
 
   @Patch('proyectos/:id')
@@ -437,22 +439,31 @@ export class MantenimientoController {
     return { id: proyecto.id, estado: proyecto.getEstado() };
   }
 
-  private mapProyectoResponse(p: {
-    id: string;
-    clienteId: string;
-    nombre: string;
-    direccionSede: string;
-    distrito: string;
-    provincia: string;
-    departamento: string;
-    contactoNombre: string;
-    contactoCargo: string;
-    contactoTelefono: string;
-    getEstado: () => 'ACTIVO' | 'INACTIVO';
-    observaciones: string | null;
-    montoPresupuestado?: number | null;
-    moneda?: Moneda | null;
-  }): ProyectoResponseDto {
+  /** Los montos pactados con el cliente solo los ven ADMINISTRADOR y SUPERVISOR; el técnico no (GAF-105). */
+  private puedeVerMontos(usuario: TokenPayload): boolean {
+    return usuario.cargo !== 'TECNICO_OPERADOR';
+  }
+
+  private mapProyectoResponse(
+    p: {
+      id: string;
+      clienteId: string;
+      nombre: string;
+      direccionSede: string;
+      distrito: string;
+      provincia: string;
+      departamento: string;
+      contactoNombre: string;
+      contactoCargo: string;
+      contactoTelefono: string;
+      getEstado: () => 'ACTIVO' | 'INACTIVO';
+      observaciones: string | null;
+      montoPresupuestado?: number | null;
+      moneda?: Moneda | null;
+    },
+    incluirMontos = true,
+  ): ProyectoResponseDto {
+    const montos = incluirMontos ? { montoPresupuestado: p.montoPresupuestado ?? null, moneda: p.moneda ?? null } : {};
     return {
       id: p.id,
       clienteId: p.clienteId,
@@ -466,8 +477,7 @@ export class MantenimientoController {
       contactoTelefono: p.contactoTelefono,
       estado: p.getEstado(),
       observaciones: p.observaciones,
-      montoPresupuestado: p.montoPresupuestado ?? null,
-      moneda: p.moneda ?? null,
+      ...montos,
     };
   }
 
@@ -490,9 +500,10 @@ export class MantenimientoController {
   @ApiListarServiciosPorProyectoDoc()
   async listarServiciosPorProyecto(
     @Param('proyectoId', new ParseUUIDPipe({ version: '4' })) proyectoId: string,
+    @UsuarioActual() usuario: TokenPayload,
   ): Promise<ServicioContratadoResponseDto[]> {
     const servicios = await this.servicioRepo.buscarPorProyectoId(proyectoId);
-    return servicios.map((s) => this.mapServicioResponse(s));
+    return servicios.map((s) => this.mapServicioResponse(s, this.puedeVerMontos(usuario)));
   }
 
   @Get('servicios-contratados/:id')
@@ -500,12 +511,13 @@ export class MantenimientoController {
   @ApiObtenerServicioContratadoDoc()
   async obtenerServicioContratado(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @UsuarioActual() usuario: TokenPayload,
   ): Promise<ServicioContratadoResponseDto> {
     const servicio = await this.servicioRepo.buscarPorId(id);
     if (!servicio) {
       throw new NotFoundException(`Servicio contratado ${id} no encontrado`);
     }
-    return this.mapServicioResponse(servicio);
+    return this.mapServicioResponse(servicio, this.puedeVerMontos(usuario));
   }
 
   @Patch('servicios-contratados/:id')
@@ -542,7 +554,8 @@ export class MantenimientoController {
     return { id: servicio.id, estado: servicio.getEstado() };
   }
 
-  private mapServicioResponse(s: ServicioContratado): ServicioContratadoResponseDto {
+  private mapServicioResponse(s: ServicioContratado, incluirMontos = true): ServicioContratadoResponseDto {
+    const montos = incluirMontos ? { monto: s.monto ?? null, moneda: s.moneda ?? null } : {};
     return {
       id: s.id,
       proyectoId: s.proyectoId,
@@ -555,8 +568,7 @@ export class MantenimientoController {
       dosisReferencial: s.dosisReferencial,
       requiereCertificado: s.requiereCertificado,
       vigenciaDias: s.vigenciaDias,
-      monto: s.monto ?? null,
-      moneda: s.moneda ?? null,
+      ...montos,
       estado: s.getEstado(),
     };
   }
