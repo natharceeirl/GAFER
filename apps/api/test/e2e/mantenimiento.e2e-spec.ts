@@ -518,6 +518,34 @@ describe('Mantenimiento API E2E contra PostgreSQL real (GAF-21, GAF-22 & GAF-23)
       expect(servicios.body[0]).toMatchObject({ monto: 1200.5, moneda: 'USD' });
     });
 
+    it('PATCH parcial incoherente responde 400 nombrando el campo moneda y no altera lo guardado', async () => {
+      const { sedeId, servicioId } = await crearSedeYServicioConMontos();
+      await http.patch(`/mantenimiento/proyectos/${sedeId}`, { montoPresupuestado: null });
+      await http.patch(`/mantenimiento/servicios-contratados/${servicioId}`, { monto: null });
+
+      const sede = await http.patch(`/mantenimiento/proyectos/${sedeId}`, { moneda: 'USD' });
+      const servicio = await http.patch(`/mantenimiento/servicios-contratados/${servicioId}`, { monto: 100 });
+
+      expect(sede.status).toBe(400);
+      expect(sede.body.errors).toEqual([{ path: 'moneda', message: expect.stringContaining('sin un presupuesto') }]);
+      expect(servicio.status).toBe(400);
+      expect(servicio.body.errors).toEqual([{ path: 'moneda', message: expect.stringContaining('indicar la moneda') }]);
+      const guardado = await http.get(`/mantenimiento/proyectos/${sedeId}`);
+      expect(guardado.body).toMatchObject({ montoPresupuestado: null, moneda: null });
+    });
+
+    it('PATCH parcial coherente con lo guardado se acepta (solo moneda o solo monto)', async () => {
+      const { sedeId, servicioId } = await crearSedeYServicioConMontos();
+
+      const sede = await http.patch(`/mantenimiento/proyectos/${sedeId}`, { moneda: 'USD' });
+      const servicio = await http.patch(`/mantenimiento/servicios-contratados/${servicioId}`, { monto: 300 });
+
+      expect(sede.status).toBe(200);
+      expect(sede.body).toMatchObject({ montoPresupuestado: 25000.5, moneda: 'USD' });
+      expect(servicio.status).toBe(200);
+      expect(servicio.body).toMatchObject({ monto: 300, moneda: 'USD' });
+    });
+
     it('TECNICO_OPERADOR lee sedes y servicios sin montos ni moneda', async () => {
       const { clienteId, sedeId, servicioId } = await crearSedeYServicioConMontos();
       const tecnico = api(t.baseUrl, 'TECNICO_OPERADOR');

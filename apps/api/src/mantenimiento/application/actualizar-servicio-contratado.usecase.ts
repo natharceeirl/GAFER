@@ -4,6 +4,7 @@ import {
   ServicioContratadoRepository,
 } from '../domain/ports/servicio-contratado.repository';
 import { FrecuenciaServicio, Moneda, ServicioContratado } from '../domain/servicio-contratado';
+import { actualizarConCamposMonto } from './actualizar-con-campos-monto';
 
 export interface ActualizarServicioContratadoCommand {
   id: string;
@@ -32,7 +33,7 @@ export class ActualizarServicioContratadoUseCase {
       throw new NotFoundException(`Servicio contratado con ID ${command.id} no encontrado`);
     }
 
-    servicio.actualizarDatos(command);
+    actualizarConCamposMonto(() => servicio.actualizarDatos(command));
     await this.servicioRepository.guardar(servicio);
     return servicio;
   }
