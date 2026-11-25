@@ -13,4 +13,5 @@ export { GenerarPdfDocumentoUseCase } from './documentos/application/generar-pdf
 export { DOCUMENTO_REPOSITORY } from './documentos/domain/ports/documento.repository';
 export { TRANSACCION } from './documentos/domain/ports/transaccion.port';
 export * from './documentos/domain/ports/pdf.ports';
-export { conexionRedis, OPCIONES_TRABAJO_PDF } from './documentos/infrastructure/adapters/cola-pdf-bullmq';
+export { conexionRedis, OPCIONES_TRABAJO_PDF, ColaPdfBullmq } from './documentos/infrastructure/adapters/cola-pdf-bullmq';
+export { S3StorageService } from './shared/infrastructure/storage/s3-storage.service';

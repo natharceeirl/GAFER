@@ -6,11 +6,13 @@ config();
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { WorkerModule } from './worker.module';
+import { GenerarPdfConsumer } from './jobs/generar-pdf.consumer';
 
 async function bootstrap() {
   const logger = new Logger('Worker');
   const app = await NestFactory.createApplicationContext(WorkerModule);
   app.enableShutdownHooks();
-  logger.log('Worker listo — a la espera de jobs (PDF, fotos, alertas de vencimiento).');
+  app.get(GenerarPdfConsumer).iniciar();
+  logger.log('Worker listo — a la espera de jobs (PDF; fotos y alertas de vencimiento aún sin implementar).');
 }
 bootstrap();
