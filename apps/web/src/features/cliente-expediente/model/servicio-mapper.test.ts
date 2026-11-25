@@ -31,7 +31,9 @@ const detalle: ServicioContratadoDetalle = {
   requiereCertificado: true,
   vigenciaDias: 180,
   estado: 'ACTIVO',
-  estadoTrabajo: 'EN_CURSO',
+  estadoTrabajo: 'EJECUTADO',
+  estadoVisible: 'EJECUTADO',
+  fechaProgramada: null,
 };
 
 const datos: DatosServicio = {
@@ -51,8 +53,9 @@ describe('servicio-mapper', () => {
     expect(servicioDeApi(detalle)).toEqual(detalle);
   });
 
-  it('servicioDeApi toma PENDIENTE si un servidor anterior no envía el estado de trabajo (GAF-99)', () => {
-    expect(servicioDeApi({ ...detalle, estadoTrabajo: undefined }).estadoTrabajo).toBe('PENDIENTE');
+  it('servicioDeApi toma PROGRAMADO si un servidor anterior no envía el estado de trabajo (GAF-99)', () => {
+    const anterior = servicioDeApi({ ...detalle, estadoTrabajo: undefined, estadoVisible: undefined, fechaProgramada: undefined });
+    expect(anterior).toMatchObject({ estadoTrabajo: 'PROGRAMADO', estadoVisible: 'PROGRAMADO', fechaProgramada: null });
     const parcial = { ...detalle, insumosAutorizados: undefined, equiposAutorizados: undefined, dosisReferencial: undefined, requiereCertificado: undefined, vigenciaDias: undefined };
     expect(servicioDeApi(parcial)).toMatchObject({
       insumosAutorizados: [],
@@ -61,6 +64,15 @@ describe('servicio-mapper', () => {
       requiereCertificado: false,
       vigenciaDias: null,
     });
+  });
+
+  it('servicioDeApi conserva el estado visible PENDIENTE que deriva el servidor y la fecha programada', () => {
+    const vencido = servicioDeApi({ ...detalle, estadoTrabajo: 'PROGRAMADO', estadoVisible: 'PENDIENTE', fechaProgramada: '2026-11-01' });
+    expect(vencido).toMatchObject({ estadoTrabajo: 'PROGRAMADO', estadoVisible: 'PENDIENTE', fechaProgramada: '2026-11-01' });
+  });
+
+  it('servicioDeApi sin estado visible usa el estado guardado', () => {
+    expect(servicioDeApi({ ...detalle, estadoTrabajo: 'CONCLUIDO', estadoVisible: undefined }).estadoVisible).toBe('CONCLUIDO');
   });
 
   it('datosDeServicio pasa los números a texto para el formulario', () => {

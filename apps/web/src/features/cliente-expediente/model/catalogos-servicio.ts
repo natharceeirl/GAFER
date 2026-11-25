@@ -1,4 +1,4 @@
-import type { ColorAura, EstadoActivoInactivo, EstadoTrabajo, FrecuenciaServicio, TipoServicio } from '@gafer/contracts';
+import type { ColorAura, EstadoActivoInactivo, EstadoVisibleTrabajo, FrecuenciaServicio, TipoServicio } from '@gafer/contracts';
 
 /**
  * Único módulo donde el código del API se convierte en etiqueta de pantalla (y al revés) para los
@@ -31,19 +31,23 @@ export const FRECUENCIAS: Array<{ codigo: FrecuenciaServicio; etiqueta: string }
 
 export const ETIQUETA_ESTADO: Record<EstadoActivoInactivo, string> = { ACTIVO: 'Activo', INACTIVO: 'Inactivo' };
 
-/** Estado del trabajo del servicio (GAF-99), con el color de su insignia. */
-export const ESTADOS_TRABAJO: Array<{ codigo: EstadoTrabajo; etiqueta: string; color: ColorAura }> = [
-  { codigo: 'PENDIENTE', etiqueta: 'Pendiente', color: 'SIN_COLOR' },
-  { codigo: 'EN_CURSO', etiqueta: 'En curso', color: 'AMARILLO' },
-  { codigo: 'COMPLETADO', etiqueta: 'Completado', color: 'VERDE' },
+/**
+ * Estado visible del trabajo del servicio (GAF-99), con el color de su insignia. PENDIENTE (naranja, el que más
+ * llama la atención junto a Cancelado) es el derivado: programado cuya fecha ya pasó.
+ */
+export const ESTADOS_TRABAJO: Array<{ codigo: EstadoVisibleTrabajo; etiqueta: string; color: ColorAura }> = [
+  { codigo: 'PROGRAMADO', etiqueta: 'Programado', color: 'SIN_COLOR' },
+  { codigo: 'PENDIENTE', etiqueta: 'Pendiente', color: 'NARANJA' },
+  { codigo: 'EJECUTADO', etiqueta: 'Ejecutado', color: 'AMARILLO' },
+  { codigo: 'CONCLUIDO', etiqueta: 'Concluido', color: 'VERDE' },
   { codigo: 'CANCELADO', etiqueta: 'Cancelado', color: 'ROJO' },
 ];
 
-export function etiquetaEstadoTrabajo(codigo: EstadoTrabajo): string {
+export function etiquetaEstadoTrabajo(codigo: EstadoVisibleTrabajo): string {
   return ESTADOS_TRABAJO.find((e) => e.codigo === codigo)?.etiqueta ?? codigo;
 }
 
-export function colorEstadoTrabajo(codigo: EstadoTrabajo): ColorAura {
+export function colorEstadoTrabajo(codigo: EstadoVisibleTrabajo): ColorAura {
   return ESTADOS_TRABAJO.find((e) => e.codigo === codigo)?.color ?? 'SIN_COLOR';
 }
 

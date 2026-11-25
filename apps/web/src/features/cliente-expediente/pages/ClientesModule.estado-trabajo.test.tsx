@@ -57,32 +57,50 @@ describe('expediente: estado de trabajo de cada servicio y estado derivado de la
   });
 
   it('muestra la insignia del servicio y la del estado de la sede con las etiquetas de pantalla', async () => {
-    const sede = await abrirExpediente(estadoConServicios([servicioEjemplo({ estadoTrabajo: 'EN_CURSO' })]));
+    const sede = await abrirExpediente(estadoConServicios([servicioEjemplo({ estadoTrabajo: 'EJECUTADO' })]));
 
-    expect(within(servicioDe(sede)).getByText('En curso')).toBeInTheDocument();
-    expect(within(sede).getByLabelText('Estado de la sede')).toHaveTextContent('En curso');
+    expect(within(servicioDe(sede)).getByText('Ejecutado')).toBeInTheDocument();
+    expect(within(sede).getByLabelText('Estado de la sede')).toHaveTextContent('Ejecutado');
   });
 
-  it('el Administrador inicia un servicio pendiente con un clic y la sede pasa a en curso', async () => {
+  it('un servicio programado con la fecha vencida se muestra Pendiente, en el servicio y en la sede, y aún se puede marcar ejecutado', async () => {
+    const sede = await abrirExpediente(
+      estadoConServicios([servicioEjemplo({ estadoTrabajo: 'PROGRAMADO', fechaProgramada: '2020-01-15' })]),
+    );
+
+    expect(within(servicioDe(sede)).getByText('Pendiente')).toBeInTheDocument();
+    expect(within(sede).getByLabelText('Estado de la sede')).toHaveTextContent('Pendiente');
+    expect(within(sede).getByRole('button', { name: 'Marcar ejecutado servicio DRT en PLANTA_NORTE' })).toBeInTheDocument();
+    expect(within(sede).queryByRole('button', { name: /pendiente/i })).not.toBeInTheDocument();
+  });
+
+  it('un servicio programado con fecha futura sigue Programado', async () => {
+    const sede = await abrirExpediente(
+      estadoConServicios([servicioEjemplo({ estadoTrabajo: 'PROGRAMADO', fechaProgramada: '2099-01-15' })]),
+    );
+    expect(within(servicioDe(sede)).getByText('Programado')).toBeInTheDocument();
+  });
+
+  it('el Administrador marca ejecutado un servicio programado con un clic y la sede pasa a ejecutado', async () => {
     const estado = estadoConServicios();
     const sede = await abrirExpediente(estado);
-    expect(within(sede).getByLabelText('Estado de la sede')).toHaveTextContent('Pendiente');
+    expect(within(sede).getByLabelText('Estado de la sede')).toHaveTextContent('Programado');
 
-    fireEvent.click(within(sede).getByRole('button', { name: 'Iniciar servicio DRT en PLANTA_NORTE' }));
+    fireEvent.click(within(sede).getByRole('button', { name: 'Marcar ejecutado servicio DRT en PLANTA_NORTE' }));
 
-    await waitFor(() => expect(within(screen.getByText('PLANTA_NORTE').closest('li') as HTMLElement).getByLabelText('Estado de la sede')).toHaveTextContent('En curso'));
-    expect(cuerpoDe(llamadasA(fetchMock, 'PATCH', RUTA_ESTADO)[0])).toEqual({ estado: 'EN_CURSO' });
+    await waitFor(() => expect(within(screen.getByText('PLANTA_NORTE').closest('li') as HTMLElement).getByLabelText('Estado de la sede')).toHaveTextContent('Ejecutado'));
+    expect(cuerpoDe(llamadasA(fetchMock, 'PATCH', RUTA_ESTADO)[0])).toEqual({ estado: 'EJECUTADO' });
     const actual = servicioDe(screen.getByText('PLANTA_NORTE').closest('li') as HTMLElement);
-    expect(within(actual).getByRole('button', { name: 'Marcar completado servicio DRT en PLANTA_NORTE' })).toBeInTheDocument();
+    expect(within(actual).getByRole('button', { name: 'Marcar concluido servicio DRT en PLANTA_NORTE' })).toBeInTheDocument();
   });
 
-  it('marca completado un servicio en curso', async () => {
-    const sede = await abrirExpediente(estadoConServicios([servicioEjemplo({ estadoTrabajo: 'EN_CURSO' })]));
+  it('marca concluido un servicio ejecutado', async () => {
+    const sede = await abrirExpediente(estadoConServicios([servicioEjemplo({ estadoTrabajo: 'EJECUTADO' })]));
 
-    fireEvent.click(within(sede).getByRole('button', { name: 'Marcar completado servicio DRT en PLANTA_NORTE' }));
+    fireEvent.click(within(sede).getByRole('button', { name: 'Marcar concluido servicio DRT en PLANTA_NORTE' }));
 
     await waitFor(() => expect(llamadasA(fetchMock, 'PATCH', RUTA_ESTADO)).toHaveLength(1));
-    expect(cuerpoDe(llamadasA(fetchMock, 'PATCH', RUTA_ESTADO)[0])).toEqual({ estado: 'COMPLETADO' });
+    expect(cuerpoDe(llamadasA(fetchMock, 'PATCH', RUTA_ESTADO)[0])).toEqual({ estado: 'CONCLUIDO' });
     expect(await screen.findByRole('button', { name: 'Reabrir servicio DRT en PLANTA_NORTE' })).toBeInTheDocument();
   });
 
@@ -118,9 +136,9 @@ describe('expediente: estado de trabajo de cada servicio y estado derivado de la
     expect(llamadasA(fetchMock, 'PATCH')).toHaveLength(0);
   });
 
-  it('reabre un servicio completado con motivo', async () => {
-    const sede = await abrirExpediente(estadoConServicios([servicioEjemplo({ estadoTrabajo: 'COMPLETADO' })]));
-    expect(within(sede).getByLabelText('Estado de la sede')).toHaveTextContent('Completado');
+  it('reabre un servicio concluido con motivo', async () => {
+    const sede = await abrirExpediente(estadoConServicios([servicioEjemplo({ estadoTrabajo: 'CONCLUIDO' })]));
+    expect(within(sede).getByLabelText('Estado de la sede')).toHaveTextContent('Concluido');
 
     fireEvent.click(within(sede).getByRole('button', { name: 'Reabrir servicio DRT en PLANTA_NORTE' }));
     const dialogo = screen.getByRole('dialog', { name: 'Reabrir servicio DRT en PLANTA_NORTE' });
@@ -128,8 +146,8 @@ describe('expediente: estado de trabajo de cada servicio y estado derivado de la
     fireEvent.click(within(dialogo).getByRole('button', { name: 'Confirmar reapertura' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(cuerpoDe(llamadasA(fetchMock, 'PATCH', RUTA_ESTADO)[0])).toEqual({ estado: 'EN_CURSO', motivo: 'Faltó tratar el almacén' });
-    expect(within(screen.getByText('PLANTA_NORTE').closest('li') as HTMLElement).getByLabelText('Estado de la sede')).toHaveTextContent('En curso');
+    expect(cuerpoDe(llamadasA(fetchMock, 'PATCH', RUTA_ESTADO)[0])).toEqual({ estado: 'EJECUTADO', motivo: 'Faltó tratar el almacén' });
+    expect(within(screen.getByText('PLANTA_NORTE').closest('li') as HTMLElement).getByLabelText('Estado de la sede')).toHaveTextContent('Ejecutado');
   });
 
   it('un error del servidor en el motivo se marca en el campo y el diálogo queda abierto', async () => {
@@ -150,19 +168,19 @@ describe('expediente: estado de trabajo de cada servicio y estado derivado de la
   it('un error general del servidor (transición rechazada) se muestra sobre las sedes', async () => {
     const estado = estadoConServicios();
     const sede = await abrirExpediente(estado);
-    estado.servicios[0].estadoTrabajo = 'EN_CURSO';
+    estado.servicios[0].estadoTrabajo = 'EJECUTADO';
 
-    fireEvent.click(within(sede).getByRole('button', { name: 'Iniciar servicio DRT en PLANTA_NORTE' }));
+    fireEvent.click(within(sede).getByRole('button', { name: 'Marcar ejecutado servicio DRT en PLANTA_NORTE' }));
 
-    expect(await screen.findByText(/No se puede pasar el servicio de EN_CURSO a EN_CURSO/)).toBeInTheDocument();
+    expect(await screen.findByText(/No se puede pasar el servicio de EJECUTADO a EJECUTADO/)).toBeInTheDocument();
   });
 
   it('el Supervisor ve las insignias pero ningún botón de estado de trabajo', async () => {
-    const sede = await abrirExpediente(estadoConServicios([servicioEjemplo({ estadoTrabajo: 'EN_CURSO' })]), 'SUPERVISOR');
+    const sede = await abrirExpediente(estadoConServicios([servicioEjemplo({ estadoTrabajo: 'EJECUTADO' })]), 'SUPERVISOR');
 
-    expect(within(sede).getByLabelText('Estado de la sede')).toHaveTextContent('En curso');
-    expect(within(servicioDe(sede)).getByText('En curso')).toBeInTheDocument();
-    for (const accion of ['Iniciar', 'Marcar completado', 'Cancelar', 'Reabrir']) {
+    expect(within(sede).getByLabelText('Estado de la sede')).toHaveTextContent('Ejecutado');
+    expect(within(servicioDe(sede)).getByText('Ejecutado')).toBeInTheDocument();
+    for (const accion of ['Marcar ejecutado', 'Marcar concluido', 'Cancelar', 'Reabrir']) {
       expect(screen.queryByRole('button', { name: `${accion} servicio DRT en PLANTA_NORTE` })).not.toBeInTheDocument();
     }
   });
@@ -170,13 +188,13 @@ describe('expediente: estado de trabajo de cada servicio y estado derivado de la
   it('un servicio dado de baja muestra su estado pero no ofrece cambiarlo, ni cuenta para el estado de la sede', async () => {
     const sede = await abrirExpediente(
       estadoConServicios([
-        servicioEjemplo({ estado: 'INACTIVO', estadoTrabajo: 'EN_CURSO' }),
-        servicioEjemplo({ id: 'bbbbbbbb-0000-4000-8000-000000000001', tipoServicio: 'DSF', estadoTrabajo: 'PENDIENTE' }),
+        servicioEjemplo({ estado: 'INACTIVO', estadoTrabajo: 'EJECUTADO' }),
+        servicioEjemplo({ id: 'bbbbbbbb-0000-4000-8000-000000000001', tipoServicio: 'DSF', estadoTrabajo: 'PROGRAMADO' }),
       ]),
     );
 
-    expect(within(sede).getByLabelText('Estado de la sede')).toHaveTextContent('Pendiente');
-    expect(within(sede).queryByRole('button', { name: 'Marcar completado servicio DRT en PLANTA_NORTE' })).not.toBeInTheDocument();
-    expect(within(sede).getByRole('button', { name: 'Iniciar servicio DSF en PLANTA_NORTE' })).toBeInTheDocument();
+    expect(within(sede).getByLabelText('Estado de la sede')).toHaveTextContent('Programado');
+    expect(within(sede).queryByRole('button', { name: 'Marcar concluido servicio DRT en PLANTA_NORTE' })).not.toBeInTheDocument();
+    expect(within(sede).getByRole('button', { name: 'Marcar ejecutado servicio DSF en PLANTA_NORTE' })).toBeInTheDocument();
   });
 });

@@ -67,8 +67,8 @@ interface Confirmacion {
 }
 
 const TEXTO_CONFIRMAR: Record<AccionEstadoTrabajo['id'], string> = {
-  iniciar: 'Confirmar inicio',
-  completar: 'Confirmar',
+  ejecutar: 'Confirmar ejecución',
+  concluir: 'Confirmar conclusión',
   cancelar: 'Confirmar cancelación',
   reabrir: 'Confirmar reapertura',
 };
@@ -318,7 +318,7 @@ export function ClienteExpedientePage({
                         <ul className="expediente-proyecto__servicios">
                           {p.servicios.map((s) => (
                             <li key={s.id} className={s.estado === 'INACTIVO' ? 'expediente-servicio expediente-servicio--inactivo' : 'expediente-servicio'}>
-                              <Badge color={colorEstadoTrabajo(s.estadoTrabajo)}>{etiquetaEstadoTrabajo(s.estadoTrabajo)}</Badge>
+                              <Badge color={colorEstadoTrabajo(s.estadoVisible)}>{etiquetaEstadoTrabajo(s.estadoVisible)}</Badge>
                               <span>
                                 {etiquetaTipoServicio(s.tipoServicio)}{' '}
                                 <span className="expediente-proyecto__frecuencia">

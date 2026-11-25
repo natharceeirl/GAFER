@@ -298,12 +298,12 @@ describe('hooks de sedes y servicios', () => {
     });
 
     it('sin motivo no envía el campo, y un 400 del servidor llega como ErrorApi con el campo motivo', async () => {
-      fetchMock.mockResolvedValueOnce(json(200, { ...servicioApi, estadoTrabajo: 'EN_CURSO' }));
+      fetchMock.mockResolvedValueOnce(json(200, { ...servicioApi, estadoTrabajo: 'EJECUTADO' }));
       const { result } = renderHook(() => useCambiarEstadoTrabajo(), { wrapper: envoltorio });
       await act(async () => {
-        await result.current.mutateAsync({ id: SERVICIO, estado: 'EN_CURSO' });
+        await result.current.mutateAsync({ id: SERVICIO, estado: 'EJECUTADO' });
       });
-      expect(JSON.parse(llamadas('PATCH')[0][1].body)).toEqual({ estado: 'EN_CURSO' });
+      expect(JSON.parse(llamadas('PATCH')[0][1].body)).toEqual({ estado: 'EJECUTADO' });
 
       fetchMock.mockResolvedValueOnce(
         json(400, { statusCode: 400, message: ['motivo: corto'], errors: [{ path: 'motivo', message: 'El motivo debe tener al menos 5 caracteres' }] }),

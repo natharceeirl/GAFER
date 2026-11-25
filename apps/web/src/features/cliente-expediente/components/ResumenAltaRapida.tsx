@@ -34,7 +34,7 @@ export function ResumenAltaRapida({ cliente, sede, onAgregarServicio, onVerExped
             <ul className="alta-resumen__servicios">
               {sede.servicios.map((s) => (
                 <li key={s.id}>
-                  <Badge color={colorEstadoTrabajo(s.estadoTrabajo)}>{etiquetaEstadoTrabajo(s.estadoTrabajo)}</Badge>{' '}
+                  <Badge color={colorEstadoTrabajo(s.estadoVisible)}>{etiquetaEstadoTrabajo(s.estadoVisible)}</Badge>{' '}
                   {etiquetaTipoServicio(s.tipoServicio)} · {etiquetaFrecuencia(s.frecuencia)}
                 </li>
               ))}

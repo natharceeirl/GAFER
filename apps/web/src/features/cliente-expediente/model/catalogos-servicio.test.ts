@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EstadoTrabajoSchema, FrecuenciaServicioSchema, TipoServicioSchema } from '@gafer/contracts';
+import { EstadoVisibleTrabajoSchema, FrecuenciaServicioSchema, TipoServicioSchema } from '@gafer/contracts';
 import {
   ESTADOS_TRABAJO,
   ETIQUETA_ESTADO,
@@ -29,12 +29,15 @@ describe('catálogos de servicio: código del API ↔ etiqueta de pantalla', () 
   });
 
   it('etiqueta los cuatro estados de trabajo del contrato y les da color (GAF-99)', () => {
-    expect(ESTADOS_TRABAJO.map((e) => e.codigo)).toEqual(EstadoTrabajoSchema.options);
+    expect(ESTADOS_TRABAJO.map((e) => e.codigo)).toEqual(EstadoVisibleTrabajoSchema.options);
+    expect(etiquetaEstadoTrabajo('PROGRAMADO')).toBe('Programado');
     expect(etiquetaEstadoTrabajo('PENDIENTE')).toBe('Pendiente');
-    expect(etiquetaEstadoTrabajo('EN_CURSO')).toBe('En curso');
-    expect(etiquetaEstadoTrabajo('COMPLETADO')).toBe('Completado');
+    expect(etiquetaEstadoTrabajo('EJECUTADO')).toBe('Ejecutado');
+    expect(etiquetaEstadoTrabajo('CONCLUIDO')).toBe('Concluido');
     expect(etiquetaEstadoTrabajo('CANCELADO')).toBe('Cancelado');
-    expect(colorEstadoTrabajo('COMPLETADO')).toBe('VERDE');
+    expect(colorEstadoTrabajo('CONCLUIDO')).toBe('VERDE');
+    expect(colorEstadoTrabajo('PENDIENTE')).toBe('NARANJA');
+    expect(colorEstadoTrabajo('PROGRAMADO')).toBe('SIN_COLOR');
     expect(colorEstadoTrabajo('CANCELADO')).toBe('ROJO');
   });
 });

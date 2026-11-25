@@ -1,4 +1,6 @@
 import type { Mock } from 'vitest';
+import { estadoVisibleDeServicio, type EstadoTrabajo } from '@gafer/contracts';
+import { fechaLocal } from '../../../shared/lib/fecha';
 
 /**
  * API de Mantenimiento simulada en memoria para las pruebas del expediente (GAF-99): clientes, sedes, servicios
@@ -65,7 +67,7 @@ export const servicioEjemplo = (cambios: Partial<Fila> = {}): Fila => ({
   requiereCertificado: true,
   vigenciaDias: 180,
   estado: 'ACTIVO',
-  estadoTrabajo: 'PENDIENTE',
+  estadoTrabajo: 'PROGRAMADO',
   ...cambios,
 });
 
@@ -108,11 +110,17 @@ const equipoApi = {
 };
 
 const TRANSICIONES: Record<string, string[]> = {
-  PENDIENTE: ['EN_CURSO', 'CANCELADO'],
-  EN_CURSO: ['COMPLETADO', 'CANCELADO'],
-  COMPLETADO: ['EN_CURSO'],
-  CANCELADO: ['EN_CURSO'],
+  PROGRAMADO: ['EJECUTADO', 'CANCELADO'],
+  EJECUTADO: ['CONCLUIDO', 'CANCELADO'],
+  CONCLUIDO: ['EJECUTADO'],
+  CANCELADO: ['EJECUTADO'],
 };
+
+/** Como el servidor: suma el estado visible (PENDIENTE si está programado y su fecha ya pasó). */
+function conVisible(servicio: Fila): Fila {
+  const fecha = (servicio.fechaProgramada as string | null | undefined) ?? null;
+  return { ...servicio, estadoVisible: estadoVisibleDeServicio(servicio.estadoTrabajo as EstadoTrabajo, fecha, fechaLocal()) };
+}
 
 function json(status: number, cuerpo: unknown) {
   return new Response(JSON.stringify(cuerpo), { status, headers: { 'Content-Type': 'application/json' } });
@@ -161,11 +169,11 @@ export function simularApiExpediente(fetchMock: Mock, estado: EstadoSimulado): E
     }
 
     const porSede = ruta.match(/^\/servicios-contratados\/proyecto\/([^/]+)$/);
-    if (porSede) return json(200, estado.servicios.filter((s) => s.proyectoId === porSede[1]));
+    if (porSede) return json(200, estado.servicios.filter((s) => s.proyectoId === porSede[1]).map(conVisible));
     if (ruta === '/servicios-contratados' && metodo === 'POST') {
-      const servicio = { id: nuevoId(), estado: 'ACTIVO', estadoTrabajo: 'PENDIENTE', ...cuerpo } as Fila;
+      const servicio = { id: nuevoId(), estado: 'ACTIVO', estadoTrabajo: 'PROGRAMADO', ...cuerpo } as Fila;
       estado.servicios.push(servicio);
-      return json(201, servicio);
+      return json(201, conVisible(servicio));
     }
     const cambio = ruta.match(/^\/servicios-contratados\/([^/]+)\/estado$/);
     if (cambio && metodo === 'PATCH') {
@@ -176,10 +184,10 @@ export function simularApiExpediente(fetchMock: Mock, estado: EstadoSimulado): E
       if (!TRANSICIONES[anterior].includes(cuerpo.estado)) {
         return json(400, { statusCode: 400, message: `No se puede pasar el servicio de ${anterior} a ${cuerpo.estado}` });
       }
-      const pideMotivo = cuerpo.estado === 'CANCELADO' || anterior === 'COMPLETADO' || anterior === 'CANCELADO';
+      const pideMotivo = cuerpo.estado === 'CANCELADO' || anterior === 'CONCLUIDO' || anterior === 'CANCELADO';
       if (pideMotivo && (cuerpo.motivo ?? '').trim().length < 5) return error400Motivo('El motivo es obligatorio');
       servicio.estadoTrabajo = cuerpo.estado;
-      return json(200, servicio);
+      return json(200, conVisible(servicio));
     }
 
     return json(404, { statusCode: 404, message: `Sin simular: ${metodo} ${ruta}` });

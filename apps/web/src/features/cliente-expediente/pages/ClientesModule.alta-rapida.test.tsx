@@ -154,7 +154,7 @@ describe('alta rápida encadenada: cliente → sede → servicio → resumen (GA
     expect(within(resumen).getByText('Molinos del Sur S.A.C.')).toBeInTheDocument();
     expect(within(resumen).getByText('PLANTA_NORTE')).toBeInTheDocument();
     expect(within(resumen).getByText(/DSF — Desinfección/)).toBeInTheDocument();
-    expect(within(resumen).getByText('Pendiente')).toBeInTheDocument();
+    expect(within(resumen).getByText('Programado')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Programar visita' }));
     expect(onProgramarVisita).toHaveBeenCalledTimes(1);
@@ -177,7 +177,7 @@ describe('alta rápida encadenada: cliente → sede → servicio → resumen (GA
     expect(new Set(proyectos).size).toBe(1);
   });
 
-  it('«Ver expediente» abre la ficha del cliente nuevo con su sede y el servicio pendiente', async () => {
+  it('«Ver expediente» abre la ficha del cliente nuevo con su sede y el servicio programado', async () => {
     montar(estadoSoloCliente());
     await recorrerAlta();
 
@@ -185,7 +185,7 @@ describe('alta rápida encadenada: cliente → sede → servicio → resumen (GA
 
     expect(await screen.findByRole('heading', { name: 'Ficha del cliente' })).toBeInTheDocument();
     const sede = (await screen.findByText('PLANTA_NORTE')).closest('li') as HTMLElement;
-    expect(within(sede).getByLabelText('Estado de la sede')).toHaveTextContent('Pendiente');
+    expect(within(sede).getByLabelText('Estado de la sede')).toHaveTextContent('Programado');
   });
 
   it('salir en el paso 1 vuelve a la cartera sin registrar nada', async () => {
