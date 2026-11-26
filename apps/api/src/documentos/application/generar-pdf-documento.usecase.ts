@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { clavePdfDocumento } from '../domain/documento';
 import { DOCUMENTO_REPOSITORY, DocumentoRepository } from '../domain/ports/documento.repository';
@@ -23,8 +24,8 @@ export class GenerarPdfDocumentoUseCase {
   ) {}
 
   /**
-   * Idempotente: un trabajo repetido sobre un PDF ya generado no vuelve a renderizar (pedir otra vez el
-   * PDF lo deja en PENDIENTE y entonces sí se regenera). Un fallo deja ERROR con el motivo y se propaga
+   * Idempotente: un trabajo repetido sobre un PDF ya generado no vuelve a renderizar; el PDF emitido es
+   * inmutable (GAF-56) y nadie puede dejarlo otra vez en PENDIENTE. Un fallo deja ERROR con el motivo y se propaga
    * para que la cola reintente; nunca se traga.
    */
   async ejecutar(id: string): Promise<void> {
@@ -44,7 +45,9 @@ export class GenerarPdfDocumentoUseCase {
       const contenido = await this.renderer.renderizar(datos);
       const clave = clavePdfDocumento(id, datos.documento.codigo);
       await this.almacen.guardar(clave, contenido);
-      await this.registrar(id, (documento) => documento.marcarPdfGenerado(clave, new Date()));
+      // La huella se calcula sobre los mismos bytes que se guardan (GAF-56): es lo que se verifica al servir.
+      const sha256 = createHash('sha256').update(contenido).digest('hex');
+      await this.registrar(id, (documento) => documento.marcarPdfGenerado(clave, new Date(), sha256));
     } catch (error) {
       await this.registrar(id, (documento) => documento.marcarPdfFallido(mensajeDe(error)));
       throw error;

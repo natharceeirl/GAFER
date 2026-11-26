@@ -46,6 +46,7 @@ export class KyselyDocumentoRepository implements DocumentoRepository {
             pdf_generado_at: documento.getPdf().generadoAt,
             pdf_error: documento.getPdf().error,
             pdf_intentos: documento.getPdf().intentos,
+            pdf_sha256: documento.getPdf().sha256,
             updated_at: sql<Date>`now()`,
           }),
         )
@@ -93,6 +94,7 @@ export class KyselyDocumentoRepository implements DocumentoRepository {
         generadoAt: fila.pdf_generado_at,
         error: fila.pdf_error,
         intentos: fila.pdf_intentos,
+        sha256: fila.pdf_sha256,
       },
       creadoPor: fila.creado_por_usuario ? { id: fila.creado_por_id, usuario: fila.creado_por_usuario, rol: '' } : null,
     });
@@ -111,7 +113,7 @@ export class KyselyDocumentoRepository implements DocumentoRepository {
     if (!resumen) return null;
     const pdf = await this.db
       .selectFrom('documentos')
-      .select(['pdf_estado', 'pdf_generado_at', 'pdf_error'])
+      .select(['pdf_estado', 'pdf_generado_at', 'pdf_error', 'pdf_sha256'])
       .where('id', '=', id)
       .executeTakeFirstOrThrow();
     const filas = await this.db
@@ -123,7 +125,7 @@ export class KyselyDocumentoRepository implements DocumentoRepository {
       .execute();
     return {
       ...resumen,
-      pdf: { estado: pdf.pdf_estado, generadoAt: pdf.pdf_generado_at?.toISOString() ?? null, error: pdf.pdf_error },
+      pdf: { estado: pdf.pdf_estado, generadoAt: pdf.pdf_generado_at?.toISOString() ?? null, error: pdf.pdf_error, sha256: pdf.pdf_sha256 },
       transiciones: filas.map((f) => ({
         estadoAnterior: f.estado_anterior,
         estadoNuevo: f.estado_nuevo,

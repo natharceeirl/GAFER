@@ -3,6 +3,7 @@
  * Solicitud, descarga y datos del PDF del Informe de Servicio contra la aplicación real (GAF-54).
  * La cola y el almacenamiento van en memoria; la base es PostgreSQL real.
  */
+import { createHash } from 'crypto';
 import { createTestApp, TestApp } from '../support/app';
 import { autorizacion, autorizacionDePersonal } from '../support/auth';
 import { resetDb } from '../support/db';
@@ -12,7 +13,11 @@ import { DOCUMENTO_REPOSITORY, DocumentoRepository } from '../../src/documentos/
 import { DOCUMENTO_PDF_DATOS, DocumentoPdfDatosPort, PdfRendererPort } from '../../src/documentos/domain/ports/pdf.ports';
 import { TRANSACCION, TransaccionPort } from '../../src/documentos/domain/ports/transaccion.port';
 
-describe('PDF del documento: API y datos (GAF-54)', () => {
+/** PNG de 1x1 píxel: solo para pruebas; la aplicación nunca fabrica firmas. */
+const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY44YAAAAASUVORK5CYII=';
+const PNG = Buffer.from(PNG_B64, 'base64');
+
+describe('PDF del documento: API y datos (GAF-54, GAF-55)', () => {
   let t: TestApp;
   let http: Api;
   let esc: Escenario;
@@ -72,7 +77,7 @@ describe('PDF del documento: API y datos (GAF-54)', () => {
       await transicionar(id, 'APROBADO');
       expect(t.cola.trabajos).toEqual([id]);
       const detalle = await http.get(`/documentos/${id}`, autorizacion('SUPERVISOR'));
-      expect(detalle.body.pdf).toEqual({ estado: 'PENDIENTE', generadoAt: null, error: null });
+      expect(detalle.body.pdf).toEqual({ estado: 'PENDIENTE', generadoAt: null, error: null, sha256: null });
     });
 
     it('si Redis está caído la aprobación responde 201 y el error del PDF queda visible', async () => {
@@ -153,6 +158,40 @@ describe('PDF del documento: API y datos (GAF-54)', () => {
       expect(detalle.body.pdf).toMatchObject({ estado: 'GENERADO', error: null, generadoAt: expect.any(String) });
     });
 
+    it('expone la huella SHA-256 en el detalle y coincide con los bytes entregados (GAF-56)', async () => {
+      const id = await aprobado();
+      expect((await http.get(`/documentos/${id}`, autorizacion('SUPERVISOR'))).body.pdf.sha256).toBeNull();
+      await generar.ejecutar(id);
+      const res = await http.get(`/documentos/${id}/pdf`, await supervisor()).buffer(true).parse(binario);
+      const detalle = await http.get(`/documentos/${id}`, autorizacion('SUPERVISOR'));
+      expect(detalle.body.pdf.sha256).toBe(createHash('sha256').update(res.body as Buffer).digest('hex'));
+    });
+
+    it('si los bytes guardados no coinciden con la huella responde 500 claro, no entrega el archivo y deja evento de auditoria (GAF-56)', async () => {
+      const id = await aprobado();
+      await generar.ejecutar(id);
+      const { rows } = await t.db.query(`SELECT pdf_storage_key FROM documentos WHERE id = $1`, [id]);
+      await t.almacen.guardar(rows[0].pdf_storage_key, Buffer.from('%PDF-1.4\n% adulterado\n'));
+
+      const res = await http.get(`/documentos/${id}/pdf`, await supervisor());
+      expect(res.status).toBe(500);
+      expect(res.body.message).toContain('no coincide con su huella SHA-256');
+
+      const eventos = await t.db.query(`SELECT modulo, accion, entidad_id FROM auditoria_eventos WHERE accion = 'PDF_INTEGRIDAD_FALLIDA'`);
+      expect(eventos.rows).toEqual([{ modulo: 'DOCUMENTOS', accion: 'PDF_INTEGRIDAD_FALLIDA', entidad_id: id }]);
+    });
+
+    it('un PDF ya generado no se puede volver a pedir: 409 y la cola no recibe nada (GAF-56)', async () => {
+      const id = await aprobado();
+      await generar.ejecutar(id);
+      t.cola.trabajos.length = 0;
+      const res = await http.post(`/documentos/${id}/pdf`, {}, await supervisor());
+      expect(res.status).toBe(409);
+      expect(res.body.message).toContain('ya fue emitido');
+      expect(t.cola.trabajos).toHaveLength(0);
+      expect((await http.get(`/documentos/${id}`, autorizacion('SUPERVISOR'))).body.pdf.estado).toBe('GENERADO');
+    });
+
     it('el Técnico no descarga (403)', async () => {
       const id = await aprobado();
       expect((await http.get(`/documentos/${id}/pdf`, autorizacion('TECNICO_OPERADOR'))).status).toBe(403);
@@ -169,8 +208,10 @@ describe('PDF del documento: API y datos (GAF-54)', () => {
       expect(d.documento.codigo).toMatch(/^INFORME-QA\d{3}-001-\d{4}$/);
       expect(d.cliente).toMatchObject({ ruc: expect.stringMatching(/^20\d{9}$/), giroNegocio: 'Generación Eléctrica' });
       expect(d.sede).toMatchObject({ distrito: 'Mollendo', departamento: 'Arequipa' });
-      expect(d.director).toEqual({ nombre: 'Ing. Carlos Medina Ruiz', cip: '84512' });
-      expect(d.aprobadoPor).toBe('SUP.UNO');
+      expect(d.director).toEqual({ nombre: 'Ing. Carlos Medina Ruiz', cip: '84512', firma: null });
+      expect(d.aprobacion).toEqual({ usuario: 'SUP.UNO', nombre: 'Usuario De Prueba', cargo: 'SUPERVISOR', fecha: expect.any(String) });
+      expect(new Date(d.aprobacion!.fecha).getTime()).toBeGreaterThan(Date.now() - 60_000);
+      expect(d.firmaCliente).toBeNull();
       expect(d.servicios).toHaveLength(1);
       expect(d.servicios[0]).toMatchObject({ tipoServicio: 'DRT', areaTotalM2: 5000, areaTratarM2: 3500 });
       expect(d.servicios[0].insumos[0]).toMatchObject({
@@ -180,6 +221,38 @@ describe('PDF del documento: API y datos (GAF-54)', () => {
       });
       expect(d.servicios[0].equipos).toHaveLength(1);
       expect(d.fotos).toEqual([]);
+    });
+
+    describe('firmas (GAF-55)', () => {
+      it('el Director Técnico: la firma configurada en Mantenimiento (data URL) llega como imagen', async () => {
+        await t.db.query(`UPDATE configuracion_sistema SET director_firma = $1 WHERE id = 'global'`, [`data:image/png;base64,${PNG_B64}`]);
+        const id = await aprobado();
+        expect((await datos.cargar(id))!.director.firma).toEqual(PNG);
+      });
+
+      it('el Director Técnico: una clave de almacenamiento se lee del almacén; si no existe o no es imagen, no hay firma', async () => {
+        const id = await aprobado();
+        await t.db.query(`UPDATE configuracion_sistema SET director_firma = 'firmas/director.png' WHERE id = 'global'`);
+        expect((await datos.cargar(id))!.director.firma).toBeNull();
+        await t.almacen.guardar('firmas/director.png', Buffer.from('%PDF-no-es-imagen'));
+        expect((await datos.cargar(id))!.director.firma).toBeNull();
+        await t.almacen.guardar('firmas/director.png', PNG);
+        expect((await datos.cargar(id))!.director.firma).toEqual(PNG);
+      });
+
+      it('el cliente: la firma del responsable guardada en el documento llega como imagen; vacía = no disponible', async () => {
+        const id = await aprobado();
+        expect((await datos.cargar(id))!.firmaCliente).toBeNull();
+        await t.db.query(`UPDATE documentos SET firma_cliente = $2 WHERE id = $1`, [id, `data:image/png;base64,${PNG_B64}`]);
+        expect((await datos.cargar(id))!.firmaCliente).toEqual(PNG);
+        await t.db.query(`UPDATE documentos SET firma_cliente = 'texto-basura' WHERE id = $1`, [id]);
+        expect((await datos.cargar(id))!.firmaCliente).toBeNull();
+      });
+
+      it('si el documento no tiene aprobación registrada, aprobacion es null (no se inventa aprobador)', async () => {
+        const id = await crearDocumento();
+        expect((await datos.cargar(id))!.aprobacion).toBeNull();
+      });
     });
 
     it('sin datos de empresa configurados llegan nulos (no se inventan) y con ellos se usan tal cual', async () => {

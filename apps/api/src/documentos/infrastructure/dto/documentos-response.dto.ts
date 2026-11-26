@@ -96,6 +96,14 @@ export class PdfDocumentoResponseDto {
 
   @ApiProperty({ nullable: true, type: String, example: null, description: 'Motivo del último fallo; visible hasta que un reintento termine bien' })
   error!: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    example: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    description: 'Huella SHA-256 (hex) del PDF emitido; nulo hasta que se genere. El PDF aprobado no se regenera.',
+  })
+  sha256!: string | null;
 }
 
 export class PdfSolicitadoResponseDto {

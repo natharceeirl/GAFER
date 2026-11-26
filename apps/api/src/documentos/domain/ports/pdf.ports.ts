@@ -14,6 +14,19 @@ export interface EmpresaPdf {
 export interface DirectorTecnicoPdf {
   nombre: string;
   cip: string;
+  /** Imagen PNG/JPEG de la firma configurada en Mantenimiento (C7); `null` si no hay una utilizable. */
+  firma: Buffer | null;
+}
+
+/** Quién aprobó el documento (Supervisor de Operaciones), según el historial de transiciones. */
+export interface AprobacionPdf {
+  usuario: string;
+  /** Nombre completo del personal con ese usuario, si existe. */
+  nombre: string | null;
+  /** Cargo del actor al aprobar (`ADMINISTRADOR`, `SUPERVISOR`...). */
+  cargo: string;
+  /** ISO 8601 del momento de la aprobación. */
+  fecha: string;
 }
 
 export interface ClientePdf {
@@ -90,8 +103,13 @@ export interface DatosInformePdf {
   servicios: ServicioPdf[];
   personal: PersonalPdf[];
   inspeccion: InspeccionPdf | null;
-  /** Quién aprobó el documento (historial de transiciones), si consta. */
-  aprobadoPor: string | null;
+  /** Quién aprobó el documento y cuándo (historial de transiciones), si consta. */
+  aprobacion: AprobacionPdf | null;
+  /**
+   * Firma del responsable del cliente capturada en la app (PNG/JPEG). `null` = responsable no disponible
+   * al momento del servicio (o firma aún no capturada): el PDF lo marca, nunca dibuja otra firma.
+   */
+  firmaCliente: Buffer | null;
   /** Hasta 20 fotos seleccionadas (sección 7). Vacío mientras no exista la selección de fotos. */
   fotos: FotoPdf[];
 }

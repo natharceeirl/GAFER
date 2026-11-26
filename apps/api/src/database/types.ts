@@ -201,12 +201,18 @@ export interface DocumentosTable {
   fecha: ColumnType<Date, Date | RawBuilder<Date>, Date>;
   creado_por_id: string | null;
   creado_por_usuario: string | null;
+  /** Firma del responsable del cliente (data URL o clave de almacenamiento); '' = no disponible. */
+  firma_cliente: ColumnType<string, never, string>;
+  /** Firma del Director Técnico fijada en el documento; si es nula se usa la de Mantenimiento. */
+  firma_director: ColumnType<string | null, never, string | null>;
   /** GAF-54 (migración 006): generación asíncrona del PDF. */
   pdf_estado: ColumnType<'PENDIENTE' | 'GENERANDO' | 'GENERADO' | 'ERROR' | null, never, 'PENDIENTE' | 'GENERANDO' | 'GENERADO' | 'ERROR' | null>;
   pdf_storage_key: ColumnType<string | null, never, string | null>;
   pdf_generado_at: ColumnType<Date | null, never, Date | null>;
   pdf_error: ColumnType<string | null, never, string | null>;
   pdf_intentos: ColumnType<number, never, number>;
+  /** GAF-56 (migración 007): huella SHA-256 (hex) del PDF emitido. */
+  pdf_sha256: ColumnType<string | null, never, string | null>;
   created_at: Generated<Date>;
   updated_at: ColumnType<Date, Date | RawBuilder<Date> | undefined, Date | RawBuilder<Date>>;
 }
