@@ -81,6 +81,12 @@ const MATRIZ_ESPERADA: Array<[string, string]> = [
   ['GET /api/documentos/:id/pdf', 'AS'],
   ['POST /api/cliente-expediente/clientes', 'A'],
   ['POST /api/mapa-murino/estaciones/:id/inspeccion', 'AST'],
+  // Mapa Murino por proyecto (GAF-62): planos los define Administración/Supervisión; el Técnico lee y registra lo visto en la visita
+  ['POST /api/mapa-murino/proyectos/:proyectoId/planos', 'AS'],
+  ['GET /api/mapa-murino/proyectos/:proyectoId/planos', 'AST'],
+  ['GET /api/mapa-murino/planos/:planoId/visitas', 'AST'],
+  ['GET /api/mapa-murino/planos/:planoId/visitas/:visitaId', 'AST'],
+  ['PUT /api/mapa-murino/planos/:planoId/visitas/:visitaId', 'AST'],
   ['GET /api/estadisticas/clientes/:id/resumen', 'AS'],
   ['POST /api/inventario/insumos/:id/descuento', 'A'],
 ];
@@ -110,6 +116,7 @@ describe('Cobertura de protección de rutas (GAF-93)', () => {
       'DocumentosController',
       'ClienteExpedienteController',
       'MapaMurinoController',
+      'PlanosMapaController',
       'EstadisticasController',
       'InventarioController',
     ]) {

@@ -242,7 +242,53 @@ export interface CorrelativosGlobalesTable {
   updated_at: Generated<Date>;
 }
 
+export interface VisitasTable {
+  id: Generated<string>;
+  cliente_id: string;
+  proyecto_id: string;
+  servicio_id: string;
+  tecnico_titular_id: string | null;
+  fecha: ColumnType<Date, string, string>;
+  hora: string;
+  estado_campo: 'PENDIENTE' | 'EN_CURSO' | 'EN_REVISION';
+  observaciones: Generated<string>;
+}
+
+export interface PlanosTable {
+  id: Generated<string>;
+  proyecto_id: string;
+  nombre: string;
+  puntos: ColumnType<unknown, string, string>;
+  cerrado: Generated<boolean>;
+  created_at: Generated<Date>;
+}
+
+export interface MapaEstacionesTable {
+  id: string;
+  plano_id: string;
+  numero: number;
+  tipo_estacion: 'CEBO_RATICIDA' | 'TRAMPA_MECANICA';
+  created_at: Generated<Date>;
+}
+
+export interface MapaVisitaEstacionesTable {
+  visita_id: string;
+  estacion_id: string;
+  plano_id: string;
+  pos_x: number;
+  pos_y: number;
+  instalada: boolean;
+  reubicada_desde_x: number | null;
+  reubicada_desde_y: number | null;
+  inspeccion: ColumnType<unknown, string | null, string | null>;
+  created_at: Generated<Date>;
+}
+
 export interface GaferDatabase {
+  visitas: VisitasTable;
+  planos: PlanosTable;
+  mapa_estaciones: MapaEstacionesTable;
+  mapa_visita_estaciones: MapaVisitaEstacionesTable;
   clientes: ClientesTable;
   proyectos: ProyectosTable;
   servicios_contratados: ServiciosContratadosTable;
