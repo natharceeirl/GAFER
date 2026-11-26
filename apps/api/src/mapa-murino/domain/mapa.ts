@@ -1,17 +1,13 @@
-import type { ColorAura, ColorIcono, Estacion as EstacionContrato, InspeccionRegistrada, TipoEstacion } from '@gafer/contracts';
+import { LIMITES_MAPA } from '@gafer/contracts';
+import type { ColorAura, ColorIcono, Estacion as EstacionContrato, InspeccionRegistrada, Punto, TipoEstacion } from '@gafer/contracts';
+
+export { LIMITES_MAPA };
+export type { Punto };
 
 /**
  * Lógica pura del Mapa Murino (spec §5.3 a §5.5): sin acceso a datos ni framework.
  * Es el mismo modelo que valida el prototipo web (`visitas-mapa.ts`), ahora del lado del servidor.
  */
-
-export interface Punto {
-  x: number;
-  y: number;
-}
-
-/** Capacidad del mapa (§5.1). */
-export const LIMITES_MAPA = { planosPorProyecto: 20, estacionesPorPlano: 100 } as const;
 
 /** Niveles del aura en orden: sin color y los 4 niveles visibles. */
 export const NIVELES_AURA: readonly ColorAura[] = ['SIN_COLOR', 'VERDE', 'AMARILLO', 'NARANJA', 'ROJO'];
